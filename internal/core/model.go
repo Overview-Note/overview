@@ -40,6 +40,7 @@ type Note struct {
 	Updated time.Time `json:"updated"`
 	Size    int64     `json:"size"`
 	Version string    `json:"version"`
+	Public  bool      `json:"public"`
 	Body    string    `json:"body"`
 }
 

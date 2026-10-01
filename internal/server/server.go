@@ -81,6 +81,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
 
+	// Public (anonymous) read-only access to shared notes.
+	s.mux.HandleFunc("GET "+base+"/public/notes", s.handlePublicNotes)
+	s.mux.HandleFunc("GET "+base+"/public/note", s.handlePublicNote)
+
 	// Vault-relative asset URLs (portable across tools / exports).
 	s.mux.HandleFunc("GET /assets/{path...}", s.handleAsset)
 
@@ -229,7 +233,9 @@ func isPublicPath(p string) bool {
 	case "/api/v1/health",
 		"/api/v1/auth/state",
 		"/api/v1/auth/setup",
-		"/api/v1/auth/login":
+		"/api/v1/auth/login",
+		"/api/v1/public/notes",
+		"/api/v1/public/note":
 		return true
 	default:
 		return false

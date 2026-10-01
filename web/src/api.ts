@@ -45,6 +45,17 @@ export interface Note {
   updated: string;
   size: number;
   version: string;
+  public: boolean;
+  body: string;
+}
+
+export interface PublicNote {
+  id: string;
+  path: string;
+  title: string;
+  tags: string[] | null;
+  created: string;
+  updated: string;
   body: string;
 }
 
@@ -134,13 +145,28 @@ export const api = {
     return json<Note>(res);
   },
 
-  async saveNote(path: string, body: string, baseVersion: string): Promise<Note> {
+  async saveNote(
+    path: string,
+    body: string,
+    baseVersion: string,
+    isPublic = false,
+  ): Promise<Note> {
     const res = await fetch(`${BASE}/note`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path, body, baseVersion }),
+      body: JSON.stringify({ path, body, baseVersion, public: isPublic }),
     });
     return json<Note>(res);
+  },
+
+  async publicNotes(): Promise<NoteMeta[]> {
+    const res = await fetch(`${BASE}/public/notes`);
+    return (await json<{ notes: NoteMeta[] }>(res)).notes;
+  },
+
+  async publicNote(path: string): Promise<PublicNote> {
+    const res = await fetch(`${BASE}/public/note?path=${encodeURIComponent(path)}`);
+    return json<PublicNote>(res);
   },
 
   async deleteNode(path: string): Promise<void> {

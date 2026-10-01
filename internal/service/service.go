@@ -53,16 +53,40 @@ func (s *Service) GetNote(ctx context.Context, path string) (core.Note, error) {
 }
 
 // SaveNote writes a note and updates the index.
-func (s *Service) SaveNote(ctx context.Context, path, body, expectedVersion string) (core.Note, error) {
+func (s *Service) SaveNote(ctx context.Context, path, body, expectedVersion string, public bool) (core.Note, error) {
 	if strings.TrimSpace(path) == "" {
 		return core.Note{}, core.Invalidf("path is required")
 	}
-	note, err := s.repo.Write(ctx, path, body, expectedVersion)
+	note, err := s.repo.Write(ctx, path, body, expectedVersion, public)
 	if err != nil {
 		return core.Note{}, err
 	}
 	if err := s.index.Upsert(ctx, note); err != nil {
 		return core.Note{}, err
+	}
+	return note, nil
+}
+
+// PublicNotes returns metadata for all publicly shared notes.
+func (s *Service) PublicNotes(ctx context.Context) ([]core.NoteMeta, error) {
+	notes, err := s.index.PublicNotes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if notes == nil {
+		notes = []core.NoteMeta{}
+	}
+	return notes, nil
+}
+
+// PublicNote returns a public note (metadata + body).
+func (s *Service) PublicNote(ctx context.Context, path string) (core.Note, error) {
+	note, err := s.repo.Read(ctx, path)
+	if err != nil {
+		return core.Note{}, err
+	}
+	if !note.Public {
+		return core.Note{}, core.ErrNotFound
 	}
 	return note, nil
 }

@@ -404,11 +404,11 @@ func upsert(ctx context.Context, tx *sql.Tx, n core.Note) error {
 
 func insert(ctx context.Context, tx *sql.Tx, n core.Note) error {
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO notes (id, path, name, title, tags, body, created, updated, size, version)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO notes (id, path, name, title, tags, body, created, updated, size, version, public)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		n.ID, n.Path, noteName(n.Path), n.Title, strings.Join(n.Tags, ","), n.Body,
 		n.Created.UTC().Format(time.RFC3339), n.Updated.UTC().Format(time.RFC3339),
-		n.Size, n.Version); err != nil {
+		n.Size, n.Version, boolToInt(n.Public)); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx,
@@ -466,6 +466,52 @@ func matchExpr(tokens []string) string {
 
 // noteName returns the file base name without extension, used to resolve
 // wiki-links like [[并发模型]] against nested notes.
+// PublicNotes returns metadata for all notes marked public.
+func (ix *Index) PublicNotes(ctx context.Context) ([]core.NoteMeta, error) {
+	rows, err := ix.db.QueryContext(ctx,
+		`SELECT id, path, title, tags, updated, size FROM notes WHERE public = 1 ORDER BY path`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	metas := make([]core.NoteMeta, 0, 16)
+	for rows.Next() {
+		var (
+			m        core.NoteMeta
+			tags, up string
+		)
+		if err := rows.Scan(&m.ID, &m.Path, &m.Title, &tags, &up, &m.Size); err != nil {
+			return nil, err
+		}
+		m.Tags = splitTags(tags)
+		m.Updated = parseTime(up)
+		metas = append(metas, m)
+	}
+	return metas, rows.Err()
+}
+
+// PublicBody returns the body of a public note.
+func (ix *Index) PublicBody(ctx context.Context, path string) (string, error) {
+	var body string
+	err := ix.db.QueryRowContext(ctx,
+		`SELECT body FROM notes WHERE path = ? AND public = 1`, path).Scan(&body)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", core.ErrNotFound
+		}
+		return "", err
+	}
+	return body, nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 func noteName(p string) string {
 	if i := strings.LastIndexByte(p, '/'); i >= 0 {
 		p = p[i+1:]

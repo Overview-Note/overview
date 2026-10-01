@@ -15,6 +15,7 @@ type Frontmatter struct {
 	Title   string   `yaml:"title,omitempty"`
 	Tags    []string `yaml:"tags,omitempty"`
 	Icon    string   `yaml:"icon,omitempty"`
+	Public  bool     `yaml:"public,omitempty"`
 	Created string   `yaml:"created,omitempty"`
 	Updated string   `yaml:"updated,omitempty"`
 }

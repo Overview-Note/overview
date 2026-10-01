@@ -43,6 +43,7 @@ type saveNoteRequest struct {
 	Path        string `json:"path"`
 	Body        string `json:"body"`
 	BaseVersion string `json:"baseVersion"`
+	Public      bool   `json:"public"`
 }
 
 func (s *Server) handleSaveNote(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +56,7 @@ func (s *Server) handleSaveNote(w http.ResponseWriter, r *http.Request) {
 	if im := r.Header.Get("If-Match"); im != "" {
 		expected = trimETag(im)
 	}
-	note, err := s.svc.SaveNote(r.Context(), req.Path, req.Body, expected)
+	note, err := s.svc.SaveNote(r.Context(), req.Path, req.Body, expected, req.Public)
 	if err != nil {
 		s.writeDomainError(w, err)
 		return
@@ -118,6 +119,34 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
+}
+
+func (s *Server) handlePublicNotes(w http.ResponseWriter, r *http.Request) {
+	notes, err := s.svc.PublicNotes(r.Context())
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"notes": notes})
+}
+
+func (s *Server) handlePublicNote(w http.ResponseWriter, r *http.Request) {
+	rel := r.URL.Query().Get("path")
+	note, err := s.svc.PublicNote(r.Context(), rel)
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	// Expose only render-safe fields for anonymous readers.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":      note.ID,
+		"path":    note.Path,
+		"title":   note.Title,
+		"tags":    note.Tags,
+		"created": note.Created,
+		"updated": note.Updated,
+		"body":    note.Body,
+	})
 }
 
 func (s *Server) handleLinks(w http.ResponseWriter, r *http.Request) {

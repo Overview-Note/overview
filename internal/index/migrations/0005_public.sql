@@ -1,0 +1,2 @@
+ALTER TABLE notes ADD COLUMN public INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_notes_public ON notes (public);

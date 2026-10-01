@@ -312,6 +312,50 @@ func TestWebDAV(t *testing.T) {
 	}
 }
 
+func TestPublicNotes(t *testing.T) {
+	ts := newTestServer(t)
+	if resp, b := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]any{
+		"path": "share.md", "body": "# Shared\n\npublic content", "baseVersion": "*", "public": true,
+	}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("create public: %d %v", resp.StatusCode, b)
+	}
+	if resp, b := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]any{
+		"path": "secret.md", "body": "# Secret\n\nprivate", "baseVersion": "*", "public": false,
+	}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("create private: %d %v", resp.StatusCode, b)
+	}
+
+	// Public listing needs no auth.
+	resp, list := doJSON(t, http.MethodGet, ts.URL+"/api/v1/public/notes", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("public notes status = %d", resp.StatusCode)
+	}
+	arr, _ := list["notes"].([]any)
+	if len(arr) != 1 {
+		t.Fatalf("public notes = %v, want 1", list["notes"])
+	}
+	first, _ := arr[0].(map[string]any)
+	if first["path"] != "share.md" {
+		t.Errorf("unexpected public note: %v", first)
+	}
+
+	// Public note body is retrievable.
+	resp, note := doJSON(t, http.MethodGet,
+		ts.URL+"/api/v1/public/note?path="+url.QueryEscape("share.md"), nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(note["body"].(string), "public content") {
+		t.Errorf("public note = %d %v", resp.StatusCode, note)
+	}
+
+	// Private note is not exposed.
+	resp, _ = doJSON(t, http.MethodGet,
+		ts.URL+"/api/v1/public/note?path="+url.QueryEscape("secret.md"), nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("private note status = %d, want 404", resp.StatusCode)
+	}
+
+	// Authenticated API is still gated when auth is enabled (auth-less server here).
+}
+
 func TestPathValidation(t *testing.T) {
 	ts := newTestServer(t)
 	resp, _ := doJSON(t, http.MethodGet, ts.URL+"/api/v1/note?path="+url.QueryEscape("../secret"), nil)

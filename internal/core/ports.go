@@ -15,8 +15,9 @@ type NoteRepository interface {
 	//   expectedVersion == "*"  -> the note must not exist (create)
 	//   expectedVersion == ""   -> unconditional write
 	//   otherwise               -> the current version must match
-	// A mismatch returns an error wrapping ErrConflict.
-	Write(ctx context.Context, rel, body, expectedVersion string) (Note, error)
+	// A mismatch returns an error wrapping ErrConflict. When public is true the
+	// note's frontmatter is marked as publicly readable.
+	Write(ctx context.Context, rel, body, expectedVersion string, public bool) (Note, error)
 
 	// Delete removes a note or folder recursively.
 	Delete(ctx context.Context, rel string) error
@@ -53,6 +54,11 @@ type Index interface {
 	Backlinks(ctx context.Context, path string) ([]NoteMeta, error)
 	// ResolveLink resolves a raw wiki-link target to a stored note.
 	ResolveLink(ctx context.Context, raw string) (NoteMeta, error)
+	// PublicNotes returns metadata for all notes marked public.
+	PublicNotes(ctx context.Context) ([]NoteMeta, error)
+	// PublicBody returns the body of a public note at path, or ErrNotFound when
+	// the note does not exist or is not public.
+	PublicBody(ctx context.Context, path string) (string, error)
 }
 
 // UserStore persists user accounts and sessions.

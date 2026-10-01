@@ -47,7 +47,7 @@ func TestWriteRead(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 
-	note, err := s.Write(ctx, "技术/Go/并发.md", "# 并发\n\n正文", "*")
+	note, err := s.Write(ctx, "技术/Go/并发.md", "# 并发\n\n正文", "*", false)
 	if err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -77,22 +77,22 @@ func TestVersionContracts(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 
-	first, err := s.Write(ctx, "n.md", "v1", "*")
+	first, err := s.Write(ctx, "n.md", "v1", "*", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.Write(ctx, "n.md", "v2", "*"); !errors.Is(err, core.ErrConflict) {
+	if _, err := s.Write(ctx, "n.md", "v2", "*", false); !errors.Is(err, core.ErrConflict) {
 		t.Errorf("create over existing should conflict, got %v", err)
 	}
-	if _, err := s.Write(ctx, "n.md", "v2", "deadbeef"); !errors.Is(err, core.ErrConflict) {
+	if _, err := s.Write(ctx, "n.md", "v2", "deadbeef", false); !errors.Is(err, core.ErrConflict) {
 		t.Errorf("stale version should conflict, got %v", err)
 	}
-	if _, err := s.Write(ctx, "other.md", "v2", first.Version); !errors.Is(err, core.ErrConflict) {
+	if _, err := s.Write(ctx, "other.md", "v2", first.Version, false); !errors.Is(err, core.ErrConflict) {
 		t.Errorf("missing note with version should conflict, got %v", err)
 	}
 
-	updated, err := s.Write(ctx, "n.md", "v2", first.Version)
+	updated, err := s.Write(ctx, "n.md", "v2", first.Version, false)
 	if err != nil {
 		t.Fatalf("valid update failed: %v", err)
 	}
@@ -104,10 +104,10 @@ func TestVersionContracts(t *testing.T) {
 func TestListAndWalk(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	if _, err := s.Write(ctx, "a.md", "A", "*"); err != nil {
+	if _, err := s.Write(ctx, "a.md", "A", "*", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Write(ctx, "dir/b.md", "B", "*"); err != nil {
+	if _, err := s.Write(ctx, "dir/b.md", "B", "*", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -138,7 +138,7 @@ func TestListAndWalk(t *testing.T) {
 func TestDeleteAndMove(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	if _, err := s.Write(ctx, "x.md", "X", "*"); err != nil {
+	if _, err := s.Write(ctx, "x.md", "X", "*", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Move(ctx, "x.md", "sub/y.md"); err != nil {

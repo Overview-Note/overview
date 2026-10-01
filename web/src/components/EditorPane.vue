@@ -40,6 +40,7 @@ const slashMenu = ref<InstanceType<typeof SlashMenu> | null>(null);
 const scrollEl = ref<HTMLElement | null>(null);
 const toc = ref<TocItem[]>([]);
 const showToc = ref(true);
+const isPublic = ref(false);
 let suppress = false;
 let saveTimer: number | undefined;
 let currentPath = "";
@@ -163,6 +164,7 @@ async function load(path: string) {
   try {
     const loaded = await store.openNote(path);
     baseVersion = loaded.version;
+    isPublic.value = loaded.public;
     suppress = true;
     editor.value.commands.setContent(mdToHtml(loaded.body), false);
     suppress = false;
@@ -202,7 +204,7 @@ async function flush() {
   dirty.value = false;
   status.value = "saving";
   try {
-    const saved = await api.saveNote(path, md, version);
+    const saved = await api.saveNote(path, md, version, isPublic.value);
     baseVersion = saved.version;
     store.applySaved(saved);
     if (saved.title !== previousTitle) {
@@ -226,6 +228,17 @@ async function flush() {
 
 function isActive(name: string, attrs?: Record<string, unknown>) {
   return editor.value?.isActive(name, attrs) ?? false;
+}
+
+async function togglePublic() {
+  isPublic.value = !isPublic.value;
+  dirty.value = true;
+  scheduleSave();
+  if (isPublic.value) {
+    const url = `${location.origin}/public/${currentPath.split("/").map(encodeURIComponent).join("/")}`;
+    await navigator.clipboard?.writeText(url).catch(() => undefined);
+    await dialogs.askConfirm(t("editor.share"), t("editor.shareMessage", { url }), false);
+  }
 }
 
 function navigateHeading(item: TocItem) {
@@ -370,6 +383,9 @@ onBeforeUnmount(() => {
         @click="showToc = !showToc"
       >
         {{ t("editor.toc") }}
+      </button>
+      <button :class="{ on: isPublic }" :title="t('editor.share')" @click="togglePublic">
+        {{ isPublic ? t("editor.shared") : t("editor.share") }}
       </button>
       <span class="sep"></span>
       <button @click="editor?.chain().focus().undo().run()">

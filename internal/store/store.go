@@ -67,7 +67,7 @@ func (s *Store) Read(_ context.Context, rel string) (core.Note, error) {
 
 // Write creates or updates a note according to the version contract documented
 // on core.NoteRepository.
-func (s *Store) Write(_ context.Context, rel, body, expectedVersion string) (core.Note, error) {
+func (s *Store) Write(_ context.Context, rel, body, expectedVersion string, public bool) (core.Note, error) {
 	if !isMarkdown(rel) {
 		rel += ".md"
 	}
@@ -101,6 +101,7 @@ func (s *Store) Write(_ context.Context, rel, body, expectedVersion string) (cor
 		meta.Created = now.Format(time.RFC3339)
 	}
 	meta.Updated = now.Format(time.RFC3339)
+	meta.Public = public
 	if meta.Title == "" {
 		meta.Title = deriveTitle(filepath.Base(rel), body)
 	}
@@ -287,6 +288,7 @@ func buildNote(rel string, raw []byte, info os.FileInfo) core.Note {
 		Updated: info.ModTime().UTC(),
 		Size:    info.Size(),
 		Version: hashBytes(raw),
+		Public:  doc.Meta.Public,
 		Body:    doc.Body,
 	}
 }

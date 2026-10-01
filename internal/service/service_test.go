@@ -39,10 +39,10 @@ func TestTreeAssembly(t *testing.T) {
 	if err := svc.Mkdir(ctx, "empty"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.SaveNote(ctx, "root.md", "# Root", "*"); err != nil {
+	if _, err := svc.SaveNote(ctx, "root.md", "# Root", "*", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.SaveNote(ctx, "dir/b.md", "# Bee", "*"); err != nil {
+	if _, err := svc.SaveNote(ctx, "dir/b.md", "# Bee", "*", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,7 +74,7 @@ func TestTreeAssembly(t *testing.T) {
 func TestSaveSearchDelete(t *testing.T) {
 	ctx := context.Background()
 	svc := newService(t)
-	if _, err := svc.SaveNote(ctx, "go.md", "# Go\n\ngoroutine 与 channel", "*"); err != nil {
+	if _, err := svc.SaveNote(ctx, "go.md", "# Go\n\ngoroutine 与 channel", "*", false); err != nil {
 		t.Fatal(err)
 	}
 	hits, err := svc.Search(ctx, "channel", 10, 0)
@@ -96,10 +96,10 @@ func TestSaveSearchDelete(t *testing.T) {
 func TestDeleteFolderReindexes(t *testing.T) {
 	ctx := context.Background()
 	svc := newService(t)
-	if _, err := svc.SaveNote(ctx, "dir/a.md", "# A\n\nalpha", "*"); err != nil {
+	if _, err := svc.SaveNote(ctx, "dir/a.md", "# A\n\nalpha", "*", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.SaveNote(ctx, "dir/b.md", "# B\n\nbeta", "*"); err != nil {
+	if _, err := svc.SaveNote(ctx, "dir/b.md", "# B\n\nbeta", "*", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Delete(ctx, "dir"); err != nil {
@@ -114,14 +114,14 @@ func TestDeleteFolderReindexes(t *testing.T) {
 func TestConflictPropagates(t *testing.T) {
 	ctx := context.Background()
 	svc := newService(t)
-	first, err := svc.SaveNote(ctx, "n.md", "v1", "*")
+	first, err := svc.SaveNote(ctx, "n.md", "v1", "*", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.SaveNote(ctx, "n.md", "v2", "stale"); err == nil {
+	if _, err := svc.SaveNote(ctx, "n.md", "v2", "stale", false); err == nil {
 		t.Error("expected conflict")
 	}
-	if _, err := svc.SaveNote(ctx, "n.md", "v2", first.Version); err != nil {
+	if _, err := svc.SaveNote(ctx, "n.md", "v2", first.Version, false); err != nil {
 		t.Errorf("valid update failed: %v", err)
 	}
 }
