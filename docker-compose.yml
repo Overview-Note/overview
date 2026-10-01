@@ -1,0 +1,14 @@
+services:
+  overview:
+    build: .
+    image: overview:latest
+    container_name: overview
+    ports:
+      - "5230:5230"
+    volumes:
+      - ./data:/data
+    environment:
+      OVERVIEW_ADDR: ":5230"
+      OVERVIEW_DATA_DIR: /data
+      OVERVIEW_MAX_UPLOAD_MB: "32"
+    restart: unless-stopped

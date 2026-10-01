@@ -1,0 +1,24 @@
+# runtime data
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# frontend
+web/node_modules/
+web/dist/
+
+# embedded frontend build output (keep .gitkeep so go:embed always resolves)
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
+
+# build output
+/bin/
+/overview
+/overview.exe
+*.exe
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/

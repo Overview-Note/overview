@@ -1,0 +1,166 @@
+const BASE = "/api/v1";
+
+export type NodeType = "folder" | "note";
+
+export interface TreeNode {
+  name: string;
+  path: string;
+  type: NodeType;
+  id?: string;
+  title?: string;
+  updated?: string;
+  size?: number;
+  children?: TreeNode[];
+}
+
+export interface Note {
+  id: string;
+  path: string;
+  title: string;
+  tags: string[] | null;
+  icon?: string;
+  created: string;
+  updated: string;
+  size: number;
+  version: string;
+  body: string;
+}
+
+export interface SearchHit {
+  id: string;
+  path: string;
+  title: string;
+  tags: string[] | null;
+  updated: string;
+  snippet: string;
+}
+
+export interface Asset {
+  path: string;
+  url: string;
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+export interface NoteMeta {
+  id: string;
+  path: string;
+  title: string;
+  tags: string[] | null;
+  updated: string;
+  size: number;
+}
+
+export interface WikiLink {
+  raw: string;
+  target?: NoteMeta;
+}
+
+export interface LinksResult {
+  outgoing: WikiLink[];
+  backlinks: NoteMeta[];
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function parseError(res: Response): Promise<ApiError> {
+  let code = "internal";
+  let message = res.statusText;
+  try {
+    const data = (await res.json()) as {
+      error?: { code?: string; message?: string };
+    };
+    if (data.error) {
+      code = data.error.code ?? code;
+      message = data.error.message ?? message;
+    }
+  } catch {
+    /* ignore */
+  }
+  return new ApiError(res.status, code, message);
+}
+
+async function json<T>(res: Response): Promise<T> {
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as T;
+}
+
+export const api = {
+  async tree(): Promise<TreeNode[]> {
+    const res = await fetch(`${BASE}/tree`);
+    const data = await json<{ nodes: TreeNode[] }>(res);
+    return data.nodes;
+  },
+
+  async note(path: string): Promise<Note> {
+    const res = await fetch(`${BASE}/note?path=${encodeURIComponent(path)}`);
+    return json<Note>(res);
+  },
+
+  async saveNote(path: string, body: string, baseVersion: string): Promise<Note> {
+    const res = await fetch(`${BASE}/note`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, body, baseVersion }),
+    });
+    return json<Note>(res);
+  },
+
+  async deleteNode(path: string): Promise<void> {
+    const res = await fetch(`${BASE}/note?path=${encodeURIComponent(path)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async createFolder(path: string): Promise<void> {
+    const res = await fetch(`${BASE}/folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async rename(from: string, to: string): Promise<void> {
+    const res = await fetch(`${BASE}/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async search(q: string): Promise<SearchHit[]> {
+    const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}`);
+    const data = await json<{ results: SearchHit[] }>(res);
+    return data.results;
+  },
+
+  async links(path: string): Promise<LinksResult> {
+    const res = await fetch(`${BASE}/links?path=${encodeURIComponent(path)}`);
+    return json<LinksResult>(res);
+  },
+
+  async resolve(target: string): Promise<NoteMeta> {
+    const res = await fetch(`${BASE}/resolve?target=${encodeURIComponent(target)}`);
+    return json<NoteMeta>(res);
+  },
+
+  async uploadAsset(file: File): Promise<Asset> {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE}/assets`, { method: "POST", body: form });
+    return json<Asset>(res);
+  },
+};

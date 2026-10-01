@@ -1,0 +1,2 @@
+ALTER TABLE notes ADD COLUMN name TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_notes_name ON notes (name);
