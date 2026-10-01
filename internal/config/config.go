@@ -22,7 +22,17 @@ type Config struct {
 	AIBaseURL   string
 	AIAPIKey    string
 	AIModel     string
+	S3Endpoint  string
+	S3Region    string
+	S3AccessKey string
+	S3SecretKey string
+	S3Bucket    string
+	S3UseSSL    bool
+	S3PublicURL string
 }
+
+// S3Enabled reports whether an S3-compatible asset backend is configured.
+func (c Config) S3Enabled() bool { return c.S3Bucket != "" }
 
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -53,6 +63,13 @@ func Load() Config {
 		AIBaseURL:   env("OVERVIEW_AI_BASE_URL", ""),
 		AIAPIKey:    env("OVERVIEW_AI_API_KEY", ""),
 		AIModel:     env("OVERVIEW_AI_MODEL", "gpt-4o-mini"),
+		S3Endpoint:  env("OVERVIEW_S3_ENDPOINT", ""),
+		S3Region:    env("OVERVIEW_S3_REGION", "us-east-1"),
+		S3AccessKey: env("OVERVIEW_S3_ACCESS_KEY", ""),
+		S3SecretKey: env("OVERVIEW_S3_SECRET_KEY", ""),
+		S3Bucket:    env("OVERVIEW_S3_BUCKET", ""),
+		S3UseSSL:    env("OVERVIEW_S3_USE_SSL", "true") == "true",
+		S3PublicURL: env("OVERVIEW_S3_PUBLIC_URL", ""),
 	}
 }
 

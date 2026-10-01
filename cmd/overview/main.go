@@ -13,9 +13,11 @@ import (
 
 	"github.com/overview-app/overview/internal/ai"
 	"github.com/overview-app/overview/internal/config"
+	"github.com/overview-app/overview/internal/core"
 	"github.com/overview-app/overview/internal/history"
 	"github.com/overview-app/overview/internal/index"
 	"github.com/overview-app/overview/internal/mcp"
+	"github.com/overview-app/overview/internal/s3store"
 	"github.com/overview-app/overview/internal/server"
 	"github.com/overview-app/overview/internal/service"
 	"github.com/overview-app/overview/internal/store"
@@ -53,7 +55,27 @@ func main() {
 
 	hist := history.New(cfg.HistoryDir)
 	tr := trash.New(cfg.TrashDir)
-	svc := service.New(st, idx, st, hist, tr)
+
+	var assets core.AssetStore = st
+	if cfg.S3Enabled() {
+		s3, err := s3store.New(context.Background(), s3store.Options{
+			Endpoint:  cfg.S3Endpoint,
+			Region:    cfg.S3Region,
+			AccessKey: cfg.S3AccessKey,
+			SecretKey: cfg.S3SecretKey,
+			Bucket:    cfg.S3Bucket,
+			UseSSL:    cfg.S3UseSSL,
+			PublicURL: cfg.S3PublicURL,
+		})
+		if err != nil {
+			logger.Error("init s3 asset store", "error", err)
+			os.Exit(1)
+		}
+		assets = s3
+		logger.Info("using s3 asset backend", "bucket", cfg.S3Bucket)
+	}
+
+	svc := service.New(st, idx, assets, hist, tr)
 	auth := service.NewAuth(idx, cfg.AuthMode)
 	_ = idx.DeleteExpiredSessions(context.Background(), time.Now().UTC())
 
