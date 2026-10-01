@@ -95,6 +95,23 @@ export interface LinksResult {
   backlinks: NoteMeta[];
 }
 
+export interface Revision {
+  id: string;
+  path: string;
+  savedAt: string;
+  size: number;
+  version: string;
+}
+
+export interface TrashEntry {
+  id: string;
+  path: string;
+  isDir: boolean;
+  deletedAt: string;
+  size: number;
+  original: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -157,6 +174,48 @@ export const api = {
       body: JSON.stringify({ path, body, baseVersion, public: isPublic }),
     });
     return json<Note>(res);
+  },
+
+  async revisions(path: string): Promise<Revision[]> {
+    const res = await fetch(`${BASE}/history?path=${encodeURIComponent(path)}`);
+    return (await json<{ revisions: Revision[] }>(res)).revisions;
+  },
+
+  async revisionContent(path: string, id: string): Promise<string> {
+    const res = await fetch(
+      `${BASE}/history/revision?path=${encodeURIComponent(path)}&id=${encodeURIComponent(id)}`,
+    );
+    return (await json<{ content: string }>(res)).content;
+  },
+
+  async restoreRevision(path: string, id: string): Promise<Note> {
+    const res = await fetch(`${BASE}/history/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, id }),
+    });
+    return json<Note>(res);
+  },
+
+  async trash(): Promise<TrashEntry[]> {
+    const res = await fetch(`${BASE}/trash`);
+    return (await json<{ entries: TrashEntry[] }>(res)).entries;
+  },
+
+  async restoreTrash(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/trash/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async purgeTrash(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/trash?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw await parseError(res);
   },
 
   async aiStatus(): Promise<{ enabled: boolean; model?: string }> {

@@ -6,6 +6,7 @@ import LoginView from "./views/LoginView.vue";
 import PublicHomeView from "./views/PublicHomeView.vue";
 import PublicNoteView from "./views/PublicNoteView.vue";
 import SetupView from "./views/SetupView.vue";
+import TrashView from "./views/TrashView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -17,6 +18,7 @@ export const router = createRouter({
       component: EditorPane,
       props: true,
     },
+    { path: "/trash", name: "trash", component: TrashView },
     { path: "/login", name: "login", component: LoginView, meta: { plain: true } },
     { path: "/setup", name: "setup", component: SetupView, meta: { plain: true } },
     {

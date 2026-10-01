@@ -24,6 +24,7 @@ import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
 import { useDialogStore } from "../stores/dialog";
 import { useWorkspaceStore } from "../stores/workspace";
 import AiPanel from "./AiPanel.vue";
+import HistoryPanel from "./HistoryPanel.vue";
 import LinksPanel from "./LinksPanel.vue";
 import SlashMenu from "./SlashMenu.vue";
 import TocPanel from "./TocPanel.vue";
@@ -44,6 +45,7 @@ const showToc = ref(true);
 const isPublic = ref(false);
 const showAI = ref(false);
 const aiEnabled = ref(false);
+const showHistory = ref(false);
 const aiContent = ref("");
 let suppress = false;
 let saveTimer: number | undefined;
@@ -411,6 +413,13 @@ onBeforeUnmount(() => {
         {{ isPublic ? t("editor.shared") : t("editor.share") }}
       </button>
       <button
+        :class="{ on: showHistory }"
+        :title="t('history.title')"
+        @click="showHistory = !showHistory"
+      >
+        {{ t("history.title") }}
+      </button>
+      <button
         v-if="aiEnabled"
         :class="{ on: showAI }"
         :title="t('ai.title')"
@@ -462,6 +471,11 @@ onBeforeUnmount(() => {
         <EditorContent :editor="editor" />
       </div>
       <AiPanel v-if="showAI" :content="aiContent" @insert="insertAI" />
+      <HistoryPanel
+        v-if="showHistory && store.note"
+        :path="store.note.path"
+        @restored="load(store.note!.path)"
+      />
       <LinksPanel
         v-if="store.note"
         :path="store.note.path"

@@ -61,6 +61,9 @@ async function logout() {
           <span v-if="auth.mode === 'multi' && auth.user" class="username">
             {{ auth.user.username }}
           </span>
+          <button v-if="auth.user" @click="router.push({ name: 'trash' })">
+            {{ t("trash.link") }}
+          </button>
           <button v-if="auth.user?.role === 'admin'" @click="usersOpen = true">
             {{ t("topbar.users") }}
           </button>
