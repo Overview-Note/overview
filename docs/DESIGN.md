@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.5.0（多用户 + WebDAV + i18n + 可移植附件）
+> 版本：v0.6.0（TOC + 公开分享 + MCP + AI）
 > 更新日期：2026-10-02
 > 定位：可自部署、支持层级目录的 Markdown 笔记知识库
 
@@ -15,6 +15,7 @@
 | v0.3.0 | 双链 | `[[wiki-link]]` 解析与索引、反向链接面板、斜杠命令菜单、按文件名解析 |
 | v0.4.0 | 多用户 | bcrypt 认证、会话、首启管理员、用户管理、WebDAV 挂载、可移植附件 |
 | v0.5.0 | i18n | 中英文案抽取与语言切换 |
+| v0.6.0 | 协作与智能 | 编辑器 TOC、公开分享（匿名只读）、MCP 服务端、AI 助手 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -93,6 +94,9 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 | ADR-013 | WebDAV 由 x/net/webdav 提供，Basic 认证 + 写后去抖重索引 | 复用认证与文件存储，外部编辑可检索 | WebDAV 与 SPA 并发编辑靠版本/时间区分 |
 | ADR-014 | 附件在 Markdown 中存相对路径 `assets/<...>` | 整个 `data/` 可被其它 Markdown 工具直接打开 | 渲染时重写为 `/assets/` |
 | ADR-015 | 自研轻量 i18n（无 vue-i18n 依赖） | 体积/复杂度可控，响应式 + 持久化 | 文案集中管理 |
+| ADR-016 | 公开分享基于 frontmatter `public` 标记 | 与文件即真相一致，随笔记文件迁移 | 公开页面不泄漏私有笔记与 wiki 目标 |
+| ADR-017 | MCP 用 JSON-RPC over HTTP（POST /mcp），Bearer 认证 | 复用 HTTP 栈，无需额外 stdio 进程管理 | 与 REST 并存，工具复用 service |
+| ADR-018 | AI 走 OpenAI 兼容 `/chat/completions`，无 SDK 依赖 | 兼容 OpenAI/DeepSeek/Ollama/vLLM 等 | 未配置时功能整体禁用 |
 
 ---
 
@@ -220,6 +224,10 @@ Base：`/api/v1`
 | GET | `/auth/users` | 用户列表（仅管理员） |
 | POST | `/auth/users` | 创建用户（仅管理员） |
 | DELETE | `/auth/users/{id}` | 删除用户（仅管理员） |
+| GET | `/public/notes` | 公开笔记列表（匿名） |
+| GET | `/public/note?path=` | 公开笔记正文（匿名，非公开返回 404） |
+| GET | `/ai/status` | AI 是否可用及模型名 |
+| POST | `/ai/chat` | AI：`{mode: chat\|organize\|complete, messages, content}` |
 
 **其他端点**
 
@@ -227,6 +235,7 @@ Base：`/api/v1`
 | --- | --- |
 | `/assets/{path...}` | 附件访问（需认证；内嵌前端资源优先） |
 | `/dav/` | WebDAV 挂载（Basic 认证，需 auth=multi） |
+| `/mcp` | MCP 服务端（JSON-RPC 2.0，Bearer 令牌） |
 
 **错误响应**
 ```json
@@ -365,6 +374,10 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 **Phase 3 — 集成与多端**
 - [x] WebDAV 挂载（供 Obsidian 等直接读写）
 - [x] i18n（前端文案抽取 + 语言切换）
+- [x] 编辑器目录（TOC）
+- [x] 公开分享 / 匿名只读访问
+- [x] MCP 服务端（AI 可操作笔记）
+- [x] AI 助手（对话 / 整理 / 补全）
 - [ ] 移动端 PWA / 原生 App（基于 `/api/v1`）
 
 **Phase 4 — 体验与规模**
@@ -389,6 +402,10 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | `OVERVIEW_MAX_UPLOAD_MB` | `32` | 上传上限 |
 | `OVERVIEW_LOG_LEVEL` | `info` | 日志级别 |
 | `OVERVIEW_AUTH` | `multi` | 认证模式：`multi` 或 `none` |
+| `OVERVIEW_MCP_TOKEN` | 空 | MCP Bearer 令牌；空且 auth=multi 时用会话令牌 |
+| `OVERVIEW_AI_BASE_URL` | 空 | OpenAI 兼容基址（如 `https://api.openai.com/v1`）；空则禁用 AI |
+| `OVERVIEW_AI_API_KEY` | 空 | AI 密钥 |
+| `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | 模型名 |
 
 ### 13.3 双链设计（v0.3）
 
@@ -407,6 +424,13 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - **可移植附件**（ADR-014）：Markdown 中保存 `assets/2026/10/xxx.png`，SPA 渲染为重写为 `/assets/...`；`/assets/` 既是附件路由也是前端静态资源前缀，服务端优先命中内嵌资源。
 - **i18n**（ADR-015）：`web/src/i18n` 提供 `t()` 与响应式 `locale`，持久化到 `localStorage`，顶栏下拉切换中/英；斜杠菜单、弹窗、工具栏等全部接入。
 
+### 13.5 协作与智能（v0.6）
+
+- **TOC**：`@tiptap/extension-table-of-contents` 生成标题锚点并跟踪滚动高亮；`TocPanel` 支持层级缩进、平滑跳转，工具栏可开关。
+- **公开分享**（ADR-016）：frontmatter `public`（迁移 0005）；`/api/v1/public/*` 匿名可读，仅暴露公开笔记；前端 `/public` 列表与只读页，编辑器工具栏「分享」一键复制链接。公开页把 wiki 链接降级为纯文本，避免泄漏私有目标。
+- **MCP**（ADR-017）：`POST /mcp` JSON-RPC，方法 `initialize`/`tools/list`/`tools/call`；工具 `notes_list/search/read/write/delete/links`；令牌认证（`OVERVIEW_MCP_TOKEN`，否则回退会话令牌）；工具错误按规范 in-band 返回。
+- **AI**（ADR-018）：`internal/ai` 无依赖 OpenAI 兼容客户端；`AIService` 提供 `organize`/`complete`/`chat`；`/api/v1/ai/*` 未配置返回 503；前端 AI 面板支持对话、整理（替换）、补全（追加）、插入。
+
 ### 13.2 v0.2 / v0.3 验证记录
 
 - `go vet ./...` / `go test ./...` 通过（覆盖 6 个包）
@@ -414,3 +438,4 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - 端到端：中文中缀检索（`发模`/`识库`）命中；`baseVersion` 过期写入返回 409；附件返回 `nosniff`；路径穿越返回 400；`/health` 返回版本
 - v0.4：未认证访问 `/api/v1/tree` 返回 401；首启 `/setup` 创建管理员后可访问；登出后再次 401；WebDAV PUT/GET 成功且写入被索引
 - v0.5：未认证可加载 SPA 与内嵌资源（200），数据接口仍需认证（401）；语言切换即时生效
+- v0.6：公开笔记匿名可读、私有笔记 404；MCP `initialize`/`tools/list` 正常、无令牌 401；AI 未配置返回 503、配置 mock 后 `organize` 返回重写内容
