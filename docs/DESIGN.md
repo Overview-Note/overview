@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.3.0（双链 + 斜杠命令）
+> 版本：v0.5.0（多用户 + WebDAV + i18n + 可移植附件）
 > 更新日期：2026-10-02
 > 定位：可自部署、支持层级目录的 Markdown 笔记知识库
 
@@ -13,6 +13,8 @@
 | v0.1.0 | Phase 1 MVP | 文件存储 + SQLite 索引 + 基础 API + Tiptap 编辑器 |
 | v0.2.0 | 架构加固 | 分层重构、原子写、乐观并发、迁移机制、中文检索、服务端快照、测试与 CI、前端 router/pinia |
 | v0.3.0 | 双链 | `[[wiki-link]]` 解析与索引、反向链接面板、斜杠命令菜单、按文件名解析 |
+| v0.4.0 | 多用户 | bcrypt 认证、会话、首启管理员、用户管理、WebDAV 挂载、可移植附件 |
+| v0.5.0 | i18n | 中英文案抽取与语言切换 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -86,6 +88,11 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 | ADR-008 | API 版本化 `/api/v1` | 为未来破坏性变更留出空间 | 前端同步更新 |
 | ADR-009 | 目录树由「文件系统结构 + 索引标题」合成 | 避免读取每个文件正文（旧实现的性能瓶颈），同时保留空文件夹 | 依赖索引；索引可重建 |
 | ADR-010 | 引入 vue-router + Pinia | 支持深链接/刷新保持、集中状态 | 前端结构规范化 |
+| ADR-011 | 认证默认 `multi`，保留 `none` 开关 | 公网默认安全；单机可通过环境变量关闭 | 无用户时强制首启向导 |
+| ADR-012 | 会话用 HttpOnly Cookie，另支持 `Bearer` | 浏览器安全（防 JS 读取），同时便于 API 客户端 | 前后端同源最简 |
+| ADR-013 | WebDAV 由 x/net/webdav 提供，Basic 认证 + 写后去抖重索引 | 复用认证与文件存储，外部编辑可检索 | WebDAV 与 SPA 并发编辑靠版本/时间区分 |
+| ADR-014 | 附件在 Markdown 中存相对路径 `assets/<...>` | 整个 `data/` 可被其它 Markdown 工具直接打开 | 渲染时重写为 `/assets/` |
+| ADR-015 | 自研轻量 i18n（无 vue-i18n 依赖） | 体积/复杂度可控，响应式 + 持久化 | 文案集中管理 |
 
 ---
 
@@ -202,6 +209,24 @@ Base：`/api/v1`
 | POST | `/assets` | 上传附件（multipart `file`） |
 | GET | `/assets/{path...}` | 访问附件（nosniff，非图片强制下载） |
 | POST | `/reindex` | 重建索引 |
+| GET | `/links?path=` | 出链与反链 |
+| GET | `/resolve?target=` | 解析 wiki 链接目标 |
+| GET | `/auth/state` | 认证模式 / 是否需要初始化 / 当前用户 |
+| POST | `/auth/setup` | 创建首个管理员 |
+| POST | `/auth/login` | 登录 |
+| POST | `/auth/logout` | 登出 |
+| GET | `/auth/me` | 当前用户 |
+| POST | `/auth/password` | 修改本人密码 |
+| GET | `/auth/users` | 用户列表（仅管理员） |
+| POST | `/auth/users` | 创建用户（仅管理员） |
+| DELETE | `/auth/users/{id}` | 删除用户（仅管理员） |
+
+**其他端点**
+
+| 路径 | 说明 |
+| --- | --- |
+| `/assets/{path...}` | 附件访问（需认证；内嵌前端资源优先） |
+| `/dav/` | WebDAV 挂载（Basic 认证，需 auth=multi） |
 
 **错误响应**
 ```json
@@ -334,13 +359,13 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 **Phase 2 — 核心增强**
 - [x] `[[wiki-link]]` 双链 + 反链面板（基于已有稳定 `id`）
 - [x] 斜杠命令（`/`）悬浮菜单
-- [ ] 用户认证 / 多用户与权限
-- [ ] 附件路径可移植（相对路径 + 导出重写）
+- [x] 用户认证 / 多用户（bcrypt + 会话 + 角色）
+- [x] 附件路径可移植（相对路径 + 渲染重写）
 
 **Phase 3 — 集成与多端**
-- [ ] WebDAV 挂载（供 Obsidian 等直接读写）
+- [x] WebDAV 挂载（供 Obsidian 等直接读写）
+- [x] i18n（前端文案抽取 + 语言切换）
 - [ ] 移动端 PWA / 原生 App（基于 `/api/v1`）
-- [ ] i18n（前端文案抽取 + 语言切换）
 
 **Phase 4 — 体验与规模**
 - [ ] 文件监视器，外部编辑自动入库
@@ -363,6 +388,7 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | `OVERVIEW_DB` | `<data>/overview.db` | SQLite 路径 |
 | `OVERVIEW_MAX_UPLOAD_MB` | `32` | 上传上限 |
 | `OVERVIEW_LOG_LEVEL` | `info` | 日志级别 |
+| `OVERVIEW_AUTH` | `multi` | 认证模式：`multi` 或 `none` |
 
 ### 13.3 双链设计（v0.3）
 
@@ -374,8 +400,17 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - 前端：编辑器内 `[[...]]` 渲染为可点击链接（点击解析跳转，未创建则询问创建）；右侧面板展示反向链接与外部链接
 - 斜杠命令：`/` 触发 `@tiptap/suggestion` 菜单（标题/列表/引用/代码块/表格/分割线）
 
+### 13.4 认证、WebDAV、i18n（v0.4/v0.5）
+
+- **认证**（ADR-011/012）：`users`/`sessions` 表（迁移 0004），bcrypt 哈希；`AuthService` 负责 setup/login/logout/用户管理；HTTP 中间件对 `/api/v1/*` 与附件强制会话（Cookie 或 `Bearer`）；无用户时前端跳转 `/setup` 创建管理员。角色 `admin`/`member`，仅管理员可管理用户，且禁止删除最后一个管理员。
+- **WebDAV**（ADR-013）：`/dav/` 映射 `data/notes`，`auth=multi` 时启用 Basic 认证；成功写入去抖 1s 后全量重建索引，外部编辑器保存的内容即可被搜索。
+- **可移植附件**（ADR-014）：Markdown 中保存 `assets/2026/10/xxx.png`，SPA 渲染为重写为 `/assets/...`；`/assets/` 既是附件路由也是前端静态资源前缀，服务端优先命中内嵌资源。
+- **i18n**（ADR-015）：`web/src/i18n` 提供 `t()` 与响应式 `locale`，持久化到 `localStorage`，顶栏下拉切换中/英；斜杠菜单、弹窗、工具栏等全部接入。
+
 ### 13.2 v0.2 / v0.3 验证记录
 
 - `go vet ./...` / `go test ./...` 通过（覆盖 6 个包）
 - `vue-tsc --noEmit` / `vite build` 通过
 - 端到端：中文中缀检索（`发模`/`识库`）命中；`baseVersion` 过期写入返回 409；附件返回 `nosniff`；路径穿越返回 400；`/health` 返回版本
+- v0.4：未认证访问 `/api/v1/tree` 返回 401；首启 `/setup` 创建管理员后可访问；登出后再次 401；WebDAV PUT/GET 成功且写入被索引
+- v0.5：未认证可加载 SPA 与内嵌资源（200），数据接口仍需认证（401）；语言切换即时生效
