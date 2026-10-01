@@ -13,6 +13,7 @@ import (
 
 	"github.com/overview-app/overview/internal/config"
 	"github.com/overview-app/overview/internal/index"
+	"github.com/overview-app/overview/internal/mcp"
 	"github.com/overview-app/overview/internal/server"
 	"github.com/overview-app/overview/internal/service"
 	"github.com/overview-app/overview/internal/store"
@@ -50,6 +51,27 @@ func main() {
 	auth := service.NewAuth(idx, cfg.AuthMode)
 	_ = idx.DeleteExpiredSessions(context.Background(), time.Now().UTC())
 
+	var mcpHandler http.Handler
+	{
+		var verify mcp.TokenVerifier
+		switch {
+		case cfg.MCPToken != "":
+			token := cfg.MCPToken
+			verify = func(_ context.Context, provided string) error {
+				if provided != token {
+					return errors.New("invalid token")
+				}
+				return nil
+			}
+		case auth.Required():
+			verify = func(ctx context.Context, provided string) error {
+				_, err := auth.Authenticate(ctx, provided)
+				return err
+			}
+		}
+		mcpHandler = mcp.New(svc, verify)
+	}
+
 	dav := server.NewDAV(st.NotesDir(), auth, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -64,6 +86,7 @@ func main() {
 		Logger:         logger,
 		Auth:           auth,
 		DAV:            dav,
+		MCP:            mcpHandler,
 	})
 	if auth.Required() {
 		if needs, err := auth.NeedsSetup(context.Background()); err == nil && needs {

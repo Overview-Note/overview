@@ -25,6 +25,7 @@ type Options struct {
 	Logger         *slog.Logger
 	Auth           *service.AuthService
 	DAV            http.Handler
+	MCP            http.Handler
 }
 
 // Server routes HTTP requests to the application service.
@@ -91,6 +92,9 @@ func (s *Server) routes() {
 	if s.opts.DAV != nil {
 		s.mux.Handle("/dav/", s.opts.DAV)
 		s.mux.Handle("/dav", s.opts.DAV)
+	}
+	if s.opts.MCP != nil {
+		s.mux.Handle("/mcp", s.opts.MCP)
 	}
 
 	s.mountStatic()
@@ -249,6 +253,8 @@ func requiresAuth(p string, static fs.FS) bool {
 	switch {
 	case strings.HasPrefix(p, "/dav"):
 		return false
+	case p == "/mcp":
+		return false // MCP performs its own bearer-token auth
 	case strings.HasPrefix(p, "/api/v1/"):
 		return true
 	case strings.HasPrefix(p, "/assets/"):

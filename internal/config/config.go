@@ -16,6 +16,7 @@ type Config struct {
 	MaxUploadMB int64
 	LogLevel    string
 	AuthMode    string
+	MCPToken    string
 }
 
 func env(key, def string) string {
@@ -41,6 +42,7 @@ func Load() Config {
 		MaxUploadMB: maxUpload,
 		LogLevel:    env("OVERVIEW_LOG_LEVEL", "info"),
 		AuthMode:    env("OVERVIEW_AUTH", "multi"),
+		MCPToken:    env("OVERVIEW_MCP_TOKEN", ""),
 	}
 }
 
