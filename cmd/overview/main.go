@@ -13,11 +13,13 @@ import (
 
 	"github.com/overview-app/overview/internal/ai"
 	"github.com/overview-app/overview/internal/config"
+	"github.com/overview-app/overview/internal/history"
 	"github.com/overview-app/overview/internal/index"
 	"github.com/overview-app/overview/internal/mcp"
 	"github.com/overview-app/overview/internal/server"
 	"github.com/overview-app/overview/internal/service"
 	"github.com/overview-app/overview/internal/store"
+	"github.com/overview-app/overview/internal/trash"
 	"github.com/overview-app/overview/internal/watcher"
 	"github.com/overview-app/overview/internal/webui"
 )
@@ -49,7 +51,9 @@ func main() {
 		staticFS = sub
 	}
 
-	svc := service.New(st, idx, st)
+	hist := history.New(cfg.HistoryDir)
+	tr := trash.New(cfg.TrashDir)
+	svc := service.New(st, idx, st, hist, tr)
 	auth := service.NewAuth(idx, cfg.AuthMode)
 	_ = idx.DeleteExpiredSessions(context.Background(), time.Now().UTC())
 

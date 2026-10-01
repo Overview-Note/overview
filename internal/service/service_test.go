@@ -4,12 +4,15 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/overview-app/overview/internal/core"
+	"github.com/overview-app/overview/internal/history"
 	"github.com/overview-app/overview/internal/index"
 	"github.com/overview-app/overview/internal/service"
 	"github.com/overview-app/overview/internal/store"
+	"github.com/overview-app/overview/internal/trash"
 )
 
 func newService(t *testing.T) *service.Service {
@@ -29,7 +32,86 @@ func newService(t *testing.T) *service.Service {
 	}
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
-	return service.New(st, ix, st)
+	return service.New(st, ix, st, nil, nil)
+}
+
+func newServiceWithLifecycle(t *testing.T) *service.Service {
+	t.Helper()
+	root := t.TempDir()
+	notes := filepath.Join(root, "notes")
+	assets := filepath.Join(root, "assets")
+	_ = os.MkdirAll(notes, 0o755)
+	_ = os.MkdirAll(assets, 0o755)
+	ix, err := index.Open(filepath.Join(root, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ix.Close() })
+	st := store.New(notes, assets)
+	hist := history.New(filepath.Join(root, ".history"))
+	tr := trash.New(filepath.Join(root, ".trash"))
+	return service.New(st, ix, st, hist, tr)
+}
+
+func TestHistoryAndTrash(t *testing.T) {
+	ctx := context.Background()
+	svc := newServiceWithLifecycle(t)
+
+	first, err := svc.SaveNote(ctx, "doc.md", "# v1\n\nfirst", "*", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveNote(ctx, "doc.md", "# v2\n\nsecond", first.Version, false); err != nil {
+		t.Fatal(err)
+	}
+
+	revs, err := svc.Revisions(ctx, "doc.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) == 0 {
+		t.Fatal("expected at least one revision")
+	}
+
+	content, err := svc.RevisionContent(ctx, "doc.md", revs[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(content, "first") {
+		t.Errorf("revision should hold v1 body: %q", content)
+	}
+
+	restored, err := svc.RestoreRevision(ctx, "doc.md", revs[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(restored.Body, "first") {
+		t.Errorf("restore failed: %q", restored.Body)
+	}
+
+	// Soft delete then restore from trash.
+	if err := svc.Delete(ctx, "doc.md"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.GetNote(ctx, "doc.md"); err == nil {
+		t.Error("note should be gone after delete")
+	}
+	entries, err := svc.Trash(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("trash entries = %d, want 1", len(entries))
+	}
+	if err := svc.RestoreTrash(ctx, entries[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.GetNote(ctx, "doc.md"); err != nil {
+		t.Errorf("note should be restored: %v", err)
+	}
+	if err := svc.PurgeTrash(ctx, entries[0].ID); err != nil {
+		t.Errorf("purge: %v", err)
+	}
 }
 
 func TestTreeAssembly(t *testing.T) {

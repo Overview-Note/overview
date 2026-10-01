@@ -11,6 +11,9 @@ type NoteRepository interface {
 	// Read returns the note at rel, including its current version.
 	Read(ctx context.Context, rel string) (Note, error)
 
+	// Raw returns the raw bytes of the note file at rel.
+	Raw(ctx context.Context, rel string) ([]byte, error)
+
 	// Write creates or updates a note. Version semantics:
 	//   expectedVersion == "*"  -> the note must not exist (create)
 	//   expectedVersion == ""   -> unconditional write
@@ -65,6 +68,13 @@ type Index interface {
 	// PublicBody returns the body of a public note at path, or ErrNotFound when
 	// the note does not exist or is not public.
 	PublicBody(ctx context.Context, path string) (string, error)
+}
+
+// PathLocator exposes the absolute filesystem path of a vault-relative path.
+// It is implemented by filesystem-backed repositories to support operations
+// like moving entries to the trash.
+type PathLocator interface {
+	AbsPath(rel string) (string, error)
 }
 
 // UserStore persists user accounts and sessions.

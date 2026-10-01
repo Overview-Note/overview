@@ -65,6 +65,22 @@ func (s *Store) Read(_ context.Context, rel string) (core.Note, error) {
 	return buildNote(toSlashPath(rel), raw, info), nil
 }
 
+// Raw returns the raw bytes of the note file at rel.
+func (s *Store) Raw(_ context.Context, rel string) ([]byte, error) {
+	full, err := resolve(s.notesDir, rel)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := os.ReadFile(full)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, core.ErrNotFound
+		}
+		return nil, err
+	}
+	return raw, nil
+}
+
 // Write creates or updates a note according to the version contract documented
 // on core.NoteRepository.
 func (s *Store) Write(_ context.Context, rel, body, expectedVersion string, public bool) (core.Note, error) {

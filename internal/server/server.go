@@ -83,6 +83,16 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
 
+	// Version history.
+	s.mux.HandleFunc("GET "+base+"/history", s.handleHistoryList)
+	s.mux.HandleFunc("GET "+base+"/history/revision", s.handleHistoryGet)
+	s.mux.HandleFunc("POST "+base+"/history/restore", s.handleHistoryRestore)
+
+	// Trash.
+	s.mux.HandleFunc("GET "+base+"/trash", s.handleTrashList)
+	s.mux.HandleFunc("POST "+base+"/trash/restore", s.handleTrashRestore)
+	s.mux.HandleFunc("DELETE "+base+"/trash", s.handleTrashPurge)
+
 	// AI assistance (available only when configured).
 	s.mux.HandleFunc("GET "+base+"/ai/status", s.handleAIStatus)
 	s.mux.HandleFunc("POST "+base+"/ai/chat", s.handleAIChat)

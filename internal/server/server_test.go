@@ -39,7 +39,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	}
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
-	svc := service.New(st, ix, st)
+	svc := service.New(st, ix, st, nil, nil)
 	dav := server.NewDAV(st.NotesDir(), service.NewAuth(ix, "none"), func() {
 		_ = svc.Reindex(context.Background())
 	}, nil)
@@ -193,7 +193,7 @@ func newAuthServer(t *testing.T) (*httptest.Server, *http.Client) {
 	}
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
-	svc := service.New(st, ix, st)
+	svc := service.New(st, ix, st, nil, nil)
 	auth := service.NewAuth(ix, "multi")
 	ts := httptest.NewServer(server.New(svc, server.Options{
 		MaxUploadBytes: 1 << 20,

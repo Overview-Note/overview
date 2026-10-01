@@ -8,6 +8,11 @@ import (
 	"github.com/overview-app/overview/internal/core"
 )
 
+// AbsPath returns the absolute filesystem path of rel inside the notes root.
+func (s *Store) AbsPath(rel string) (string, error) {
+	return resolve(s.notesDir, rel)
+}
+
 // resolve turns a slash-separated relative path into an absolute path that is
 // guaranteed to stay inside root. It rejects empty, absolute and escaping
 // paths with an error wrapping core.ErrInvalid.

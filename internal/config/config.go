@@ -13,6 +13,8 @@ type Config struct {
 	NotesDir    string
 	AssetsDir   string
 	DBPath      string
+	HistoryDir  string
+	TrashDir    string
 	MaxUploadMB int64
 	LogLevel    string
 	AuthMode    string
@@ -42,6 +44,8 @@ func Load() Config {
 		NotesDir:    filepath.Join(dataDir, "notes"),
 		AssetsDir:   filepath.Join(dataDir, "assets"),
 		DBPath:      env("OVERVIEW_DB", filepath.Join(dataDir, "overview.db")),
+		HistoryDir:  filepath.Join(dataDir, ".history"),
+		TrashDir:    filepath.Join(dataDir, ".trash"),
 		MaxUploadMB: maxUpload,
 		LogLevel:    env("OVERVIEW_LOG_LEVEL", "info"),
 		AuthMode:    env("OVERVIEW_AUTH", "multi"),

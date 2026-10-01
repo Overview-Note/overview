@@ -12,18 +12,24 @@ import (
 	"strings"
 
 	"github.com/overview-app/overview/internal/core"
+	"github.com/overview-app/overview/internal/history"
+	"github.com/overview-app/overview/internal/markdown"
+	"github.com/overview-app/overview/internal/trash"
 )
 
 // Service is the application service facade.
 type Service struct {
-	repo   core.NoteRepository
-	index  core.Index
-	assets core.AssetStore
+	repo    core.NoteRepository
+	index   core.Index
+	assets  core.AssetStore
+	history *history.Store
+	trash   *trash.Store
 }
 
-// New constructs a Service.
-func New(repo core.NoteRepository, index core.Index, assets core.AssetStore) *Service {
-	return &Service{repo: repo, index: index, assets: assets}
+// New constructs a Service. history and trash may be nil to disable those
+// features.
+func New(repo core.NoteRepository, index core.Index, assets core.AssetStore, hist *history.Store, tr *trash.Store) *Service {
+	return &Service{repo: repo, index: index, assets: assets, history: hist, trash: tr}
 }
 
 // Tree assembles the directory tree from a cheap filesystem listing merged
@@ -57,6 +63,9 @@ func (s *Service) SaveNote(ctx context.Context, path, body, expectedVersion stri
 	if strings.TrimSpace(path) == "" {
 		return core.Note{}, core.Invalidf("path is required")
 	}
+	if s.history != nil {
+		s.snapshot(ctx, path)
+	}
 	note, err := s.repo.Write(ctx, path, body, expectedVersion, public)
 	if err != nil {
 		return core.Note{}, err
@@ -65,6 +74,57 @@ func (s *Service) SaveNote(ctx context.Context, path, body, expectedVersion stri
 		return core.Note{}, err
 	}
 	return note, nil
+}
+
+// snapshot records the current on-disk revision of a note, if it exists.
+func (s *Service) snapshot(ctx context.Context, path string) {
+	existing, err := s.repo.Read(ctx, path)
+	if err != nil {
+		return
+	}
+	raw, err := s.repo.Raw(ctx, path)
+	if err != nil {
+		return
+	}
+	_, _ = s.history.Snapshot(existing.Path, existing.Version, raw)
+}
+
+// Revisions lists stored revisions for a note.
+func (s *Service) Revisions(ctx context.Context, path string) ([]history.Revision, error) {
+	if s.history == nil {
+		return []history.Revision{}, nil
+	}
+	if strings.TrimSpace(path) == "" {
+		return nil, core.Invalidf("path is required")
+	}
+	return s.history.List(path)
+}
+
+// RevisionContent returns the raw markdown of a stored revision.
+func (s *Service) RevisionContent(ctx context.Context, path, id string) (string, error) {
+	if s.history == nil {
+		return "", core.ErrNotFound
+	}
+	raw, err := s.history.Content(path, id)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+// RestoreRevision replaces a note's body with a stored revision, preserving the
+// note's current public flag.
+func (s *Service) RestoreRevision(ctx context.Context, path, id string) (core.Note, error) {
+	raw, err := s.RevisionContent(ctx, path, id)
+	if err != nil {
+		return core.Note{}, err
+	}
+	public := false
+	if current, err := s.repo.Read(ctx, path); err == nil {
+		public = current.Public
+	}
+	doc := markdown.Parse(raw)
+	return s.SaveNote(ctx, path, doc.Body, "", public)
 }
 
 // PublicNotes returns metadata for all publicly shared notes.
@@ -91,22 +151,75 @@ func (s *Service) PublicNote(ctx context.Context, path string) (core.Note, error
 	return note, nil
 }
 
-// Delete removes a note or folder. Notes are removed directly; folder removals
-// reindex only the affected subtree.
+// Delete moves a note or folder to the trash (soft delete) and reindexes the
+// affected subtree. When trash is unavailable it falls back to a hard delete.
 func (s *Service) Delete(ctx context.Context, path string) error {
 	if strings.TrimSpace(path) == "" {
 		return core.Invalidf("path is required")
 	}
-	if _, err := s.repo.Read(ctx, path); err == nil {
-		if err := s.repo.Delete(ctx, path); err != nil {
+	_, readErr := s.repo.Read(ctx, path)
+	isNote := readErr == nil
+
+	if s.trash != nil {
+		locator, ok := s.repo.(core.PathLocator)
+		if !ok {
+			return s.repo.Delete(ctx, path)
+		}
+		full, err := locator.AbsPath(path)
+		if err != nil {
 			return err
 		}
-		return s.index.DeleteByPath(ctx, path)
-	}
-	if err := s.repo.Delete(ctx, path); err != nil {
+		if _, err := s.trash.Move(full, path, !isNote); err != nil {
+			return err
+		}
+	} else if err := s.repo.Delete(ctx, path); err != nil {
 		return err
 	}
+
+	if isNote {
+		return s.index.DeleteByPath(ctx, path)
+	}
 	return s.index.ReplacePrefix(ctx, path, nil)
+}
+
+// Trash lists soft-deleted items.
+func (s *Service) Trash(ctx context.Context) ([]trash.Entry, error) {
+	if s.trash == nil {
+		return []trash.Entry{}, nil
+	}
+	return s.trash.List()
+}
+
+// RestoreTrash restores a trashed item to its original (or given) path and
+// reindexes it.
+func (s *Service) RestoreTrash(ctx context.Context, id string) error {
+	if s.trash == nil {
+		return core.ErrNotFound
+	}
+	entry, err := s.trash.Meta(id)
+	if err != nil {
+		return err
+	}
+	locator, ok := s.repo.(core.PathLocator)
+	if !ok {
+		return core.Invalidf("repository cannot locate paths")
+	}
+	dest, err := locator.AbsPath(entry.Path)
+	if err != nil {
+		return err
+	}
+	if err := s.trash.Restore(id, dest); err != nil {
+		return err
+	}
+	return s.Reindex(ctx)
+}
+
+// PurgeTrash permanently removes a trashed item.
+func (s *Service) PurgeTrash(ctx context.Context, id string) error {
+	if s.trash == nil {
+		return core.ErrNotFound
+	}
+	return s.trash.Purge(id)
 }
 
 // Move renames or relocates a note or folder, reindexing only the affected

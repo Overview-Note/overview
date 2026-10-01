@@ -31,7 +31,7 @@ func newMCPServer(t *testing.T, verify mcp.TokenVerifier) *httptest.Server {
 	}
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
-	svc := service.New(st, ix, st)
+	svc := service.New(st, ix, st, nil, nil)
 	ts := httptest.NewServer(mcp.New(svc, verify))
 	t.Cleanup(ts.Close)
 	return ts
