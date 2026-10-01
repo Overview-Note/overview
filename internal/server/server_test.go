@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -164,6 +165,104 @@ func TestWikiLinksEndpoint(t *testing.T) {
 	resp, resolved := doJSON(t, http.MethodGet, ts.URL+"/api/v1/resolve?target="+url.QueryEscape("Bee"), nil)
 	if resp.StatusCode != http.StatusOK || resolved["path"] != "dir/b.md" {
 		t.Errorf("resolve = %d %v", resp.StatusCode, resolved)
+	}
+}
+
+func newAuthServer(t *testing.T) (*httptest.Server, *http.Client) {
+	t.Helper()
+	root := t.TempDir()
+	notes := filepath.Join(root, "notes")
+	assets := filepath.Join(root, "assets")
+	if err := os.MkdirAll(notes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(assets, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ix, err := index.Open(filepath.Join(root, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ix.Close() })
+	st := store.New(notes, assets)
+	svc := service.New(st, ix, st)
+	auth := service.NewAuth(ix, "multi")
+	ts := httptest.NewServer(server.New(svc, server.Options{
+		MaxUploadBytes: 1 << 20,
+		Auth:           auth,
+	}).Handler())
+	t.Cleanup(ts.Close)
+	jar, _ := cookiejar.New(nil)
+	return ts, &http.Client{Jar: jar}
+}
+
+func authJSON(t *testing.T, client *http.Client, method, url string, body any, out any) int {
+	t.Helper()
+	var reader io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		reader = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, url, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if out != nil {
+		_ = json.NewDecoder(resp.Body).Decode(out)
+	}
+	return resp.StatusCode
+}
+
+func TestAuthFlow(t *testing.T) {
+	ts, client := newAuthServer(t)
+
+	var state map[string]any
+	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/auth/state", nil, &state); code != http.StatusOK {
+		t.Fatalf("state code = %d", code)
+	}
+	if state["needsSetup"] != true {
+		t.Errorf("expected needsSetup, got %v", state["needsSetup"])
+	}
+
+	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/tree", nil, nil); code != http.StatusUnauthorized {
+		t.Errorf("unauthenticated tree = %d, want 401", code)
+	}
+
+	var login map[string]any
+	if code := authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/setup",
+		map[string]string{"username": "admin", "password": "secret1"}, &login); code != http.StatusOK {
+		t.Fatalf("setup code = %d (%v)", code, login)
+	}
+
+	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/tree", nil, nil); code != http.StatusOK {
+		t.Errorf("authenticated tree = %d, want 200", code)
+	}
+	var me map[string]any
+	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/auth/me", nil, &me); code != http.StatusOK || me["username"] != "admin" {
+		t.Errorf("me = %d %v", code, me)
+	}
+
+	if code := authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/logout", nil, nil); code != http.StatusOK {
+		t.Errorf("logout = %d", code)
+	}
+	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/tree", nil, nil); code != http.StatusUnauthorized {
+		t.Errorf("after logout tree = %d, want 401", code)
+	}
+
+	if code := authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/login",
+		map[string]string{"username": "admin", "password": "secret1"}, &login); code != http.StatusOK {
+		t.Errorf("login = %d", code)
+	}
+	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/tree", nil, nil); code != http.StatusOK {
+		t.Errorf("tree after login = %d, want 200", code)
 	}
 }
 

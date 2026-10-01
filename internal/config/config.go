@@ -15,6 +15,7 @@ type Config struct {
 	DBPath      string
 	MaxUploadMB int64
 	LogLevel    string
+	AuthMode    string
 }
 
 func env(key, def string) string {
@@ -39,6 +40,7 @@ func Load() Config {
 		DBPath:      env("OVERVIEW_DB", filepath.Join(dataDir, "overview.db")),
 		MaxUploadMB: maxUpload,
 		LogLevel:    env("OVERVIEW_LOG_LEVEL", "info"),
+		AuthMode:    env("OVERVIEW_AUTH", "multi"),
 	}
 }
 

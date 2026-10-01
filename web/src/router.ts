@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from "vue-router";
 import EmptyState from "./components/EmptyState.vue";
 import EditorPane from "./components/EditorPane.vue";
+import { useAuthStore } from "./stores/auth";
+import LoginView from "./views/LoginView.vue";
+import SetupView from "./views/SetupView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -12,5 +15,25 @@ export const router = createRouter({
       component: EditorPane,
       props: true,
     },
+    { path: "/login", name: "login", component: LoginView, meta: { plain: true } },
+    { path: "/setup", name: "setup", component: SetupView, meta: { plain: true } },
   ],
+});
+
+router.beforeEach(async (to) => {
+  const auth = useAuthStore();
+  if (!auth.loaded) {
+    await auth.loadState().catch(() => undefined);
+  }
+  if (auth.mode !== "multi") return true;
+  if (auth.needsSetup) {
+    return to.name === "setup" ? true : { name: "setup" };
+  }
+  if (!auth.user) {
+    return to.name === "login" ? true : { name: "login" };
+  }
+  if (to.name === "login" || to.name === "setup") {
+    return { name: "home" };
+  }
+  return true;
 });

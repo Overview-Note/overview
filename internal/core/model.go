@@ -2,6 +2,25 @@ package core
 
 import "time"
 
+// Roles for authenticated users.
+const (
+	RoleAdmin  = "admin"
+	RoleMember = "member"
+)
+
+// User is an authenticated account. The password hash never leaves the
+// persistence layer.
+type User struct {
+	ID       string    `json:"id"`
+	Username string    `json:"username"`
+	Role     string    `json:"role"`
+	Created  time.Time `json:"created"`
+	Updated  time.Time `json:"updated"`
+}
+
+// IsAdmin reports whether the user has administrative privileges.
+func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
+
 // NodeType distinguishes folders from notes in the tree.
 type NodeType string
 

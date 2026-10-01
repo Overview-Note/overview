@@ -1,6 +1,28 @@
 const BASE = "/api/v1";
 
+let unauthorizedHandler: (() => void) | null = null;
+
+/** Registers a callback invoked when an authenticated request returns 401. */
+export function setUnauthorizedHandler(handler: () => void) {
+  unauthorizedHandler = handler;
+}
+
 export type NodeType = "folder" | "note";
+
+export interface User {
+  id: string;
+  username: string;
+  role: "admin" | "member";
+  created: string;
+  updated: string;
+}
+
+export interface AuthState {
+  mode: "none" | "multi";
+  needsSetup: boolean;
+  authenticated: boolean;
+  user?: User;
+}
 
 export interface TreeNode {
   name: string;
@@ -91,7 +113,12 @@ async function parseError(res: Response): Promise<ApiError> {
 }
 
 async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) throw await parseError(res);
+  if (!res.ok) {
+    if (res.status === 401 && !res.url.includes("/auth/")) {
+      unauthorizedHandler?.();
+    }
+    throw await parseError(res);
+  }
   return (await res.json()) as T;
 }
 
@@ -162,5 +189,54 @@ export const api = {
     form.append("file", file);
     const res = await fetch(`${BASE}/assets`, { method: "POST", body: form });
     return json<Asset>(res);
+  },
+
+  async authState(): Promise<AuthState> {
+    const res = await fetch(`${BASE}/auth/state`);
+    return json<AuthState>(res);
+  },
+
+  async setup(username: string, password: string): Promise<User> {
+    const res = await fetch(`${BASE}/auth/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    return (await json<{ user: User }>(res)).user;
+  },
+
+  async login(username: string, password: string): Promise<User> {
+    const res = await fetch(`${BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    return (await json<{ user: User }>(res)).user;
+  },
+
+  async logout(): Promise<void> {
+    const res = await fetch(`${BASE}/auth/logout`, { method: "POST" });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async listUsers(): Promise<User[]> {
+    const res = await fetch(`${BASE}/auth/users`);
+    return (await json<{ users: User[] }>(res)).users;
+  },
+
+  async createUser(username: string, password: string, role: string): Promise<User> {
+    const res = await fetch(`${BASE}/auth/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, role }),
+    });
+    return json<User>(res);
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/auth/users/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw await parseError(res);
   },
 };

@@ -47,12 +47,20 @@ func main() {
 	}
 
 	svc := service.New(st, idx, st)
+	auth := service.NewAuth(idx, cfg.AuthMode)
+	_ = idx.DeleteExpiredSessions(context.Background(), time.Now().UTC())
 	srv := server.New(svc, server.Options{
 		MaxUploadBytes: cfg.MaxUploadMB << 20,
 		Static:         staticFS,
 		Version:        version,
 		Logger:         logger,
+		Auth:           auth,
 	})
+	if auth.Required() {
+		if needs, err := auth.NeedsSetup(context.Background()); err == nil && needs {
+			logger.Info("authentication enabled; first-run setup required at /setup")
+		}
+	}
 
 	reindexCtx, cancelReindex := context.WithTimeout(context.Background(), 5*time.Minute)
 	start := time.Now()

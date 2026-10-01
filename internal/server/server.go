@@ -23,6 +23,7 @@ type Options struct {
 	Static         fs.FS
 	Version        string
 	Logger         *slog.Logger
+	Auth           *service.AuthService
 }
 
 // Server routes HTTP requests to the application service.
@@ -38,6 +39,9 @@ func New(svc *service.Service, opts Options) *Server {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
+	if opts.Auth == nil {
+		opts.Auth = service.NewAuth(nil, "none")
+	}
 	s := &Server{svc: svc, opts: opts, logger: opts.Logger, mux: http.NewServeMux()}
 	s.routes()
 	return s
@@ -45,11 +49,23 @@ func New(svc *service.Service, opts Options) *Server {
 
 // Handler returns the composed handler (middleware + routes).
 func (s *Server) Handler() http.Handler {
-	return requestID(recoverer(s.logger)(requestLogger(s.logger)(s.mux)))
+	return requestID(recoverer(s.logger)(requestLogger(s.logger)(s.authMiddleware(s.mux))))
 }
 
 func (s *Server) routes() {
 	const base = "/api/v1"
+
+	// Authentication.
+	s.mux.HandleFunc("GET "+base+"/auth/state", s.handleAuthState)
+	s.mux.HandleFunc("POST "+base+"/auth/setup", s.handleSetup)
+	s.mux.HandleFunc("POST "+base+"/auth/login", s.handleLogin)
+	s.mux.HandleFunc("POST "+base+"/auth/logout", s.handleLogout)
+	s.mux.HandleFunc("GET "+base+"/auth/me", s.handleMe)
+	s.mux.HandleFunc("POST "+base+"/auth/password", s.handleChangePassword)
+	s.mux.HandleFunc("GET "+base+"/auth/users", s.handleListUsers)
+	s.mux.HandleFunc("POST "+base+"/auth/users", s.handleCreateUser)
+	s.mux.HandleFunc("DELETE "+base+"/auth/users/{id}", s.handleDeleteUser)
+
 	s.mux.HandleFunc("GET "+base+"/health", s.handleHealth)
 	s.mux.HandleFunc("GET "+base+"/tree", s.handleTree)
 	s.mux.HandleFunc("GET "+base+"/note", s.handleGetNote)
@@ -160,6 +176,71 @@ func recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // ---------------------------------------------------------------------------
+// authentication
+// ---------------------------------------------------------------------------
+
+const sessionCookie = "overview_session"
+
+type userCtxKey int
+
+const ctxUser userCtxKey = iota
+
+func withUser(ctx context.Context, u core.User) context.Context {
+	return context.WithValue(ctx, ctxUser, u)
+}
+
+func userFromContext(ctx context.Context) (core.User, bool) {
+	u, ok := ctx.Value(ctxUser).(core.User)
+	return u, ok
+}
+
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.opts.Auth.Required() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		p := r.URL.Path
+		if isPublicPath(p) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !strings.HasPrefix(p, "/api/v1/") && !strings.HasPrefix(p, "/assets/") {
+			next.ServeHTTP(w, r) // SPA shell is public; data is not
+			return
+		}
+		user, err := s.opts.Auth.Authenticate(r.Context(), s.sessionToken(r))
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(withUser(r.Context(), user)))
+	})
+}
+
+func isPublicPath(p string) bool {
+	switch p {
+	case "/api/v1/health",
+		"/api/v1/auth/state",
+		"/api/v1/auth/setup",
+		"/api/v1/auth/login":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) sessionToken(r *http.Request) string {
+	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
+		return c.Value
+	}
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+	}
+	return ""
+}
+
+// ---------------------------------------------------------------------------
 // responses
 // ---------------------------------------------------------------------------
 
@@ -202,6 +283,10 @@ func (s *Server) writeDomainError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, core.ErrInvalid):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, core.ErrUnauthorized):
+		writeError(w, http.StatusUnauthorized, err.Error())
+	case errors.Is(err, core.ErrForbidden):
+		writeError(w, http.StatusForbidden, err.Error())
 	default:
 		s.logger.Error("internal error", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal server error")

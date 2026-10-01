@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"io"
+	"time"
 )
 
 // NoteRepository persists notes on a backing store (currently the filesystem).
@@ -52,6 +53,22 @@ type Index interface {
 	Backlinks(ctx context.Context, path string) ([]NoteMeta, error)
 	// ResolveLink resolves a raw wiki-link target to a stored note.
 	ResolveLink(ctx context.Context, raw string) (NoteMeta, error)
+}
+
+// UserStore persists user accounts and sessions.
+type UserStore interface {
+	CreateUser(ctx context.Context, user User, passwordHash string) error
+	UserByUsername(ctx context.Context, username string) (User, string, error)
+	UserByID(ctx context.Context, id string) (User, error)
+	ListUsers(ctx context.Context) ([]User, error)
+	DeleteUser(ctx context.Context, id string) error
+	UpdatePassword(ctx context.Context, id, passwordHash string) error
+	CountUsers(ctx context.Context) (int, error)
+
+	CreateSession(ctx context.Context, token, userID string, expires time.Time) error
+	UserBySession(ctx context.Context, token string) (User, error)
+	DeleteSession(ctx context.Context, token string) error
+	DeleteExpiredSessions(ctx context.Context, now time.Time) error
 }
 
 // AssetStore persists binary attachments.
