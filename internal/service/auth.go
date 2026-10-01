@@ -66,17 +66,27 @@ func (a *AuthService) Setup(ctx context.Context, username, password string) (cor
 	return user, token, err
 }
 
-// Login verifies credentials and starts a session.
-func (a *AuthService) Login(ctx context.Context, username, password string) (core.User, string, error) {
+// VerifyPassword checks a username/password pair without starting a session.
+// Used by non-cookie protocols such as WebDAV Basic auth.
+func (a *AuthService) VerifyPassword(ctx context.Context, username, password string) (core.User, error) {
 	user, hash, err := a.users.UserByUsername(ctx, strings.TrimSpace(username))
 	if err != nil {
 		if errors.Is(err, core.ErrNotFound) {
-			return core.User{}, "", core.ErrUnauthorized
+			return core.User{}, core.ErrUnauthorized
 		}
-		return core.User{}, "", err
+		return core.User{}, err
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
-		return core.User{}, "", core.ErrUnauthorized
+		return core.User{}, core.ErrUnauthorized
+	}
+	return user, nil
+}
+
+// Login verifies credentials and starts a session.
+func (a *AuthService) Login(ctx context.Context, username, password string) (core.User, string, error) {
+	user, err := a.VerifyPassword(ctx, username, password)
+	if err != nil {
+		return core.User{}, "", err
 	}
 	token, err := a.newSession(ctx, user.ID)
 	return user, token, err

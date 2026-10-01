@@ -24,6 +24,7 @@ type Options struct {
 	Version        string
 	Logger         *slog.Logger
 	Auth           *service.AuthService
+	DAV            http.Handler
 }
 
 // Server routes HTTP requests to the application service.
@@ -82,6 +83,11 @@ func (s *Server) routes() {
 
 	// Vault-relative asset URLs (portable across tools / exports).
 	s.mux.HandleFunc("GET /assets/{path...}", s.handleAsset)
+
+	if s.opts.DAV != nil {
+		s.mux.Handle("/dav/", s.opts.DAV)
+		s.mux.Handle("/dav", s.opts.DAV)
+	}
 
 	s.mountStatic()
 }

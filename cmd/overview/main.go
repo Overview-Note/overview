@@ -49,12 +49,21 @@ func main() {
 	svc := service.New(st, idx, st)
 	auth := service.NewAuth(idx, cfg.AuthMode)
 	_ = idx.DeleteExpiredSessions(context.Background(), time.Now().UTC())
+
+	dav := server.NewDAV(st.NotesDir(), auth, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := svc.Reindex(ctx); err != nil {
+			logger.Warn("reindex after WebDAV write failed", "error", err)
+		}
+	}, logger)
 	srv := server.New(svc, server.Options{
 		MaxUploadBytes: cfg.MaxUploadMB << 20,
 		Static:         staticFS,
 		Version:        version,
 		Logger:         logger,
 		Auth:           auth,
+		DAV:            dav,
 	})
 	if auth.Required() {
 		if needs, err := auth.NeedsSetup(context.Background()); err == nil && needs {

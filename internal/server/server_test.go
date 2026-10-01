@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/overview-app/overview/internal/index"
 	"github.com/overview-app/overview/internal/server"
@@ -38,7 +40,13 @@ func newTestServer(t *testing.T) *httptest.Server {
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
 	svc := service.New(st, ix, st)
-	ts := httptest.NewServer(server.New(svc, server.Options{MaxUploadBytes: 1 << 20}).Handler())
+	dav := server.NewDAV(st.NotesDir(), service.NewAuth(ix, "none"), func() {
+		_ = svc.Reindex(context.Background())
+	}, nil)
+	ts := httptest.NewServer(server.New(svc, server.Options{
+		MaxUploadBytes: 1 << 20,
+		DAV:            dav,
+	}).Handler())
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -263,6 +271,44 @@ func TestAuthFlow(t *testing.T) {
 	}
 	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/tree", nil, nil); code != http.StatusOK {
 		t.Errorf("tree after login = %d, want 200", code)
+	}
+}
+
+func TestWebDAV(t *testing.T) {
+	ts := newTestServer(t)
+
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/dav/dav-note.md",
+		strings.NewReader("# Dav\n\nhello from webdav channel"))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		t.Fatalf("dav put status = %d", resp.StatusCode)
+	}
+
+	got, err := http.Get(ts.URL + "/dav/dav-note.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Body.Close()
+	if got.StatusCode != http.StatusOK {
+		t.Fatalf("dav get status = %d", got.StatusCode)
+	}
+	body, _ := io.ReadAll(got.Body)
+	if !strings.Contains(string(body), "hello from webdav") {
+		t.Errorf("dav body = %q", body)
+	}
+
+	// Writes are reindexed after a debounce; wait and search via the API.
+	time.Sleep(1200 * time.Millisecond)
+	resp2, res := doJSON(t, http.MethodGet, ts.URL+"/api/v1/search?q=webdav", nil)
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("search status = %d", resp2.StatusCode)
+	}
+	if arr, _ := res["results"].([]any); len(arr) == 0 {
+		t.Errorf("webdav write was not indexed: %v", res)
 	}
 }
 
