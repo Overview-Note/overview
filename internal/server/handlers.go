@@ -121,6 +121,24 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
+func (s *Server) handleOrphanAssets(w http.ResponseWriter, r *http.Request) {
+	orphans, err := s.svc.OrphanAssets(r.Context())
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"orphans": orphans})
+}
+
+func (s *Server) handlePurgeOrphans(w http.ResponseWriter, r *http.Request) {
+	removed, err := s.svc.PurgeOrphanAssets(r.Context())
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"removed": removed})
+}
+
 func (s *Server) handlePublicNotes(w http.ResponseWriter, r *http.Request) {
 	notes, err := s.svc.PublicNotes(r.Context())
 	if err != nil {

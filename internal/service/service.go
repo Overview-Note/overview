@@ -8,14 +8,20 @@ import (
 	"context"
 	"io"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/overview-app/overview/internal/core"
 	"github.com/overview-app/overview/internal/history"
 	"github.com/overview-app/overview/internal/markdown"
 	"github.com/overview-app/overview/internal/trash"
 )
+
+// assetRefPattern matches asset references in any of the accepted URL forms,
+// capturing the vault-relative path.
+var assetRefPattern = regexp.MustCompile(`(?:/api/v1/assets/|/api/assets/|/assets/|assets/)([A-Za-z0-9._/-]+)`)
 
 // Service is the application service facade.
 type Service struct {
@@ -303,6 +309,65 @@ func (s *Service) Upload(ctx context.Context, name string, r io.Reader) (core.As
 // OpenAsset returns a reader for an asset.
 func (s *Service) OpenAsset(ctx context.Context, rel string) (io.ReadSeekCloser, error) {
 	return s.assets.Open(ctx, rel)
+}
+
+// OrphanAsset describes a stored asset not referenced by any note.
+type OrphanAsset struct {
+	Path string    `json:"path"`
+	Size int64     `json:"size"`
+	Age  time.Time `json:"created"`
+}
+
+// OrphanAssets returns stored assets that no note references.
+func (s *Service) OrphanAssets(ctx context.Context) ([]OrphanAsset, error) {
+	assets, err := s.assets.ListAssets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	referenced := map[string]struct{}{}
+	if err := s.repo.Walk(ctx, func(n core.Note) error {
+		for _, ref := range assetRefs(n.Body) {
+			referenced[ref] = struct{}{}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	orphans := make([]OrphanAsset, 0)
+	for _, a := range assets {
+		if _, ok := referenced[a.Path]; ok {
+			continue
+		}
+		orphans = append(orphans, OrphanAsset{Path: a.Path, Size: a.Size, Age: a.Created})
+	}
+	sort.Slice(orphans, func(i, j int) bool { return orphans[i].Age.Before(orphans[j].Age) })
+	return orphans, nil
+}
+
+// PurgeOrphanAssets deletes unreferenced assets and returns how many were
+// removed.
+func (s *Service) PurgeOrphanAssets(ctx context.Context) (int, error) {
+	orphans, err := s.OrphanAssets(ctx)
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, o := range orphans {
+		if err := s.assets.DeleteAsset(ctx, o.Path); err == nil {
+			removed++
+		}
+	}
+	return removed, nil
+}
+
+// assetRefs extracts asset paths referenced by a Markdown body, normalising
+// the various URL forms to the vault-relative form used by the store.
+func assetRefs(body string) []string {
+	var refs []string
+	for _, m := range assetRefPattern.FindAllStringSubmatch(body, -1) {
+		refs = append(refs, m[1])
+	}
+	return refs
 }
 
 // ReindexPath reindexes only the subtree rooted at path (used by the file

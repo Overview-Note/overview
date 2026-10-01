@@ -99,4 +99,8 @@ type AssetStore interface {
 	Save(ctx context.Context, name string, r io.Reader) (Asset, error)
 	// Open returns a reader for the asset at rel.
 	Open(ctx context.Context, rel string) (io.ReadSeekCloser, error)
+	// ListAssets returns metadata for every stored asset.
+	ListAssets(ctx context.Context) ([]Asset, error)
+	// DeleteAsset removes the asset at rel.
+	DeleteAsset(ctx context.Context, rel string) error
 }

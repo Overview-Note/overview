@@ -296,6 +296,50 @@ func (s *Store) Save(_ context.Context, name string, r io.Reader) (core.Asset, e
 	}, nil
 }
 
+// ListAssets returns metadata for every stored asset.
+func (s *Store) ListAssets(_ context.Context) ([]core.Asset, error) {
+	assets := make([]core.Asset, 0, 32)
+	err := filepath.WalkDir(s.assetsDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		rel, err := filepath.Rel(s.assetsDir, p)
+		if err != nil {
+			return nil
+		}
+		relSlash := filepath.ToSlash(rel)
+		assets = append(assets, core.Asset{
+			Path:        relSlash,
+			URL:         "/assets/" + relSlash,
+			Name:        d.Name(),
+			Size:        info.Size(),
+			ContentType: contentType(p),
+			Created:     info.ModTime().UTC(),
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return assets, nil
+}
+
+// DeleteAsset removes the asset at rel.
+func (s *Store) DeleteAsset(_ context.Context, rel string) error {
+	full, err := resolve(s.assetsDir, rel)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(full); os.IsNotExist(err) {
+		return core.ErrNotFound
+	}
+	return os.Remove(full)
+}
+
 // Open returns a reader for the asset at rel.
 func (s *Store) Open(_ context.Context, rel string) (io.ReadSeekCloser, error) {
 	full, err := resolve(s.assetsDir, rel)

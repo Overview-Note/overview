@@ -96,9 +96,10 @@ type SearchHit struct {
 
 // Asset describes a stored upload.
 type Asset struct {
-	Path        string `json:"path"`
-	URL         string `json:"url"`
-	Name        string `json:"name"`
-	Size        int64  `json:"size"`
-	ContentType string `json:"contentType"`
+	Path        string    `json:"path"`
+	URL         string    `json:"url"`
+	Name        string    `json:"name"`
+	Size        int64     `json:"size"`
+	ContentType string    `json:"contentType"`
+	Created     time.Time `json:"created,omitempty"`
 }

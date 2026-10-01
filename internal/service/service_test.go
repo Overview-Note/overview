@@ -193,6 +193,49 @@ func TestDeleteFolderReindexes(t *testing.T) {
 	}
 }
 
+func TestOrphanAssets(t *testing.T) {
+	ctx := context.Background()
+	svc := newServiceWithLifecycle(t)
+
+	used, err := svc.Upload(ctx, "used.png", strings.NewReader("USED"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	orphan, err := svc.Upload(ctx, "orphan.png", strings.NewReader("ORPHAN"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.SaveNote(ctx, "ref.md", "# Ref\n\n![img](assets/"+used.Path+")", "*", false); err != nil {
+		t.Fatal(err)
+	}
+
+	orphans, err := svc.OrphanAssets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(orphans) != 1 || orphans[0].Path != orphan.Path {
+		t.Fatalf("orphans = %+v, want [%s]", orphans, orphan.Path)
+	}
+
+	removed, err := svc.PurgeOrphanAssets(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != 1 {
+		t.Errorf("removed = %d, want 1", removed)
+	}
+	if r, err := svc.OpenAsset(ctx, used.Path); err != nil {
+		t.Errorf("referenced asset must survive: %v", err)
+	} else {
+		r.Close()
+	}
+	if r, err := svc.OpenAsset(ctx, orphan.Path); err == nil {
+		r.Close()
+		t.Error("orphan asset should be deleted")
+	}
+}
+
 func TestConflictPropagates(t *testing.T) {
 	ctx := context.Background()
 	svc := newService(t)

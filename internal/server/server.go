@@ -83,6 +83,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
 
+	// Asset maintenance.
+	s.mux.HandleFunc("GET "+base+"/assets/orphans", s.handleOrphanAssets)
+	s.mux.HandleFunc("POST "+base+"/assets/orphans/purge", s.handlePurgeOrphans)
+
 	// Version history.
 	s.mux.HandleFunc("GET "+base+"/history", s.handleHistoryList)
 	s.mux.HandleFunc("GET "+base+"/history/revision", s.handleHistoryGet)
