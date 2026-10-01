@@ -1,0 +1,289 @@
+openapi: 3.0.3
+info:
+  title: Overview API
+  description: |
+    REST API for the Overview self-hosted Markdown knowledge base.
+    Authenticate with a session cookie (browser) or `Authorization: Bearer <token>`.
+  version: "0.7.0"
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [system]
+      responses:
+        "200": { description: OK }
+  /tree:
+    get:
+      summary: Get the note directory tree
+      tags: [notes]
+      responses:
+        "200": { description: Tree nodes }
+  /note:
+    get:
+      summary: Read a note
+      tags: [notes]
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Note }
+        "404": { description: Not found }
+    put:
+      summary: Create or update a note
+      tags: [notes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, body]
+              properties:
+                path: { type: string }
+                body: { type: string }
+                baseVersion: { type: string, description: "'*' create-only, or prior version for optimistic locking" }
+                public: { type: boolean }
+      responses:
+        "200": { description: Saved note }
+        "409": { description: Version or existence conflict }
+    delete:
+      summary: Move a note or folder to the trash
+      tags: [notes]
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Deleted }
+  /folder:
+    post:
+      summary: Create a folder
+      tags: [notes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { path: { type: string } } }
+      responses:
+        "200": { description: Created }
+  /rename:
+    post:
+      summary: Rename or move a note or folder
+      tags: [notes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { from: { type: string }, to: { type: string } } }
+      responses:
+        "200": { description: Renamed }
+  /search:
+    get:
+      summary: Full-text search
+      tags: [search]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Search hits }
+  /links:
+    get:
+      summary: Outgoing wiki-links and backlinks of a note
+      tags: [links]
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Links }
+  /resolve:
+    get:
+      summary: Resolve a wiki-link target to a note
+      tags: [links]
+      parameters:
+        - { name: target, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Note metadata }
+        "404": { description: Not found }
+  /assets:
+    post:
+      summary: Upload an attachment
+      tags: [assets]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties: { file: { type: string, format: binary } }
+      responses:
+        "200": { description: Stored asset }
+  /assets/orphans:
+    get:
+      summary: List attachments not referenced by any note
+      tags: [assets]
+      responses:
+        "200": { description: Orphan assets }
+  /assets/orphans/purge:
+    post:
+      summary: Delete all orphaned attachments
+      tags: [assets]
+      responses:
+        "200": { description: Count removed }
+  /reindex:
+    post:
+      summary: Rebuild the search index
+      tags: [system]
+      responses:
+        "200": { description: Reindexed }
+  /history:
+    get:
+      summary: List revisions of a note
+      tags: [history]
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Revisions }
+  /history/revision:
+    get:
+      summary: Get revision content
+      tags: [history]
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Revision content }
+  /history/restore:
+    post:
+      summary: Restore a note to a revision
+      tags: [history]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { path: { type: string }, id: { type: string } } }
+      responses:
+        "200": { description: Restored note }
+  /trash:
+    get:
+      summary: List trashed items
+      tags: [trash]
+      responses:
+        "200": { description: Trash entries }
+    delete:
+      summary: Permanently delete a trashed item
+      tags: [trash]
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Purged }
+  /trash/restore:
+    post:
+      summary: Restore a trashed item
+      tags: [trash]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { id: { type: string } } }
+      responses:
+        "200": { description: Restored }
+  /public/notes:
+    get:
+      summary: List public notes (anonymous)
+      tags: [public]
+      responses:
+        "200": { description: Public notes }
+  /public/note:
+    get:
+      summary: Read a public note (anonymous)
+      tags: [public]
+      parameters:
+        - { name: path, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Public note }
+        "404": { description: Not found or not public }
+  /ai/status:
+    get:
+      summary: AI availability and model
+      tags: [ai]
+      responses:
+        "200": { description: Status }
+  /ai/chat:
+    post:
+      summary: AI chat, organize or complete
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [chat, organize, complete] }
+                content: { type: string }
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string }
+                      content: { type: string }
+      responses:
+        "200": { description: Reply }
+        "503": { description: AI not configured }
+  /auth/state:
+    get:
+      summary: Authentication mode and current user
+      tags: [auth]
+      responses:
+        "200": { description: State }
+  /auth/setup:
+    post:
+      summary: Create the first administrator
+      tags: [auth]
+      responses:
+        "200": { description: Created and logged in }
+        "409": { description: Already initialized }
+  /auth/login:
+    post:
+      summary: Log in
+      tags: [auth]
+      responses:
+        "200": { description: Logged in }
+        "401": { description: Invalid credentials }
+  /auth/logout:
+    post:
+      summary: Log out
+      tags: [auth]
+      responses:
+        "200": { description: Logged out }
+  /auth/me:
+    get:
+      summary: Current user
+      tags: [auth]
+      responses:
+        "200": { description: User }
+        "401": { description: Unauthorized }
+  /auth/password:
+    post:
+      summary: Change own password
+      tags: [auth]
+      responses:
+        "200": { description: Changed }
+  /auth/users:
+    get:
+      summary: List users (admin)
+      tags: [auth]
+      responses:
+        "200": { description: Users }
+    post:
+      summary: Create a user (admin)
+      tags: [auth]
+      responses:
+        "200": { description: Created }
+  /auth/users/{id}:
+    delete:
+      summary: Delete a user (admin)
+      tags: [auth]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Deleted }

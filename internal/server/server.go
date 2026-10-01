@@ -83,6 +83,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
 
+	// API documentation (public).
+	s.mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPI)
+	s.mux.HandleFunc("GET /api/docs", s.handleAPIDocs)
+
 	// Asset maintenance.
 	s.mux.HandleFunc("GET "+base+"/assets/orphans", s.handleOrphanAssets)
 	s.mux.HandleFunc("POST "+base+"/assets/orphans/purge", s.handlePurgeOrphans)
@@ -274,6 +278,8 @@ func requiresAuth(p string, static fs.FS) bool {
 		return false
 	case p == "/mcp":
 		return false // MCP performs its own bearer-token auth
+	case p == "/api/v1/openapi.json", p == "/api/docs":
+		return false
 	case strings.HasPrefix(p, "/api/v1/"):
 		return true
 	case strings.HasPrefix(p, "/assets/"):
