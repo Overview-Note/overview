@@ -91,8 +91,8 @@ func (s *Service) PublicNote(ctx context.Context, path string) (core.Note, error
 	return note, nil
 }
 
-// Delete removes a note or folder. Notes are removed from the index directly;
-// folder removals trigger a full reindex.
+// Delete removes a note or folder. Notes are removed directly; folder removals
+// reindex only the affected subtree.
 func (s *Service) Delete(ctx context.Context, path string) error {
 	if strings.TrimSpace(path) == "" {
 		return core.Invalidf("path is required")
@@ -106,10 +106,11 @@ func (s *Service) Delete(ctx context.Context, path string) error {
 	if err := s.repo.Delete(ctx, path); err != nil {
 		return err
 	}
-	return s.Reindex(ctx)
+	return s.index.ReplacePrefix(ctx, path, nil)
 }
 
-// Move renames or relocates a note or folder and rebuilds the index.
+// Move renames or relocates a note or folder, reindexing only the affected
+// subtrees (source and destination).
 func (s *Service) Move(ctx context.Context, from, to string) error {
 	if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
 		return core.Invalidf("from and to are required")
@@ -117,7 +118,14 @@ func (s *Service) Move(ctx context.Context, from, to string) error {
 	if err := s.repo.Move(ctx, from, to); err != nil {
 		return err
 	}
-	return s.Reindex(ctx)
+	if err := s.index.ReplacePrefix(ctx, from, nil); err != nil {
+		return err
+	}
+	notes, err := s.repo.ListUnder(ctx, to)
+	if err != nil {
+		return err
+	}
+	return s.index.ReplacePrefix(ctx, to, notes)
 }
 
 // Mkdir creates a folder.
@@ -182,6 +190,17 @@ func (s *Service) Upload(ctx context.Context, name string, r io.Reader) (core.As
 // OpenAsset returns a reader for an asset.
 func (s *Service) OpenAsset(ctx context.Context, rel string) (io.ReadSeekCloser, error) {
 	return s.assets.Open(ctx, rel)
+}
+
+// ReindexPath reindexes only the subtree rooted at path (used by the file
+// watcher for external edits).
+func (s *Service) ReindexPath(ctx context.Context, path string) error {
+	path = strings.Trim(strings.TrimSpace(path), "/")
+	notes, err := s.repo.ListUnder(ctx, path)
+	if err != nil {
+		return err
+	}
+	return s.index.ReplacePrefix(ctx, path, notes)
 }
 
 // Reindex rebuilds the search index from the repository.

@@ -183,6 +183,30 @@ func (s *Store) List(_ context.Context) ([]core.Entry, error) {
 	return entries, nil
 }
 
+// ListUnder returns notes at or under the given path prefix.
+func (s *Store) ListUnder(ctx context.Context, prefix string) ([]core.Note, error) {
+	entries, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	prefix = strings.Trim(prefix, "/")
+	out := make([]core.Note, 0, 16)
+	for _, e := range entries {
+		if e.IsDir || !isMarkdown(e.Path) {
+			continue
+		}
+		if prefix != "" && e.Path != prefix && !strings.HasPrefix(e.Path, prefix+"/") {
+			continue
+		}
+		note, err := s.Read(ctx, e.Path)
+		if err != nil {
+			continue
+		}
+		out = append(out, note)
+	}
+	return out, nil
+}
+
 // Walk visits every note (reading full content), used to rebuild the index.
 func (s *Store) Walk(ctx context.Context, fn func(core.Note) error) error {
 	entries, err := s.List(ctx)

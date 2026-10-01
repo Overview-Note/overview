@@ -31,6 +31,9 @@ type NoteRepository interface {
 	// List returns a flat, content-free listing of the notes tree.
 	List(ctx context.Context) ([]Entry, error)
 
+	// ListUnder returns notes at or under the given path prefix.
+	ListUnder(ctx context.Context, prefix string) ([]Note, error)
+
 	// Walk visits every note, used to (re)build the index.
 	Walk(ctx context.Context, fn func(Note) error) error
 }
@@ -43,6 +46,9 @@ type Index interface {
 	DeleteByPath(ctx context.Context, path string) error
 	// Sync replaces the entire index contents with notes.
 	Sync(ctx context.Context, notes []Note) error
+	// ReplacePrefix reindexes only the subtree rooted at prefix: it deletes all
+	// indexed notes whose path equals or is under prefix, then inserts notes.
+	ReplacePrefix(ctx context.Context, prefix string, notes []Note) error
 	// Tree returns metadata for every indexed note.
 	Tree(ctx context.Context) ([]NoteMeta, error)
 	// Search runs a full-text query and returns escaped snippets.

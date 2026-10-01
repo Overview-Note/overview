@@ -18,6 +18,7 @@ import (
 	"github.com/overview-app/overview/internal/server"
 	"github.com/overview-app/overview/internal/service"
 	"github.com/overview-app/overview/internal/store"
+	"github.com/overview-app/overview/internal/watcher"
 	"github.com/overview-app/overview/internal/webui"
 )
 
@@ -122,9 +123,18 @@ func main() {
 		}
 	}()
 
+	watchCtx, cancelWatch := context.WithCancel(context.Background())
+	defer cancelWatch()
+	go func() {
+		if err := watcher.New(st.NotesDir(), svc, logger).Run(watchCtx); err != nil {
+			logger.Warn("file watcher stopped", "error", err)
+		}
+	}()
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
+	cancelWatch()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

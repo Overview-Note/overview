@@ -177,6 +177,42 @@ func (ix *Index) Sync(ctx context.Context, notes []core.Note) error {
 	return tx.Commit()
 }
 
+// ReplacePrefix reindexes only the subtree rooted at prefix.
+func (ix *Index) ReplacePrefix(ctx context.Context, prefix string, notes []core.Note) error {
+	tx, err := ix.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	like := escapeLike(prefix) + "/%"
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM notes_fts WHERE id IN (SELECT id FROM notes WHERE path = ? OR path LIKE ? ESCAPE '\')`,
+		prefix, like); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM links WHERE source_id IN (SELECT id FROM notes WHERE path = ? OR path LIKE ? ESCAPE '\')`,
+		prefix, like); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM notes WHERE path = ? OR path LIKE ? ESCAPE '\'`, prefix, like); err != nil {
+		return err
+	}
+	for _, n := range notes {
+		if err := insert(ctx, tx, n); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
+}
+
 // Tree returns metadata for every indexed note.
 func (ix *Index) Tree(ctx context.Context) ([]core.NoteMeta, error) {
 	rows, err := ix.db.QueryContext(ctx,

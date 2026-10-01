@@ -133,6 +133,39 @@ func TestWikiLinks(t *testing.T) {
 	}
 }
 
+func TestReplacePrefix(t *testing.T) {
+	ctx := context.Background()
+	ix := openTestIndex(t)
+	if err := ix.Sync(ctx, []core.Note{
+		note("1", "dir/a.md", "A", "alpha"),
+		note("2", "dir/sub/b.md", "B", "beta"),
+		note("3", "other.md", "O", "omega"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Replace only dir/* with a single new note.
+	if err := ix.ReplacePrefix(ctx, "dir", []core.Note{
+		note("9", "dir/new.md", "New", "gamma"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, _ := ix.Search(ctx, "alpha", 10, 0)
+	if len(hits) != 0 {
+		t.Errorf("alpha should be gone: %d", len(hits))
+	}
+	hits, _ = ix.Search(ctx, "gamma", 10, 0)
+	if len(hits) != 1 {
+		t.Errorf("gamma should exist: %d", len(hits))
+	}
+	// Unrelated subtree survives.
+	hits, _ = ix.Search(ctx, "omega", 10, 0)
+	if len(hits) != 1 {
+		t.Errorf("unrelated note lost: %d", len(hits))
+	}
+}
+
 func TestUpsertAndDelete(t *testing.T) {
 	ctx := context.Background()
 	ix := openTestIndex(t)
