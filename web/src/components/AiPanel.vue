@@ -3,7 +3,7 @@ import { ref } from "vue";
 import { api } from "../api";
 import { t } from "../i18n";
 
-const props = defineProps<{ content: string }>();
+const props = defineProps<{ content: string; enabled?: boolean }>();
 const emit = defineEmits<{
   (e: "insert", payload: { text: string; replace: boolean }): void;
 }>();
@@ -80,9 +80,14 @@ async function complete() {
 <template>
   <aside class="ai-panel">
     <h4>{{ t("ai.title") }}</h4>
+    <p v-if="enabled === false" class="muted small">{{ t("ai.notConfiguredHint") }}</p>
     <div class="ai-actions">
-      <button :disabled="busy" @click="organize">{{ t("ai.organize") }}</button>
-      <button :disabled="busy" @click="complete">{{ t("ai.complete") }}</button>
+      <button :disabled="busy || enabled === false" @click="organize">
+        {{ t("ai.organize") }}
+      </button>
+      <button :disabled="busy || enabled === false" @click="complete">
+        {{ t("ai.complete") }}
+      </button>
     </div>
     <div class="ai-messages">
       <div v-for="(m, i) in messages" :key="i" class="ai-msg" :class="m.role">
@@ -104,7 +109,7 @@ async function complete() {
         :placeholder="t('ai.placeholder')"
         @keydown.enter.exact.prevent="send"
       ></textarea>
-      <button class="primary" type="submit" :disabled="busy">
+      <button class="primary" type="submit" :disabled="busy || enabled === false">
         {{ busy ? t("ai.thinking") : t("ai.send") }}
       </button>
     </form>

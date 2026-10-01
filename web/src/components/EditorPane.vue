@@ -17,6 +17,7 @@ import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import { api, ApiError } from "../api";
 import { SlashCommand, slashItems, type SlashItem } from "../editor/slash";
+import { compressImage } from "../media/compress";
 import type { TocItem } from "../editor/toc";
 import { t } from "../i18n";
 import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
@@ -47,6 +48,9 @@ const showAI = ref(false);
 const aiEnabled = ref(false);
 const showHistory = ref(false);
 const aiContent = ref("");
+const compressImages = ref(localStorage.getItem("overview.compress") !== "off");
+const flashMessage = ref("");
+let flashTimer: number | undefined;
 let suppress = false;
 let saveTimer: number | undefined;
 let currentPath = "";
@@ -69,13 +73,33 @@ function mdToHtml(md: string): string {
   return resolveAssetSrc(html);
 }
 
-async function uploadAndInsert(file: File) {
+async function uploadAndInsert(original: File) {
   try {
+    const file = compressImages.value ? await compressImage(original) : original;
     const asset = await api.uploadAsset(file);
     editor.value?.chain().focus().setImage({ src: asset.url, alt: file.name }).run();
+    if (file !== original && original.size > 0) {
+      const saved = Math.round((1 - file.size / original.size) * 100);
+      if (saved >= 10) {
+        flashStatus(t("editor.compressed", { percent: saved }));
+      }
+    }
   } catch (e) {
     await dialogs.askConfirm(t("editor.uploadFailed"), (e as Error).message, false);
   }
+}
+
+function flashStatus(message: string) {
+  flashMessage.value = message;
+  window.clearTimeout(flashTimer);
+  flashTimer = window.setTimeout(() => {
+    flashMessage.value = "";
+  }, 4000);
+}
+
+function toggleCompress() {
+  compressImages.value = !compressImages.value;
+  localStorage.setItem("overview.compress", compressImages.value ? "on" : "off");
 }
 
 function handleFiles(files?: FileList | null): boolean {
@@ -259,6 +283,13 @@ async function togglePublic() {
   }
 }
 
+function toggleAI() {
+  showAI.value = !showAI.value;
+  if (showAI.value && !aiEnabled.value) {
+    void dialogs.askConfirm(t("ai.title"), t("ai.notConfiguredHint"), false);
+  }
+}
+
 function navigateHeading(item: TocItem) {
   const container = scrollEl.value;
   if (!container) return;
@@ -319,6 +350,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   window.clearTimeout(saveTimer);
+  window.clearTimeout(flashTimer);
   window.removeEventListener("beforeunload", onBeforeUnload);
 });
 </script>
@@ -399,6 +431,13 @@ onBeforeUnmount(() => {
         {{ t("editor.link") }}
       </button>
       <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
+      <button
+        :class="{ on: compressImages }"
+        :title="t('editor.compressToggle')"
+        @click="toggleCompress"
+      >
+        {{ t("editor.compress") }}
+      </button>
       <button :class="{ on: isActive('table') }" @click="insertTable">
         {{ t("editor.table") }}
       </button>
@@ -420,10 +459,9 @@ onBeforeUnmount(() => {
         {{ t("history.title") }}
       </button>
       <button
-        v-if="aiEnabled"
         :class="{ on: showAI }"
-        :title="t('ai.title')"
-        @click="showAI = !showAI"
+        :title="aiEnabled ? t('ai.title') : t('ai.notConfigured')"
+        @click="toggleAI"
       >
         {{ t("ai.title") }}
       </button>
@@ -436,13 +474,14 @@ onBeforeUnmount(() => {
       </button>
       <span class="status">
         {{
-          status === "saving"
+          flashMessage ||
+          (status === "saving"
             ? t("editor.saving")
             : status === "saved"
               ? t("editor.saved")
               : dirty
                 ? t("editor.unsaved")
-                : ""
+                : "")
         }}
       </span>
     </div>
@@ -465,23 +504,30 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="editor-body">
-      <TocPanel v-if="showToc" :items="toc" @navigate="navigateHeading" />
       <div ref="scrollEl" class="editor-scroll">
         <div class="editor-title">{{ store.note?.title || store.note?.path }}</div>
         <EditorContent :editor="editor" />
       </div>
-      <AiPanel v-if="showAI" :content="aiContent" @insert="insertAI" />
-      <HistoryPanel
-        v-if="showHistory && store.note"
-        :path="store.note.path"
-        @restored="load(store.note!.path)"
-      />
-      <LinksPanel
-        v-if="store.note"
-        :path="store.note.path"
-        @navigate="(p) => router.push({ name: 'note', params: { path: p } })"
-        @create="openWiki"
-      />
+      <div class="editor-side" v-if="showToc || showAI || showHistory || store.note">
+        <TocPanel v-if="showToc" :items="toc" @navigate="navigateHeading" />
+        <AiPanel
+          v-if="showAI"
+          :content="aiContent"
+          :enabled="aiEnabled"
+          @insert="insertAI"
+        />
+        <HistoryPanel
+          v-if="showHistory && store.note"
+          :path="store.note.path"
+          @restored="load(store.note!.path)"
+        />
+        <LinksPanel
+          v-if="store.note"
+          :path="store.note.path"
+          @navigate="(p) => router.push({ name: 'note', params: { path: p } })"
+          @create="openWiki"
+        />
+      </div>
     </div>
 
     <SlashMenu ref="slashMenu" />
