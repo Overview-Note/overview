@@ -248,7 +248,7 @@ func (s *Store) Save(_ context.Context, name string, r io.Reader) (core.Asset, e
 	}
 	return core.Asset{
 		Path:        rel,
-		URL:         "/api/v1/assets/" + rel,
+		URL:         "/assets/" + rel,
 		Name:        filepath.Base(name),
 		Size:        size,
 		ContentType: contentType(full),

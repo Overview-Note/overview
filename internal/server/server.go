@@ -64,6 +64,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
 
+	// Vault-relative asset URLs (portable across tools / exports).
+	s.mux.HandleFunc("GET /assets/{path...}", s.handleAsset)
+
 	s.mountStatic()
 }
 

@@ -16,6 +16,7 @@ import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import { api, ApiError } from "../api";
 import { SlashCommand, type SlashItem } from "../editor/slash";
+import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
 import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
 import { useDialogStore } from "../stores/dialog";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -50,7 +51,8 @@ turndown.use(gfm);
 registerWikiRule(turndown);
 
 function mdToHtml(md: string): string {
-  return marked.parse(wikiToHtml(md), { async: false }) as string;
+  const html = marked.parse(wikiToHtml(md), { async: false }) as string;
+  return resolveAssetSrc(html);
 }
 
 async function uploadAndInsert(file: File) {
@@ -180,7 +182,7 @@ async function flush() {
   window.clearTimeout(saveTimer);
   const path = currentPath;
   const version = baseVersion;
-  const md = turndown.turndown(editor.value.getHTML());
+  const md = toVaultMarkdown(turndown.turndown(editor.value.getHTML()));
   const previousTitle = store.note?.title;
   dirty.value = false;
   status.value = "saving";

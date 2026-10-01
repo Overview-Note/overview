@@ -196,6 +196,9 @@ func TestAssetUploadAndServe(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || asset["url"] == "" {
 		t.Fatalf("upload failed: %d %v", resp.StatusCode, asset)
 	}
+	if !strings.HasPrefix(asset["url"], "/assets/") {
+		t.Errorf("asset url should be vault-relative served path, got %q", asset["url"])
+	}
 
 	got, err := http.Get(ts.URL + asset["url"])
 	if err != nil {
