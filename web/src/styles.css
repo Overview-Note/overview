@@ -505,6 +505,51 @@ mark {
   min-height: 0;
 }
 
+.toc-panel {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-soft);
+  padding: 18px 10px;
+  overflow: auto;
+}
+
+.toc-panel h4 {
+  margin: 0 0 8px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.toc-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-item:hover {
+  background: var(--bg-hover);
+}
+
+.toc-item.scrolled {
+  color: var(--text);
+}
+
+.toc-item.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 550;
+}
+
 .links-panel {
   width: 264px;
   flex-shrink: 0;
@@ -739,6 +784,12 @@ mark {
 .danger-text {
   color: #dc2626;
   font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .toc-panel {
+    display: none;
+  }
 }
 
 @media (max-width: 900px) {

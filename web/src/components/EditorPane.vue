@@ -10,12 +10,14 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
+import { TableOfContents } from "@tiptap/extension-table-of-contents";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import { marked } from "marked";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import { api, ApiError } from "../api";
 import { SlashCommand, slashItems, type SlashItem } from "../editor/slash";
+import type { TocItem } from "../editor/toc";
 import { t } from "../i18n";
 import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
 import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
@@ -23,6 +25,7 @@ import { useDialogStore } from "../stores/dialog";
 import { useWorkspaceStore } from "../stores/workspace";
 import LinksPanel from "./LinksPanel.vue";
 import SlashMenu from "./SlashMenu.vue";
+import TocPanel from "./TocPanel.vue";
 
 const props = defineProps<{ path: string }>();
 
@@ -34,6 +37,9 @@ const status = ref<"idle" | "saving" | "saved">("idle");
 const dirty = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const slashMenu = ref<InstanceType<typeof SlashMenu> | null>(null);
+const scrollEl = ref<HTMLElement | null>(null);
+const toc = ref<TocItem[]>([]);
+const showToc = ref(true);
 let suppress = false;
 let saveTimer: number | undefined;
 let currentPath = "";
@@ -109,6 +115,12 @@ const editor = useEditor({
     TableRow,
     TableHeader,
     TableCell,
+    TableOfContents.configure({
+      scrollParent: () => scrollEl.value ?? window,
+      onUpdate: (items) => {
+        toc.value = items as unknown as TocItem[];
+      },
+    }),
     SlashCommand.configure({
       suggestion: {
         items: ({ query }: { query: string }) =>
@@ -214,6 +226,17 @@ async function flush() {
 
 function isActive(name: string, attrs?: Record<string, unknown>) {
   return editor.value?.isActive(name, attrs) ?? false;
+}
+
+function navigateHeading(item: TocItem) {
+  const container = scrollEl.value;
+  if (!container) return;
+  const top =
+    item.dom.getBoundingClientRect().top -
+    container.getBoundingClientRect().top +
+    container.scrollTop -
+    16;
+  container.scrollTo({ top, behavior: "smooth" });
 }
 
 function setLink() {
@@ -341,6 +364,13 @@ onBeforeUnmount(() => {
       <button :class="{ on: isActive('table') }" @click="insertTable">
         {{ t("editor.table") }}
       </button>
+      <button
+        :class="{ on: showToc }"
+        :title="t('editor.toc')"
+        @click="showToc = !showToc"
+      >
+        {{ t("editor.toc") }}
+      </button>
       <span class="sep"></span>
       <button @click="editor?.chain().focus().undo().run()">
         {{ t("editor.undo") }}
@@ -379,7 +409,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="editor-body">
-      <div class="editor-scroll">
+      <TocPanel v-if="showToc" :items="toc" @navigate="navigateHeading" />
+      <div ref="scrollEl" class="editor-scroll">
         <div class="editor-title">{{ store.note?.title || store.note?.path }}</div>
         <EditorContent :editor="editor" />
       </div>
