@@ -786,6 +786,104 @@ mark {
   font-size: 12px;
 }
 
+.ai-panel {
+  width: 300px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg-soft);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 12px;
+  gap: 10px;
+}
+
+.ai-panel h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-actions button {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.ai-messages {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.ai-msg {
+  font-size: 13px;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.ai-msg pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
+.ai-msg.user {
+  background: var(--accent-soft);
+}
+
+.ai-msg.assistant {
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.ai-insert {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.ai-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-input textarea {
+  resize: vertical;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.ai-input textarea:focus {
+  border-color: var(--accent);
+}
+
+.ai-input button.primary {
+  padding: 7px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+}
+
 .public-page {
   min-height: 100vh;
   background: var(--bg);

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/overview-app/overview/internal/ai"
 	"github.com/overview-app/overview/internal/config"
 	"github.com/overview-app/overview/internal/index"
 	"github.com/overview-app/overview/internal/mcp"
@@ -87,6 +88,7 @@ func main() {
 		Auth:           auth,
 		DAV:            dav,
 		MCP:            mcpHandler,
+		AI:             service.NewAI(ai.New(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)),
 	})
 	if auth.Required() {
 		if needs, err := auth.NeedsSetup(context.Background()); err == nil && needs {

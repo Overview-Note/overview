@@ -23,6 +23,7 @@ import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
 import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
 import { useDialogStore } from "../stores/dialog";
 import { useWorkspaceStore } from "../stores/workspace";
+import AiPanel from "./AiPanel.vue";
 import LinksPanel from "./LinksPanel.vue";
 import SlashMenu from "./SlashMenu.vue";
 import TocPanel from "./TocPanel.vue";
@@ -41,6 +42,9 @@ const scrollEl = ref<HTMLElement | null>(null);
 const toc = ref<TocItem[]>([]);
 const showToc = ref(true);
 const isPublic = ref(false);
+const showAI = ref(false);
+const aiEnabled = ref(false);
+const aiContent = ref("");
 let suppress = false;
 let saveTimer: number | undefined;
 let currentPath = "";
@@ -155,9 +159,21 @@ const editor = useEditor({
   onUpdate: () => {
     if (suppress) return;
     dirty.value = true;
+    aiContent.value = editor.value?.getText() ?? "";
     scheduleSave();
   },
 });
+
+function insertAI(payload: { text: string; replace: boolean }) {
+  if (!editor.value) return;
+  if (payload.replace) {
+    editor.value.commands.setContent(mdToHtml(payload.text));
+  } else {
+    editor.value.chain().focus("end").insertContent(`\n${payload.text}`).run();
+  }
+  dirty.value = true;
+  scheduleSave();
+}
 
 async function load(path: string) {
   if (!editor.value) return;
@@ -291,7 +307,14 @@ onBeforeRouteLeave(async () => {
   return true;
 });
 
-onMounted(() => window.addEventListener("beforeunload", onBeforeUnload));
+onMounted(async () => {
+  window.addEventListener("beforeunload", onBeforeUnload);
+  try {
+    aiEnabled.value = (await api.aiStatus()).enabled;
+  } catch {
+    aiEnabled.value = false;
+  }
+});
 onBeforeUnmount(() => {
   window.clearTimeout(saveTimer);
   window.removeEventListener("beforeunload", onBeforeUnload);
@@ -387,6 +410,14 @@ onBeforeUnmount(() => {
       <button :class="{ on: isPublic }" :title="t('editor.share')" @click="togglePublic">
         {{ isPublic ? t("editor.shared") : t("editor.share") }}
       </button>
+      <button
+        v-if="aiEnabled"
+        :class="{ on: showAI }"
+        :title="t('ai.title')"
+        @click="showAI = !showAI"
+      >
+        {{ t("ai.title") }}
+      </button>
       <span class="sep"></span>
       <button @click="editor?.chain().focus().undo().run()">
         {{ t("editor.undo") }}
@@ -430,6 +461,7 @@ onBeforeUnmount(() => {
         <div class="editor-title">{{ store.note?.title || store.note?.path }}</div>
         <EditorContent :editor="editor" />
       </div>
+      <AiPanel v-if="showAI" :content="aiContent" @insert="insertAI" />
       <LinksPanel
         v-if="store.note"
         :path="store.note.path"

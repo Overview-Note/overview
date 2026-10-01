@@ -159,6 +159,23 @@ export const api = {
     return json<Note>(res);
   },
 
+  async aiStatus(): Promise<{ enabled: boolean; model?: string }> {
+    const res = await fetch(`${BASE}/ai/status`);
+    return json<{ enabled: boolean; model?: string }>(res);
+  },
+
+  async aiChat(
+    mode: "chat" | "organize" | "complete",
+    payload: { messages?: { role: string; content: string }[]; content?: string },
+  ): Promise<string> {
+    const res = await fetch(`${BASE}/ai/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode, ...payload }),
+    });
+    return (await json<{ reply: string }>(res)).reply;
+  },
+
   async publicNotes(): Promise<NoteMeta[]> {
     const res = await fetch(`${BASE}/public/notes`);
     return (await json<{ notes: NoteMeta[] }>(res)).notes;

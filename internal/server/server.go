@@ -26,6 +26,7 @@ type Options struct {
 	Auth           *service.AuthService
 	DAV            http.Handler
 	MCP            http.Handler
+	AI             *service.AIService
 }
 
 // Server routes HTTP requests to the application service.
@@ -81,6 +82,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST "+base+"/assets", s.handleUploadAsset)
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
+
+	// AI assistance (available only when configured).
+	s.mux.HandleFunc("GET "+base+"/ai/status", s.handleAIStatus)
+	s.mux.HandleFunc("POST "+base+"/ai/chat", s.handleAIChat)
 
 	// Public (anonymous) read-only access to shared notes.
 	s.mux.HandleFunc("GET "+base+"/public/notes", s.handlePublicNotes)

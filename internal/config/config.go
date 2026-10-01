@@ -17,6 +17,9 @@ type Config struct {
 	LogLevel    string
 	AuthMode    string
 	MCPToken    string
+	AIBaseURL   string
+	AIAPIKey    string
+	AIModel     string
 }
 
 func env(key, def string) string {
@@ -43,6 +46,9 @@ func Load() Config {
 		LogLevel:    env("OVERVIEW_LOG_LEVEL", "info"),
 		AuthMode:    env("OVERVIEW_AUTH", "multi"),
 		MCPToken:    env("OVERVIEW_MCP_TOKEN", ""),
+		AIBaseURL:   env("OVERVIEW_AI_BASE_URL", ""),
+		AIAPIKey:    env("OVERVIEW_AI_API_KEY", ""),
+		AIModel:     env("OVERVIEW_AI_MODEL", "gpt-4o-mini"),
 	}
 }
 
