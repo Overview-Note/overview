@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.6.0（TOC + 公开分享 + MCP + AI）
+> 版本：v0.7.0（全路线图完成）
 > 更新日期：2026-10-02
 > 定位：可自部署、支持层级目录的 Markdown 笔记知识库
 
@@ -16,6 +16,7 @@
 | v0.4.0 | 多用户 | bcrypt 认证、会话、首启管理员、用户管理、WebDAV 挂载、可移植附件 |
 | v0.5.0 | i18n | 中英文案抽取与语言切换 |
 | v0.6.0 | 协作与智能 | 编辑器 TOC、公开分享（匿名只读）、MCP 服务端、AI 助手 |
+| v0.7.0 | 规模化与运维 | 增量索引、文件监视器、版本历史、回收站、附件孤儿清理、S3 后端、PWA、OpenAPI |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -97,6 +98,11 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 | ADR-016 | 公开分享基于 frontmatter `public` 标记 | 与文件即真相一致，随笔记文件迁移 | 公开页面不泄漏私有笔记与 wiki 目标 |
 | ADR-017 | MCP 用 JSON-RPC over HTTP（POST /mcp），Bearer 认证 | 复用 HTTP 栈，无需额外 stdio 进程管理 | 与 REST 并存，工具复用 service |
 | ADR-018 | AI 走 OpenAI 兼容 `/chat/completions`，无 SDK 依赖 | 兼容 OpenAI/DeepSeek/Ollama/vLLM 等 | 未配置时功能整体禁用 |
+| ADR-019 | 索引增量更新（`ReplacePrefix`），文件监视器驱动 | 避免大库全量重建；外部编辑自动入库 | 复杂前缀删除需 LIKE 转义 |
+| ADR-020 | 版本历史与回收站均落盘（`.history` / `.trash`） | 坚持"文件即真相"，可随数据目录迁移 | 需定期清理；隐藏目录被遍历忽略 |
+| ADR-021 | 附件后端抽象为 `AssetStore`，S3 为可选实现 | 本地优先，按需切换到对象存储 | 切换后旧本地附件需迁移 |
+| ADR-022 | PWA 仅缓存应用壳与构建产物 | 离线可启动，同时避免缓存隐私数据 | API/上传/DAV 永不缓存 |
+| ADR-023 | OpenAPI 由 YAML 内嵌并在启动时转 JSON | 单一可读来源，工具可直接消费 | 手写维护 |
 
 ---
 
@@ -228,6 +234,15 @@ Base：`/api/v1`
 | GET | `/public/note?path=` | 公开笔记正文（匿名，非公开返回 404） |
 | GET | `/ai/status` | AI 是否可用及模型名 |
 | POST | `/ai/chat` | AI：`{mode: chat\|organize\|complete, messages, content}` |
+| GET | `/assets/orphans` | 未被引用的附件列表 |
+| POST | `/assets/orphans/purge` | 清理孤儿附件 |
+| GET | `/history?path=` | 笔记历史版本列表 |
+| GET | `/history/revision?path=&id=` | 某版本内容 |
+| POST | `/history/restore` | 回滚到某版本 |
+| GET | `/trash` | 回收站列表 |
+| POST | `/trash/restore` | 从回收站恢复 |
+| DELETE | `/trash?id=` | 彻底删除 |
+| GET | `/openapi.json` | OpenAPI 规范（公开） |
 
 **其他端点**
 
@@ -381,12 +396,14 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - [ ] 移动端 PWA / 原生 App（基于 `/api/v1`）
 
 **Phase 4 — 体验与规模**
-- [ ] 文件监视器，外部编辑自动入库
-- [ ] 增量索引（避免全量重建）
-- [ ] 版本历史 / 回收站
-- [ ] 附件引用计数与回收
-- [ ] 图片压缩、多存储后端（S3/WebDAV）
-- [ ] OpenAPI 自动文档
+- [x] 文件监视器，外部编辑自动入库
+- [x] 增量索引（避免全量重建）
+- [x] 版本历史 / 回收站
+- [x] 附件引用计数与回收
+- [x] 多存储后端（S3）
+- [x] OpenAPI 文档
+- [x] 移动端 PWA
+- [ ] 图片压缩（可选增强）
 
 ---
 
@@ -406,6 +423,12 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | `OVERVIEW_AI_BASE_URL` | 空 | OpenAI 兼容基址（如 `https://api.openai.com/v1`）；空则禁用 AI |
 | `OVERVIEW_AI_API_KEY` | 空 | AI 密钥 |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | 模型名 |
+| `OVERVIEW_S3_BUCKET` | 空 | 设置后附件改存 S3 兼容存储 |
+| `OVERVIEW_S3_ENDPOINT` | 空 | S3 端点（如 `s3.amazonaws.com`） |
+| `OVERVIEW_S3_REGION` | `us-east-1` | 区域 |
+| `OVERVIEW_S3_ACCESS_KEY` / `_SECRET_KEY` | 空 | 凭据 |
+| `OVERVIEW_S3_USE_SSL` | `true` | 是否使用 HTTPS |
+| `OVERVIEW_S3_PUBLIC_URL` | 空 | 可选 CDN/公开前缀 |
 
 ### 13.3 双链设计（v0.3）
 
@@ -431,6 +454,17 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - **MCP**（ADR-017）：`POST /mcp` JSON-RPC，方法 `initialize`/`tools/list`/`tools/call`；工具 `notes_list/search/read/write/delete/links`；令牌认证（`OVERVIEW_MCP_TOKEN`，否则回退会话令牌）；工具错误按规范 in-band 返回。
 - **AI**（ADR-018）：`internal/ai` 无依赖 OpenAI 兼容客户端；`AIService` 提供 `organize`/`complete`/`chat`；`/api/v1/ai/*` 未配置返回 503；前端 AI 面板支持对话、整理（替换）、补全（追加）、插入。
 
+### 13.6 规模化与运维（v0.7）
+
+- **增量索引**（ADR-019）：`Index.ReplacePrefix` 只重建某子树；`Delete`/`Move`/`ReindexPath` 均只影响相关路径。
+- **文件监视器**：`internal/watcher` 用 fsnotify 递归监听 `data/notes`，去抖后对顶层子树增量重建——外部编辑器/Git/DAV 的改动即时可搜。
+- **版本历史**（ADR-020）：每次保存前把旧文件快照到 `data/.history/<path>/`；提供列表、查看、回滚。
+- **回收站**（ADR-020）：删除改为移动到 `data/.trash/<id>/`（含 `meta.json`），支持恢复与彻底删除。
+- **附件孤儿清理**：扫描所有正文中的 `assets/...` 引用，列出并清理未被引用的附件。
+- **S3 后端**（ADR-021）：`internal/s3store`（minio-go）实现 `AssetStore`，配置 `OVERVIEW_S3_BUCKET` 即启用。
+- **PWA**（ADR-022）：manifest + service worker，仅缓存应用壳与哈希构建产物，离线可启动。
+- **OpenAPI**（ADR-023）：`/api/v1/openapi.json` 与 `/api/docs`（无外部依赖）。
+
 ### 13.2 v0.2 / v0.3 验证记录
 
 - `go vet ./...` / `go test ./...` 通过（覆盖 6 个包）
@@ -439,3 +473,4 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - v0.4：未认证访问 `/api/v1/tree` 返回 401；首启 `/setup` 创建管理员后可访问；登出后再次 401；WebDAV PUT/GET 成功且写入被索引
 - v0.5：未认证可加载 SPA 与内嵌资源（200），数据接口仍需认证（401）；语言切换即时生效
 - v0.6：公开笔记匿名可读、私有笔记 404；MCP `initialize`/`tools/list` 正常、无令牌 401；AI 未配置返回 503、配置 mock 后 `organize` 返回重写内容
+- v0.7：磁盘新建文件 2s 内可被搜索（文件监视器）；软删除进入回收站并可恢复；`/api/v1/openapi.json`、`/api/docs`、`/manifest.webmanifest`、`/sw.js`、`/icon.svg` 均 200

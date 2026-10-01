@@ -19,6 +19,10 @@ Markdown files; the SQLite index is fully rebuildable.
 - **Public sharing** — mark a note public and share an anonymous read-only link
 - **MCP server** — AI agents can list/search/read/write notes via `POST /mcp`
 - **AI assistant** — chat, organize and complete notes (any OpenAI-compatible API)
+- **Version history & trash** — revision snapshots and soft delete with restore
+- **Live sync** — a file watcher reindexes external edits; incremental indexing
+- **Pluggable assets** — local filesystem or any S3-compatible object store
+- **PWA & OpenAPI** — installable app shell; typed API docs at `/api/docs`
 - **Single binary** — frontend embedded, one `docker run`
 
 ## Quick start (Docker)
@@ -59,6 +63,28 @@ go build -ldflags="-X main.version=0.5.0" -o bin/overview ./cmd/overview
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI when set) |
 | `OVERVIEW_AI_API_KEY` | — | API key for the AI provider |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | AI model name |
+| `OVERVIEW_S3_BUCKET` | — | Enables S3-compatible asset storage when set |
+| `OVERVIEW_S3_ENDPOINT` | — | S3 endpoint (e.g. `s3.amazonaws.com`) |
+| `OVERVIEW_S3_REGION` | `us-east-1` | S3 region |
+| `OVERVIEW_S3_ACCESS_KEY` / `OVERVIEW_S3_SECRET_KEY` | — | S3 credentials |
+| `OVERVIEW_S3_USE_SSL` | `true` | Use HTTPS for S3 |
+| `OVERVIEW_S3_PUBLIC_URL` | — | Optional CDN/public URL prefix |
+
+## API documentation
+
+- Interactive list: `/api/docs`
+- OpenAPI spec: `/api/v1/openapi.json`
+
+## Data layout
+
+```
+data/
+├── notes/        # Markdown files (the source of truth)
+├── assets/       # uploaded attachments (or S3 when configured)
+├── .history/     # note revision snapshots
+├── .trash/       # soft-deleted notes
+└── overview.db   # rebuildable SQLite index
+```
 
 ## REST API (v1)
 
