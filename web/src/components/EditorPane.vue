@@ -15,7 +15,8 @@ import { marked } from "marked";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import { api, ApiError } from "../api";
-import { SlashCommand, type SlashItem } from "../editor/slash";
+import { SlashCommand, slashItems, type SlashItem } from "../editor/slash";
+import { t } from "../i18n";
 import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
 import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
 import { useDialogStore } from "../stores/dialog";
@@ -60,7 +61,7 @@ async function uploadAndInsert(file: File) {
     const asset = await api.uploadAsset(file);
     editor.value?.chain().focus().setImage({ src: asset.url, alt: file.name }).run();
   } catch (e) {
-    await dialogs.askConfirm("图片上传失败", (e as Error).message, false);
+    await dialogs.askConfirm(t("editor.uploadFailed"), (e as Error).message, false);
   }
 }
 
@@ -77,8 +78,8 @@ async function openWiki(target: string) {
     router.push({ name: "note", params: { path: meta.path } });
   } catch {
     const ok = await dialogs.askConfirm(
-      "创建笔记",
-      `未找到「${target}」，是否创建？`,
+      t("editor.createLinkTitle"),
+      t("editor.createLinkMessage", { target }),
       false,
     );
     if (!ok) return;
@@ -89,7 +90,7 @@ async function openWiki(target: string) {
       await store.refreshTree();
       router.push({ name: "note", params: { path: created.path } });
     } catch (e) {
-      await dialogs.askConfirm("创建失败", (e as Error).message, false);
+      await dialogs.askConfirm(t("editor.createFailed"), (e as Error).message, false);
     }
   }
 }
@@ -103,15 +104,17 @@ const editor = useEditor({
     }),
     Image.configure({ inline: false, allowBase64: false }),
     Link.configure({ openOnClick: false, autolink: true }),
-    Placeholder.configure({
-      placeholder: "开始记录，输入 / 触发命令，或粘贴 / 拖入图片…",
-    }),
+    Placeholder.configure({ placeholder: t("editor.placeholder") }),
     Table.configure({ resizable: true, HTMLAttributes: { class: "md-table" } }),
     TableRow,
     TableHeader,
     TableCell,
     SlashCommand.configure({
       suggestion: {
+        items: ({ query }: { query: string }) =>
+          slashItems(t).filter((item) =>
+            item.title.toLowerCase().includes(query.toLowerCase()),
+          ),
         render: () => ({
           onStart: (p: SuggestionProps<SlashItem>) => slashMenu.value?.onStart(p),
           onUpdate: (p: SuggestionProps<SlashItem>) => slashMenu.value?.onUpdate(p),
@@ -199,12 +202,12 @@ async function flush() {
     status.value = "idle";
     if (e instanceof ApiError && e.status === 409) {
       await dialogs.askConfirm(
-        "保存冲突",
-        "该笔记已在其他位置被修改，为避免覆盖，本次改动未保存。请刷新页面后重试。",
+        t("editor.saveConflictTitle"),
+        t("editor.saveConflictMessage"),
         false,
       );
     } else {
-      await dialogs.askConfirm("保存失败", (e as Error).message, false);
+      await dialogs.askConfirm(t("editor.saveFailed"), (e as Error).message, false);
     }
   }
 }
@@ -216,7 +219,7 @@ function isActive(name: string, attrs?: Record<string, unknown>) {
 function setLink() {
   void (async () => {
     const prev = editor.value?.getAttributes("link").href as string | undefined;
-    const url = await dialogs.ask("链接地址", prev ?? "https://");
+    const url = await dialogs.ask(t("editor.linkTitle"), prev ?? "https://");
     if (url === null) return;
     if (url === "") {
       editor.value?.chain().focus().unsetLink().run();
@@ -310,51 +313,69 @@ onBeforeUnmount(() => {
         :class="{ on: isActive('bulletList') }"
         @click="editor?.chain().focus().toggleBulletList().run()"
       >
-        • 列表
+        {{ t("editor.listBullet") }}
       </button>
       <button
         :class="{ on: isActive('orderedList') }"
         @click="editor?.chain().focus().toggleOrderedList().run()"
       >
-        1. 列表
+        {{ t("editor.listOrdered") }}
       </button>
       <button
         :class="{ on: isActive('blockquote') }"
         @click="editor?.chain().focus().toggleBlockquote().run()"
       >
-        引用
+        {{ t("editor.quote") }}
       </button>
       <button
         :class="{ on: isActive('codeBlock') }"
         @click="editor?.chain().focus().toggleCodeBlock().run()"
       >
-        代码块
+        {{ t("editor.code") }}
       </button>
       <span class="sep"></span>
-      <button :class="{ on: isActive('link') }" @click="setLink">链接</button>
-      <button @click="fileInput?.click()">图片</button>
-      <button :class="{ on: isActive('table') }" @click="insertTable">表格</button>
+      <button :class="{ on: isActive('link') }" @click="setLink">
+        {{ t("editor.link") }}
+      </button>
+      <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
+      <button :class="{ on: isActive('table') }" @click="insertTable">
+        {{ t("editor.table") }}
+      </button>
       <span class="sep"></span>
-      <button @click="editor?.chain().focus().undo().run()">撤销</button>
-      <button @click="editor?.chain().focus().redo().run()">重做</button>
+      <button @click="editor?.chain().focus().undo().run()">
+        {{ t("editor.undo") }}
+      </button>
+      <button @click="editor?.chain().focus().redo().run()">
+        {{ t("editor.redo") }}
+      </button>
       <span class="status">
         {{
           status === "saving"
-            ? "保存中…"
+            ? t("editor.saving")
             : status === "saved"
-              ? "已保存"
+              ? t("editor.saved")
               : dirty
-                ? "未保存"
+                ? t("editor.unsaved")
                 : ""
         }}
       </span>
     </div>
     <div v-if="isActive('table')" class="table-toolbar">
-      <button @click="editor?.chain().focus().addRowAfter().run()">＋行</button>
-      <button @click="editor?.chain().focus().addColumnAfter().run()">＋列</button>
-      <button @click="editor?.chain().focus().deleteRow().run()">删行</button>
-      <button @click="editor?.chain().focus().deleteColumn().run()">删列</button>
-      <button @click="editor?.chain().focus().deleteTable().run()">删表格</button>
+      <button @click="editor?.chain().focus().addRowAfter().run()">
+        {{ t("editor.addRow") }}
+      </button>
+      <button @click="editor?.chain().focus().addColumnAfter().run()">
+        {{ t("editor.addCol") }}
+      </button>
+      <button @click="editor?.chain().focus().deleteRow().run()">
+        {{ t("editor.delRow") }}
+      </button>
+      <button @click="editor?.chain().focus().deleteColumn().run()">
+        {{ t("editor.delCol") }}
+      </button>
+      <button @click="editor?.chain().focus().deleteTable().run()">
+        {{ t("editor.delTable") }}
+      </button>
     </div>
 
     <div class="editor-body">

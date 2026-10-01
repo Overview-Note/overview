@@ -211,8 +211,8 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !strings.HasPrefix(p, "/api/v1/") && !strings.HasPrefix(p, "/assets/") {
-			next.ServeHTTP(w, r) // SPA shell is public; data is not
+		if !requiresAuth(p, s.opts.Static) {
+			next.ServeHTTP(w, r) // SPA shell and bundled assets are public
 			return
 		}
 		user, err := s.opts.Auth.Authenticate(r.Context(), s.sessionToken(r))
@@ -230,6 +230,28 @@ func isPublicPath(p string) bool {
 		"/api/v1/auth/state",
 		"/api/v1/auth/setup",
 		"/api/v1/auth/login":
+		return true
+	default:
+		return false
+	}
+}
+
+// requiresAuth reports whether a request path must be authenticated. API and
+// uploaded attachment paths do; the SPA shell and embedded static assets do
+// not, and the WebDAV handler performs its own Basic auth.
+func requiresAuth(p string, static fs.FS) bool {
+	switch {
+	case strings.HasPrefix(p, "/dav"):
+		return false
+	case strings.HasPrefix(p, "/api/v1/"):
+		return true
+	case strings.HasPrefix(p, "/assets/"):
+		// A real static file wins over the attachment route.
+		if static != nil {
+			if _, err := fs.Stat(static, strings.TrimPrefix(p, "/")); err == nil {
+				return false
+			}
+		}
 		return true
 	default:
 		return false

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { t } from "../i18n";
 import { useAuthStore } from "../stores/auth";
 
 const auth = useAuthStore();
@@ -31,18 +32,18 @@ async function submit() {
   <div class="auth-page">
     <form class="auth-card" @submit.prevent="submit">
       <h1>Overview</h1>
-      <p class="auth-sub">登录到你的知识库</p>
+      <p class="auth-sub">{{ t("auth.loginSub") }}</p>
       <label>
-        用户名
+        {{ t("auth.username") }}
         <input v-model="username" autocomplete="username" autofocus />
       </label>
       <label>
-        密码
+        {{ t("auth.password") }}
         <input v-model="password" type="password" autocomplete="current-password" />
       </label>
       <p v-if="error" class="auth-error">{{ error }}</p>
       <button class="primary" type="submit" :disabled="busy">
-        {{ busy ? "登录中…" : "登录" }}
+        {{ busy ? t("auth.loginBusy") : t("auth.loginSubmit") }}
       </button>
     </form>
   </div>

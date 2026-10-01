@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { api, type LinksResult } from "../api";
+import { t } from "../i18n";
 
 const props = defineProps<{ path: string }>();
 const emit = defineEmits<{
@@ -28,7 +29,7 @@ watch(
   <aside class="links-panel">
     <section v-if="links.backlinks.length">
       <h4>
-        反向链接 <span class="count">{{ links.backlinks.length }}</span>
+        {{ t("links.backlinks") }} <span class="count">{{ links.backlinks.length }}</span>
       </h4>
       <button
         v-for="item in links.backlinks"
@@ -42,7 +43,7 @@ watch(
 
     <section v-if="links.outgoing.length">
       <h4>
-        外部链接 <span class="count">{{ links.outgoing.length }}</span>
+        {{ t("links.outgoing") }} <span class="count">{{ links.outgoing.length }}</span>
       </h4>
       <template v-for="link in links.outgoing" :key="link.raw">
         <button
@@ -53,13 +54,13 @@ watch(
           {{ link.target.title || link.target.path }}
         </button>
         <button v-else class="link-item missing" @click="emit('create', link.raw)">
-          {{ link.raw }} <span class="badge">未创建</span>
+          {{ link.raw }} <span class="badge">{{ t("links.missing") }}</span>
         </button>
       </template>
     </section>
 
     <div v-if="!links.backlinks.length && !links.outgoing.length" class="muted small">
-      暂无链接
+      {{ t("links.empty") }}
     </div>
   </aside>
 </template>

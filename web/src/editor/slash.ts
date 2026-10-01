@@ -8,53 +8,53 @@ export interface SlashItem {
   run: (editor: Editor, range: Range) => void;
 }
 
-export function slashItems(): SlashItem[] {
+export function slashItems(tr: (key: string) => string): SlashItem[] {
   return [
     {
-      title: "标题 1",
-      hint: "一级标题",
+      title: tr("slash.h1"),
+      hint: tr("slash.h1hint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).setNode("heading", { level: 1 }).run(),
     },
     {
-      title: "标题 2",
-      hint: "二级标题",
+      title: tr("slash.h2"),
+      hint: tr("slash.h2hint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run(),
     },
     {
-      title: "标题 3",
-      hint: "三级标题",
+      title: tr("slash.h3"),
+      hint: tr("slash.h3hint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).setNode("heading", { level: 3 }).run(),
     },
     {
-      title: "无序列表",
-      hint: "项目符号列表",
+      title: tr("slash.bullet"),
+      hint: tr("slash.bullethint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).toggleBulletList().run(),
     },
     {
-      title: "有序列表",
-      hint: "编号列表",
+      title: tr("slash.ordered"),
+      hint: tr("slash.orderedhint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
     },
     {
-      title: "引用",
-      hint: "引用块",
+      title: tr("slash.quote"),
+      hint: tr("slash.quotehint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
     },
     {
-      title: "代码块",
-      hint: "代码片段",
+      title: tr("slash.code"),
+      hint: tr("slash.codehint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
     },
     {
-      title: "表格",
-      hint: "插入 3×3 表格",
+      title: tr("slash.table"),
+      hint: tr("slash.tablehint"),
       run: (editor, range) =>
         editor
           .chain()
@@ -64,8 +64,8 @@ export function slashItems(): SlashItem[] {
           .run(),
     },
     {
-      title: "分割线",
-      hint: "水平分割线",
+      title: tr("slash.hr"),
+      hint: tr("slash.hrhint"),
       run: (editor, range) =>
         editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
     },
@@ -81,7 +81,7 @@ export const SlashCommand = Extension.create({
         startOfLine: true,
         allowSpaces: false,
         items: ({ query }: { query: string }) =>
-          slashItems().filter((item) =>
+          slashItems((key) => key).filter((item) =>
             item.title.toLowerCase().includes(query.toLowerCase()),
           ),
         command: ({

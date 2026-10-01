@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "../i18n";
 import { useWorkspaceStore } from "../stores/workspace";
 
 const store = useWorkspaceStore();
@@ -6,6 +7,6 @@ const store = useWorkspaceStore();
 
 <template>
   <div class="empty">
-    <p>{{ store.error ?? "从左侧选择或新建一篇笔记" }}</p>
+    <p>{{ store.error ?? t("empty.hint") }}</p>
   </div>
 </template>

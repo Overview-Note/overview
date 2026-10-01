@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { TreeNode } from "../api";
+import { t } from "../i18n";
 
 const props = defineProps<{
   node: TreeNode;
@@ -37,13 +38,18 @@ function onClick() {
       <span class="label">{{ node.title || node.name }}</span>
       <span class="row-actions" @click.stop>
         <template v-if="isFolder">
-          <button title="在此新建笔记" @click="emit('create-note', node.path)">＋</button>
-          <button title="在此新建文件夹" @click="emit('create-folder', node.path)">
+          <button :title="t('tree.newNoteHere')" @click="emit('create-note', node.path)">
+            ＋
+          </button>
+          <button
+            :title="t('tree.newFolderHere')"
+            @click="emit('create-folder', node.path)"
+          >
             ⊞
           </button>
         </template>
-        <button title="重命名" @click="emit('rename', node)">✎</button>
-        <button title="删除" @click="emit('delete', node)">✕</button>
+        <button :title="t('tree.rename')" @click="emit('rename', node)">✎</button>
+        <button :title="t('tree.delete')" @click="emit('delete', node)">✕</button>
       </span>
     </div>
     <div v-if="isFolder && expanded" class="children">

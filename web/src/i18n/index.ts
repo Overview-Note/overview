@@ -1,0 +1,254 @@
+import { ref } from "vue";
+
+export type Locale = "zh" | "en";
+
+const STORAGE_KEY = "overview.locale";
+
+const messages: Record<Locale, Record<string, string>> = {
+  zh: {
+    "app.loading": "载入中…",
+    "topbar.users": "用户管理",
+    "topbar.logout": "退出",
+    "topbar.language": "语言",
+
+    "sidebar.newNote": "＋ 笔记",
+    "sidebar.newFolder": "＋ 文件夹",
+    "sidebar.search": "搜索…",
+    "sidebar.searching": "搜索中…",
+    "sidebar.noResults": "无结果",
+    "sidebar.empty": "还没有内容，点击上方新建",
+    "sidebar.newNoteTitle": "新建笔记",
+    "sidebar.newNoteDefault": "未命名",
+    "sidebar.newFolderTitle": "新建文件夹",
+    "sidebar.newFolderDefault": "新文件夹",
+    "sidebar.renameTitle": "重命名",
+    "sidebar.deleteTitle": "删除",
+    "sidebar.deleteConfirm": "确定删除「{name}」？",
+    "sidebar.createFailed": "创建失败",
+    "sidebar.renameFailed": "重命名失败",
+    "sidebar.deleteFailed": "删除失败",
+
+    "tree.newNoteHere": "在此新建笔记",
+    "tree.newFolderHere": "在此新建文件夹",
+    "tree.rename": "重命名",
+    "tree.delete": "删除",
+
+    "editor.placeholder": "开始记录，输入 / 触发命令，或粘贴 / 拖入图片…",
+    "editor.listBullet": "• 列表",
+    "editor.listOrdered": "1. 列表",
+    "editor.quote": "引用",
+    "editor.code": "代码块",
+    "editor.link": "链接",
+    "editor.image": "图片",
+    "editor.table": "表格",
+    "editor.undo": "撤销",
+    "editor.redo": "重做",
+    "editor.saving": "保存中…",
+    "editor.saved": "已保存",
+    "editor.unsaved": "未保存",
+    "editor.addRow": "＋行",
+    "editor.addCol": "＋列",
+    "editor.delRow": "删行",
+    "editor.delCol": "删列",
+    "editor.delTable": "删表格",
+    "editor.linkTitle": "链接地址",
+    "editor.saveConflictTitle": "保存冲突",
+    "editor.saveConflictMessage":
+      "该笔记已在其他位置被修改，为避免覆盖，本次改动未保存。请刷新页面后重试。",
+    "editor.saveFailed": "保存失败",
+    "editor.uploadFailed": "图片上传失败",
+    "editor.createLinkTitle": "创建笔记",
+    "editor.createLinkMessage": "未找到「{target}」，是否创建？",
+    "editor.createFailed": "创建失败",
+
+    "links.backlinks": "反向链接",
+    "links.outgoing": "外部链接",
+    "links.missing": "未创建",
+    "links.empty": "暂无链接",
+
+    "dialog.cancel": "取消",
+    "dialog.confirm": "确定",
+
+    "empty.hint": "从左侧选择或新建一篇笔记",
+
+    "auth.loginSub": "登录到你的知识库",
+    "auth.username": "用户名",
+    "auth.password": "密码",
+    "auth.loginSubmit": "登录",
+    "auth.loginBusy": "登录中…",
+    "auth.setupSub": "创建管理员账号以启用认证",
+    "auth.confirmPassword": "确认密码",
+    "auth.setupSubmit": "创建并登录",
+    "auth.setupBusy": "创建中…",
+    "auth.mismatch": "两次输入的密码不一致",
+
+    "users.title": "用户管理",
+    "users.admin": "管理员",
+    "users.member": "成员",
+    "users.delete": "删除",
+    "users.add": "＋ 新建用户",
+    "users.close": "关闭",
+    "users.newTitle": "新建用户",
+    "users.passwordTitle": "设置密码（至少 6 位）",
+    "users.deleteTitle": "删除用户",
+    "users.deleteMessage": "确定删除「{name}」？",
+
+    "slash.h1": "标题 1",
+    "slash.h1hint": "一级标题",
+    "slash.h2": "标题 2",
+    "slash.h2hint": "二级标题",
+    "slash.h3": "标题 3",
+    "slash.h3hint": "三级标题",
+    "slash.bullet": "无序列表",
+    "slash.bullethint": "项目符号列表",
+    "slash.ordered": "有序列表",
+    "slash.orderedhint": "编号列表",
+    "slash.quote": "引用",
+    "slash.quotehint": "引用块",
+    "slash.code": "代码块",
+    "slash.codehint": "代码片段",
+    "slash.table": "表格",
+    "slash.tablehint": "插入 3×3 表格",
+    "slash.hr": "分割线",
+    "slash.hrhint": "水平分割线",
+  },
+  en: {
+    "app.loading": "Loading…",
+    "topbar.users": "Users",
+    "topbar.logout": "Sign out",
+    "topbar.language": "Language",
+
+    "sidebar.newNote": "+ Note",
+    "sidebar.newFolder": "+ Folder",
+    "sidebar.search": "Search…",
+    "sidebar.searching": "Searching…",
+    "sidebar.noResults": "No results",
+    "sidebar.empty": "No content yet — create one above",
+    "sidebar.newNoteTitle": "New note",
+    "sidebar.newNoteDefault": "Untitled",
+    "sidebar.newFolderTitle": "New folder",
+    "sidebar.newFolderDefault": "New folder",
+    "sidebar.renameTitle": "Rename",
+    "sidebar.deleteTitle": "Delete",
+    "sidebar.deleteConfirm": 'Delete "{name}"?',
+    "sidebar.createFailed": "Create failed",
+    "sidebar.renameFailed": "Rename failed",
+    "sidebar.deleteFailed": "Delete failed",
+
+    "tree.newNoteHere": "New note here",
+    "tree.newFolderHere": "New folder here",
+    "tree.rename": "Rename",
+    "tree.delete": "Delete",
+
+    "editor.placeholder": "Start writing, type / for commands, or paste/drop images…",
+    "editor.listBullet": "• List",
+    "editor.listOrdered": "1. List",
+    "editor.quote": "Quote",
+    "editor.code": "Code block",
+    "editor.link": "Link",
+    "editor.image": "Image",
+    "editor.table": "Table",
+    "editor.undo": "Undo",
+    "editor.redo": "Redo",
+    "editor.saving": "Saving…",
+    "editor.saved": "Saved",
+    "editor.unsaved": "Unsaved",
+    "editor.addRow": "+ Row",
+    "editor.addCol": "+ Col",
+    "editor.delRow": "- Row",
+    "editor.delCol": "- Col",
+    "editor.delTable": "Delete table",
+    "editor.linkTitle": "Link URL",
+    "editor.saveConflictTitle": "Save conflict",
+    "editor.saveConflictMessage":
+      "This note was modified elsewhere. Your changes were not saved to avoid overwriting. Please reload and try again.",
+    "editor.saveFailed": "Save failed",
+    "editor.uploadFailed": "Image upload failed",
+    "editor.createLinkTitle": "Create note",
+    "editor.createLinkMessage": '"{target}" was not found. Create it?',
+    "editor.createFailed": "Create failed",
+
+    "links.backlinks": "Backlinks",
+    "links.outgoing": "Outgoing links",
+    "links.missing": "Missing",
+    "links.empty": "No links",
+
+    "dialog.cancel": "Cancel",
+    "dialog.confirm": "OK",
+
+    "empty.hint": "Select or create a note on the left",
+
+    "auth.loginSub": "Sign in to your knowledge base",
+    "auth.username": "Username",
+    "auth.password": "Password",
+    "auth.loginSubmit": "Sign in",
+    "auth.loginBusy": "Signing in…",
+    "auth.setupSub": "Create an administrator account to enable authentication",
+    "auth.confirmPassword": "Confirm password",
+    "auth.setupSubmit": "Create and sign in",
+    "auth.setupBusy": "Creating…",
+    "auth.mismatch": "Passwords do not match",
+
+    "users.title": "User management",
+    "users.admin": "Admin",
+    "users.member": "Member",
+    "users.delete": "Delete",
+    "users.add": "+ New user",
+    "users.close": "Close",
+    "users.newTitle": "New user",
+    "users.passwordTitle": "Set password (min 6 chars)",
+    "users.deleteTitle": "Delete user",
+    "users.deleteMessage": 'Delete "{name}"?',
+
+    "slash.h1": "Heading 1",
+    "slash.h1hint": "Large heading",
+    "slash.h2": "Heading 2",
+    "slash.h2hint": "Medium heading",
+    "slash.h3": "Heading 3",
+    "slash.h3hint": "Small heading",
+    "slash.bullet": "Bullet list",
+    "slash.bullethint": "Unordered list",
+    "slash.ordered": "Numbered list",
+    "slash.orderedhint": "Ordered list",
+    "slash.quote": "Quote",
+    "slash.quotehint": "Blockquote",
+    "slash.code": "Code block",
+    "slash.codehint": "Code snippet",
+    "slash.table": "Table",
+    "slash.tablehint": "Insert a 3×3 table",
+    "slash.hr": "Divider",
+    "slash.hrhint": "Horizontal rule",
+  },
+};
+
+function detect(): Locale {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved === "zh" || saved === "en") return saved;
+  return navigator.language?.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+export const locale = ref<Locale>(detect());
+
+export function setLocale(next: Locale) {
+  locale.value = next;
+  localStorage.setItem(STORAGE_KEY, next);
+  document.documentElement.lang = next === "zh" ? "zh-CN" : "en";
+}
+
+export function t(key: string, params?: Record<string, string | number>): string {
+  const table = messages[locale.value] ?? messages.zh;
+  let text = table[key] ?? messages.zh[key] ?? key;
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.split(`{${name}}`).join(String(value));
+    }
+  }
+  return text;
+}
+
+export const locales: { value: Locale; label: string }[] = [
+  { value: "zh", label: "中文" },
+  { value: "en", label: "English" },
+];
+
+setLocale(locale.value);

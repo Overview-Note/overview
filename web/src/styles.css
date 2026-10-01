@@ -624,6 +624,17 @@ mark {
   color: var(--text-soft);
 }
 
+.lang-select {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
 .auth-page {
   flex: 1;
   min-height: 100vh;

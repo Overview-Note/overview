@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io/fs"
 	"mime"
 	"net/http"
 	"path"
@@ -160,6 +161,15 @@ func (s *Server) handleUploadAsset(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request) {
 	rel := r.PathValue("path")
+	// Embedded frontend assets share the /assets/ prefix; prefer them so the
+	// SPA bundle wins over an upload with a colliding name.
+	if s.opts.Static != nil {
+		if _, err := fs.Stat(s.opts.Static, "assets/"+rel); err == nil {
+			r.URL.Path = "/assets/" + rel
+			http.FileServer(http.FS(s.opts.Static)).ServeHTTP(w, r)
+			return
+		}
+	}
 	reader, err := s.svc.OpenAsset(r.Context(), rel)
 	if err != nil {
 		s.writeDomainError(w, err)

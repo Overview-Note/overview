@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
+import { t } from "../i18n";
 import { useDialogStore } from "../stores/dialog";
 
 const dialogs = useDialogStore();
@@ -29,7 +30,7 @@ function onPromptKey(event: KeyboardEvent) {
           :placeholder="dialogs.prompt.placeholder"
         />
         <div class="dialog-actions">
-          <button @click="dialogs.resolvePrompt(null)">取消</button>
+          <button @click="dialogs.resolvePrompt(null)">{{ t("dialog.cancel") }}</button>
           <button class="primary" @click="dialogs.resolvePrompt(dialogs.prompt!.value)">
             {{ dialogs.prompt.confirmLabel }}
           </button>
@@ -46,12 +47,12 @@ function onPromptKey(event: KeyboardEvent) {
         <h3>{{ dialogs.confirm.title }}</h3>
         <p v-if="dialogs.confirm.message">{{ dialogs.confirm.message }}</p>
         <div class="dialog-actions">
-          <button @click="dialogs.resolveConfirm(false)">取消</button>
+          <button @click="dialogs.resolveConfirm(false)">{{ t("dialog.cancel") }}</button>
           <button
             :class="dialogs.confirm.danger ? 'danger' : 'primary'"
             @click="dialogs.resolveConfirm(true)"
           >
-            确定
+            {{ t("dialog.confirm") }}
           </button>
         </div>
       </div>
