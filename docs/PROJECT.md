@@ -102,7 +102,7 @@ store · index · s3store · watcher · mcp · server
 
 ## 项目状态
 
-- **版本**：v0.11.1（在 v0.11.0 基础上修复图片密集页切换卡顿，并让静态站支持可选主题、配色与 App 对齐；Phase 7 部分待排期）
+- **版本**：v0.11.2（在 v0.11.1 基础上新增管理员可用的 API/MCP 令牌管理界面与接口；Phase 7 部分待排期）
 - **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli
   以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试）；前端 `vue-tsc` 类型检查、
   **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
