@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.11.0（CLI 化 · MCP 2026-07-28 · 性能与品牌）
+> 版本：v0.11.1（图片性能与静态站主题）
 > 更新日期：2026-10-02
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -22,6 +22,7 @@
 | v0.10.0 | 对标 memos 补齐 | 代码高亮 / 任务列表 / KaTeX / Mermaid / 脚注、拖拽移动、ZIP 导入导出、浏览器快速捕获、专注模式与快捷键面板、MCP 工具由 OpenAPI 生成、sitemap/robots、i18n 增繁中/日/德 |
 | v0.10.2 | 已知问题修复 | render 模式白名单、历史保留策略、导出站搜索、WebDAV 增量重建、OpenAPI 补全、表格/wiki 往返修复 |
 | v0.11.0 | CLI 化 · MCP 升级 · 性能与品牌 | 离线 CLI（笔记/检索/历史/回收站/附件/归档）、`build` 静态站生成、MCP 升级到 `2026-07-28`（无状态 `_meta` + `server/discover` + `resultType`）并补齐到 22 个工具、前端路由切分 + 静态资源 gzip/immutable 缓存（Lighthouse 99）、可拖拽侧栏与对比度回归、笔记风格新 Logo 与暖色柔和主题、GHCR 多架构镜像 |
+| v0.11.1 | 图片性能与静态站主题 | 笔记图片 `loading=lazy`/`decoding=async` + 切换时取消过期请求与在飞图片（修复图片密集页切换卡顿）；静态站可选主题 `--theme auto\|light\|dark`（`OVERVIEW_SITE_THEME`）并与 App 设计令牌对齐配色 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
