@@ -22,3 +22,7 @@ internal/webui/dist/*
 .DS_Store
 .idea/
 .vscode/
+
+# static docs export
+/_site/
+

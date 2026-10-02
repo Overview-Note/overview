@@ -4,8 +4,10 @@ import { marked } from "marked";
 import { api, type PublicNote } from "../api";
 import { t } from "../i18n";
 import { resolveAssetSrc } from "../markdown/assets";
+import { useSiteStore } from "../stores/site";
 
 const props = defineProps<{ path: string }>();
+const site = useSiteStore();
 
 const note = ref<PublicNote | null>(null);
 const error = ref("");
@@ -19,6 +21,12 @@ const html = computed(() => {
   });
   const rendered = marked.parse(md, { async: false }) as string;
   return resolveAssetSrc(rendered);
+});
+
+// Avoid a duplicated title when the body already starts with an H1.
+const showTitle = computed(() => {
+  if (!note.value) return false;
+  return !/^\s*#\s/.test(note.value.body);
 });
 
 watch(
@@ -51,13 +59,13 @@ watch(
           <circle cx="12" cy="12" r="9" />
           <path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" />
         </svg>
-        <span>Overview</span>
+        <span>{{ site.siteTitle }}</span>
       </a>
       <a class="public-back" href="/public">{{ t("public.allNotes") }}</a>
     </header>
     <div class="public-body">
       <article v-if="note" class="public-article">
-        <h1>{{ note.title || note.path }}</h1>
+        <h1 v-if="showTitle">{{ note.title || note.path }}</h1>
         <div class="tiptap-content" v-html="html"></div>
       </article>
       <p v-else-if="error" class="muted">{{ t("public.notFound") }}</p>

@@ -29,6 +29,8 @@ type Config struct {
 	S3Bucket    string
 	S3UseSSL    bool
 	S3PublicURL string
+	SiteTitle   string
+	Render      bool
 }
 
 // S3Enabled reports whether an S3-compatible asset backend is configured.
@@ -70,6 +72,8 @@ func Load() Config {
 		S3Bucket:    env("OVERVIEW_S3_BUCKET", ""),
 		S3UseSSL:    env("OVERVIEW_S3_USE_SSL", "true") == "true",
 		S3PublicURL: env("OVERVIEW_S3_PUBLIC_URL", ""),
+		SiteTitle:   env("OVERVIEW_SITE_TITLE", "Overview"),
+		Render:      env("OVERVIEW_RENDER", "") == "true",
 	}
 }
 

@@ -8,24 +8,26 @@ import Sidebar from "./components/Sidebar.vue";
 import UsersDialog from "./components/UsersDialog.vue";
 import { t } from "./i18n";
 import { useAuthStore } from "./stores/auth";
+import { useSiteStore } from "./stores/site";
 import { useWorkspaceStore } from "./stores/workspace";
 
 const store = useWorkspaceStore();
 const auth = useAuthStore();
+const site = useSiteStore();
 const route = useRoute();
 const router = useRouter();
 const usersOpen = ref(false);
 const settingsOpen = ref(false);
 const userMenuOpen = ref(false);
 
-const plain = computed(() => route.meta.plain === true);
+const plain = computed(() => site.render || route.meta.plain === true);
 const showSearch = computed(() => auth.mode !== "multi" || !!auth.user);
 
 onMounted(async () => {
   if (!auth.loaded) {
     await auth.loadState().catch(() => undefined);
   }
-  if (auth.mode !== "multi" || auth.user) {
+  if (!site.render && (auth.mode !== "multi" || auth.user)) {
     await store.refreshTree().catch(() => undefined);
   }
 });

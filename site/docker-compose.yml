@@ -1,0 +1,24 @@
+# Runs Overview as a public, read-only documentation site.
+#
+#   docker compose -f site/docker-compose.yml up -d --build
+#   open http://localhost:8080
+#
+# The notes under ./notes are rendered read-only; only notes marked
+# `public: true` are exposed.
+services:
+  overview-docs:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: overview:docs
+    container_name: overview-docs
+    ports:
+      - "8080:5230"
+    volumes:
+      - ./notes:/data/notes
+    environment:
+      OVERVIEW_ADDR: ":5230"
+      OVERVIEW_DATA_DIR: /data
+      OVERVIEW_RENDER: "true"
+      OVERVIEW_SITE_TITLE: "Overview Docs"
+    restart: unless-stopped

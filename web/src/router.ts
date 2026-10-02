@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import EmptyState from "./components/EmptyState.vue";
 import EditorPane from "./components/EditorPane.vue";
 import { useAuthStore } from "./stores/auth";
+import { useSiteStore } from "./stores/site";
 import LoginView from "./views/LoginView.vue";
 import PublicHomeView from "./views/PublicHomeView.vue";
 import PublicNoteView from "./views/PublicNoteView.vue";
@@ -38,6 +39,17 @@ export const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
+  const site = useSiteStore();
+  if (!site.loaded) {
+    await site.load();
+  }
+  // Documentation-site mode: everything is public and read-only.
+  if (site.render) {
+    if (to.name === "home") return { name: "public-home" };
+    if (to.name === "note") return { name: "public", params: { path: to.params.path } };
+    return true;
+  }
+
   const auth = useAuthStore();
   if (!auth.loaded) {
     await auth.loadState().catch(() => undefined);

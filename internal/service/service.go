@@ -145,6 +145,32 @@ func (s *Service) PublicNotes(ctx context.Context) ([]core.NoteMeta, error) {
 	return notes, nil
 }
 
+// PublicTree builds a directory tree containing only publicly shared notes,
+// used by the read-only documentation-site mode.
+func (s *Service) PublicTree(ctx context.Context) ([]core.TreeNode, error) {
+	metas, err := s.index.PublicNotes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]core.Entry, 0, len(metas)*2)
+	byPath := make(map[string]core.NoteMeta, len(metas))
+	seen := map[string]struct{}{}
+	for _, m := range metas {
+		byPath[m.Path] = m
+		parts := strings.Split(m.Path, "/")
+		for i := 1; i < len(parts); i++ {
+			dir := strings.Join(parts[:i], "/")
+			if _, ok := seen[dir]; ok {
+				continue
+			}
+			seen[dir] = struct{}{}
+			entries = append(entries, core.Entry{Path: dir, Name: parts[i-1], IsDir: true})
+		}
+		entries = append(entries, core.Entry{Path: m.Path, Name: parts[len(parts)-1]})
+	}
+	return buildTree(entries, byPath), nil
+}
+
 // PublicNote returns a public note (metadata + body).
 func (s *Service) PublicNote(ctx context.Context, path string) (core.Note, error) {
 	note, err := s.repo.Read(ctx, path)

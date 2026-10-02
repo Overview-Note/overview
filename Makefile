@@ -5,7 +5,7 @@ BINARY := bin/overview
 VERSION ?= 0.2.0-dev
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: help dev build build-web build-go test test-go test-web lint fmt vet clean docker
+.PHONY: help dev build build-web build-go test test-go test-web lint fmt vet clean docker site site-export
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -45,3 +45,9 @@ clean: ## Remove build artifacts
 
 docker: ## Build the Docker image
 	docker build -t overview:$(VERSION) .
+
+site: ## Run the documentation site (site/) in read-only render mode on :5230
+	OVERVIEW_RENDER=true OVERVIEW_SITE_TITLE="Overview Docs" OVERVIEW_DATA_DIR=./site go run ./cmd/overview
+
+site-export: ## Export the documentation site to a static site in _site/
+	OVERVIEW_DATA_DIR=./site OVERVIEW_SITE_TITLE="Overview Docs" OVERVIEW_EXPORT_DIR=./_site OVERVIEW_EXPORT_BASE=/ go run ./cmd/overview export

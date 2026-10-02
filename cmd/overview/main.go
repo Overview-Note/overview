@@ -19,6 +19,7 @@ import (
 	"github.com/Overview-Note/overview/internal/s3store"
 	"github.com/Overview-Note/overview/internal/server"
 	"github.com/Overview-Note/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/sitegen"
 	"github.com/Overview-Note/overview/internal/store"
 	"github.com/Overview-Note/overview/internal/trash"
 	"github.com/Overview-Note/overview/internal/watcher"
@@ -28,7 +29,40 @@ import (
 // version is overridden at build time with -ldflags="-X main.version=...".
 var version = "0.2.0-dev"
 
+// runExport renders the vault to a static site. Configuration via the same
+// environment variables, plus OVERVIEW_EXPORT_DIR and OVERVIEW_EXPORT_BASE.
+func runExport() {
+	cfg := config.Load()
+	logger := newLogger(cfg.LogLevel)
+	outDir := envOr("OVERVIEW_EXPORT_DIR", "_site")
+	base := envOr("OVERVIEW_EXPORT_BASE", "/")
+
+	n, err := sitegen.Generate(sitegen.Options{
+		NotesDir:  cfg.NotesDir,
+		OutDir:    outDir,
+		Base:      base,
+		SiteTitle: cfg.SiteTitle,
+	})
+	if err != nil {
+		logger.Error("export failed", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("site exported", "pages", n, "out", outDir)
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "export" {
+		runExport()
+		return
+	}
+
 	cfg := config.Load()
 	logger := newLogger(cfg.LogLevel)
 	slog.SetDefault(logger)
@@ -122,7 +156,12 @@ func main() {
 		DAV:            dav,
 		MCP:            mcpHandler,
 		AI:             aiSvc,
+		Render:         cfg.Render,
+		SiteTitle:      cfg.SiteTitle,
 	})
+	if cfg.Render {
+		logger.Info("running in render mode (public documentation site, read-only)")
+	}
 	if auth.Required() {
 		if needs, err := auth.NeedsSetup(context.Background()); err == nil && needs {
 			logger.Info("authentication enabled; first-run setup required at /setup")

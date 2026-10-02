@@ -9,18 +9,30 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":  "ok",
-		"name":    "Overview",
-		"version": s.opts.Version,
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    "ok",
+		"name":      "Overview",
+		"version":   s.opts.Version,
+		"render":    s.opts.Render,
+		"siteTitle": s.opts.SiteTitle,
 	})
 }
 
 func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
-	nodes, err := s.svc.Tree(r.Context())
+	var (
+		nodes []core.TreeNode
+		err   error
+	)
+	if s.opts.Render {
+		nodes, err = s.svc.PublicTree(r.Context())
+	} else {
+		nodes, err = s.svc.Tree(r.Context())
+	}
 	if err != nil {
 		s.writeDomainError(w, err)
 		return
@@ -33,6 +45,10 @@ func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 	note, err := s.svc.GetNote(r.Context(), rel)
 	if err != nil {
 		s.writeDomainError(w, err)
+		return
+	}
+	if s.opts.Render && !note.Public {
+		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
 	w.Header().Set("ETag", etag(note.Version))

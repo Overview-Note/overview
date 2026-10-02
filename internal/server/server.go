@@ -27,6 +27,10 @@ type Options struct {
 	DAV            http.Handler
 	MCP            http.Handler
 	AI             *service.AIService
+	// Render runs the server as a public documentation site: no auth, the
+	// note tree is exposed read-only and the SPA renders notes directly.
+	Render    bool
+	SiteTitle string
 }
 
 // Server routes HTTP requests to the application service.
@@ -45,6 +49,10 @@ func New(svc *service.Service, opts Options) *Server {
 	if opts.Auth == nil {
 		opts.Auth = service.NewAuth(nil, "none")
 	}
+	if opts.Render {
+		// A documentation site is fully public and read-only.
+		opts.Auth = service.NewAuth(nil, "none")
+	}
 	s := &Server{svc: svc, opts: opts, logger: opts.Logger, mux: http.NewServeMux()}
 	s.routes()
 	return s
@@ -52,7 +60,26 @@ func New(svc *service.Service, opts Options) *Server {
 
 // Handler returns the composed handler (middleware + routes).
 func (s *Server) Handler() http.Handler {
-	return requestID(recoverer(s.logger)(requestLogger(s.logger)(s.authMiddleware(s.mux))))
+	return requestID(recoverer(s.logger)(requestLogger(s.logger)(s.renderGuard(s.authMiddleware(s.mux)))))
+}
+
+// renderGuard rejects state-changing API requests when running as a docs site.
+func (s *Server) renderGuard(next http.Handler) http.Handler {
+	if !s.opts.Render {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			next.ServeHTTP(w, r)
+		default:
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				writeError(w, http.StatusMethodNotAllowed, "read-only site")
+				return
+			}
+			next.ServeHTTP(w, r)
+		}
+	})
 }
 
 func (s *Server) routes() {

@@ -167,6 +167,23 @@ Tools: `notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`
 
 ---
 
+## Documentation site
+
+This project's own documentation is **built with Overview** (dogfooding). The notes live
+under [`site/notes`](site) and are rendered two ways:
+
+- **Live server** — read-only *render mode* (no login, only public notes):
+  ```bash
+  make site            # http://localhost:5230
+  ```
+- **Static export** — for GitHub Pages and any static host:
+  ```bash
+  make site-export     # outputs ./_site
+  ```
+
+The export is deployed automatically to GitHub Pages by
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml).
+
 ## Data Layout
 
 ```
