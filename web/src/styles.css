@@ -570,11 +570,11 @@ button:disabled {
 }
 .tree-row.note.depth-2 {
   font-size: var(--text-sm);
-  padding-left: 24px;
+  padding-left: 18px;
 }
 .tree-row.note.depth-3 {
   font-size: var(--text-sm);
-  padding-left: 34px;
+  padding-left: 24px;
   color: var(--text-soft);
 }
 
@@ -611,7 +611,7 @@ button:disabled {
 }
 
 .children {
-  padding-left: 10px;
+  padding-left: 8px;
 }
 
 .sidebar-foot {
@@ -778,10 +778,8 @@ button:disabled {
 }
 
 /* Floating table toolbar anchored above the active table. */
+/* Rendered inside a Tiptap BubbleMenu (positioned by tippy). */
 .table-bubble {
-  position: fixed;
-  z-index: 150;
-  transform: translateY(calc(-100% - 8px));
   display: flex;
   align-items: center;
   gap: 2px;

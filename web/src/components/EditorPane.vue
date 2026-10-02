@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
-import { EditorContent, useEditor } from "@tiptap/vue-3";
+import { BubbleMenu, EditorContent, useEditor } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
@@ -51,7 +51,6 @@ const aiEnabled = ref(false);
 const showHistory = ref(false);
 const aiContent = ref("");
 const flashMessage = ref("");
-const tableMenu = ref<{ left: number; top: number } | null>(null);
 let flashTimer: number | undefined;
 let suppress = false;
 let saveTimer: number | undefined;
@@ -183,50 +182,9 @@ const editor = useEditor({
     if (suppress) return;
     dirty.value = true;
     aiContent.value = editor.value?.getText() ?? "";
-    updateTableMenu();
     scheduleSave();
   },
-  onSelectionUpdate: () => updateTableMenu(),
-  onTransaction: () => updateTableMenu(),
 });
-
-let tableMenuRaf = 0;
-
-// Position the floating table toolbar just above the table containing the
-// cursor, so table commands sit next to the table itself.
-function updateTableMenu() {
-  window.cancelAnimationFrame(tableMenuRaf);
-  tableMenuRaf = window.requestAnimationFrame(() => {
-    const ed = editor.value;
-    if (!ed || !ed.isActive("table")) {
-      tableMenu.value = null;
-      return;
-    }
-    // Resolve the DOM element of the table that holds the selection.
-    const { view } = ed;
-    const { from } = view.state.selection;
-    const domAt = view.domAtPos(from);
-    let el: HTMLElement | null =
-      domAt.node.nodeType === 1
-        ? (domAt.node as HTMLElement)
-        : (domAt.node.parentElement as HTMLElement | null);
-
-    let table: HTMLElement | null = null;
-    while (el && el !== view.dom) {
-      if (el.tagName === "TABLE") {
-        table = el;
-        break;
-      }
-      el = el.parentElement;
-    }
-    if (!table) {
-      tableMenu.value = null;
-      return;
-    }
-    const rect = table.getBoundingClientRect();
-    tableMenu.value = { left: rect.left, top: rect.top };
-  });
-}
 
 function insertAI(payload: { text: string; replace: boolean }) {
   if (!editor.value) return;
@@ -378,13 +336,8 @@ onBeforeRouteLeave(async () => {
   return true;
 });
 
-function onViewportChange() {
-  updateTableMenu();
-}
-
 onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
-  window.addEventListener("resize", onViewportChange);
   try {
     aiEnabled.value = (await api.aiStatus()).enabled;
   } catch {
@@ -395,7 +348,6 @@ onBeforeUnmount(() => {
   window.clearTimeout(saveTimer);
   window.clearTimeout(flashTimer);
   window.removeEventListener("beforeunload", onBeforeUnload);
-  window.removeEventListener("resize", onViewportChange);
 });
 </script>
 
@@ -536,10 +488,37 @@ onBeforeUnmount(() => {
             }}
           </span>
         </div>
-        <div ref="scrollEl" class="editor-scroll" @scroll="updateTableMenu">
+        <div ref="scrollEl" class="editor-scroll">
           <div class="editor-crumb">{{ store.note?.path }}</div>
           <EditorContent :editor="editor" />
         </div>
+        <BubbleMenu
+          v-if="editor"
+          :editor="editor"
+          :should-show="() => editor!.isActive('table')"
+          :tippy-options="{ duration: 100, placement: 'top' }"
+        >
+          <div class="table-bubble">
+            <button @click="editor?.chain().focus().addRowAfter().run()">
+              {{ t("editor.addRow") }}
+            </button>
+            <button @click="editor?.chain().focus().addColumnAfter().run()">
+              {{ t("editor.addCol") }}
+            </button>
+            <button @click="editor?.chain().focus().deleteRow().run()">
+              {{ t("editor.delRow") }}
+            </button>
+            <button @click="editor?.chain().focus().deleteColumn().run()">
+              {{ t("editor.delCol") }}
+            </button>
+            <button
+              class="danger-text"
+              @click="editor?.chain().focus().deleteTable().run()"
+            >
+              {{ t("editor.delTable") }}
+            </button>
+          </div>
+        </BubbleMenu>
       </div>
 
       <div class="editor-side" v-if="showToc || showAI || showHistory || store.note">
