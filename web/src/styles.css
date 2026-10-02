@@ -40,7 +40,7 @@
   --font-mono:
     ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono",
     monospace;
-  --base-size: 15px;
+  --base-size: 16px;
 
   /* Spacing scale */
   --sp-1: 4px;
@@ -93,16 +93,16 @@
 
 /* Font size preference */
 :root[data-font="compact"] {
-  --base-size: 14px;
-}
-:root[data-font="default"] {
   --base-size: 15px;
 }
-:root[data-font="relaxed"] {
+:root[data-font="default"] {
   --base-size: 16px;
 }
-:root[data-font="large"] {
+:root[data-font="relaxed"] {
   --base-size: 17px;
+}
+:root[data-font="large"] {
+  --base-size: 18px;
 }
 
 * {
@@ -156,12 +156,12 @@ body {
 
 button {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text);
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 5px 9px;
+  padding: 6px 10px;
   cursor: pointer;
   transition:
     background 0.12s ease,
@@ -236,7 +236,7 @@ button:disabled {
 
 .muted {
   color: var(--text-soft);
-  font-size: 13px;
+  font-size: 14px;
   padding: 12px 8px;
 }
 
@@ -336,9 +336,9 @@ button:disabled {
 }
 
 .topbar-link {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
-  padding: 6px 10px;
+  padding: 6px 11px;
 }
 
 .topbar-link:hover {
@@ -368,7 +368,7 @@ button:disabled {
   border-radius: 999px;
   background: var(--bg-soft);
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   outline: none;
   transition:
     background 0.12s ease,
@@ -503,7 +503,7 @@ button:disabled {
   border-left: 2px solid transparent;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 14.5px;
   white-space: nowrap;
   color: var(--text-muted);
 }
@@ -523,7 +523,7 @@ button:disabled {
 .tree-row.folder {
   font-weight: 600;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-top: var(--sp-3);
@@ -596,7 +596,7 @@ button:disabled {
 }
 
 .result-title {
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 550;
 }
 
@@ -607,7 +607,7 @@ button:disabled {
 }
 
 .result-snippet {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-soft);
   overflow: hidden;
   display: -webkit-box;
@@ -648,7 +648,6 @@ button:disabled {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
   padding: 7px var(--sp-4);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -661,6 +660,8 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .table-toolbar {
@@ -904,7 +905,7 @@ mark {
 
 .editor-side h4 {
   margin: 0 0 var(--sp-2);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   color: var(--text);
   text-transform: uppercase;
@@ -923,7 +924,7 @@ mark {
   margin: 1px 0;
   border-left: 2px solid transparent;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  font-size: 13.5px;
+  font-size: 14.5px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1269,13 +1270,13 @@ mark {
 }
 
 .settings-label {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
 }
 
 .settings-hint {
   margin: var(--sp-2) 0 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-soft);
   line-height: 1.6;
 }
