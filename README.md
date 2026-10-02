@@ -80,6 +80,7 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 
 ### 🛠 Operations
 - **Single binary** with the frontend embedded (`docker run` or `go run`)
+- **Structured logging** — JSON or text, to stdout and/or a rotating log file
 - **SQLite migrations**, atomic writes, optimistic concurrency (ETag / 409)
 - **Version history** (revision snapshots) and **trash** (soft delete + restore)
 - **Live sync** — a file watcher reindexes external edits
@@ -154,6 +155,10 @@ Overview is configured entirely through environment variables.
 | `OVERVIEW_MAX_UPLOAD_MB` | `32` | Upload size limit |
 | `OVERVIEW_HISTORY_KEEP` | `50` | Revisions kept per note (`0` disables pruning) |
 | `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `OVERVIEW_LOG_FORMAT` | `json` | `json` or `text` |
+| `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset); rotates on size |
+| `OVERVIEW_LOG_MAX_MB` | `10` | Max log file size before rotation |
+| `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep (`0` truncates) |
 | `OVERVIEW_AUTH` | `multi` | `multi` (users + login) or `none` |
 | `OVERVIEW_SITE_TITLE` | `Overview` | Site title (UI and render mode) |
 | `OVERVIEW_RENDER` | `false` | `true` → public read-only docs site |

@@ -500,7 +500,11 @@ P2 — 打磨与生态
 | `OVERVIEW_DB` | `<data>/overview.db` | SQLite 路径 |
 | `OVERVIEW_MAX_UPLOAD_MB` | `32` | 上传上限 |
 | `OVERVIEW_HISTORY_KEEP` | `50` | 每篇笔记保留的历史版本数（`0` 不裁剪） |
-| `OVERVIEW_LOG_LEVEL` | `info` | 日志级别 |
+| `OVERVIEW_LOG_LEVEL` | `info` | 日志级别：`debug`/`info`/`warn`/`error` |
+| `OVERVIEW_LOG_FORMAT` | `json` | 日志格式：`json` 或 `text` |
+| `OVERVIEW_LOG_FILE` | 空 | 日志文件路径；设置后同时写入文件（空则仅 stdout） |
+| `OVERVIEW_LOG_MAX_MB` | `10` | 单个日志文件大小上限，超过后轮转 |
+| `OVERVIEW_LOG_BACKUPS` | `3` | 轮转保留的历史文件数（`0` 表示截断不保留） |
 | `OVERVIEW_AUTH` | `multi` | 认证模式：`multi` 或 `none` |
 | `OVERVIEW_SITE_TITLE` | `Overview` | 站点标题（UI 与 render 模式） |
 | `OVERVIEW_RENDER` | `false` | 设为 `true` 变为公开只读文档站 |
@@ -581,6 +585,16 @@ P2 — 打磨与生态
 - **表格 / wiki 链接往返**：前端 `sanitizeEditorHtml` 移除 Tiptap 顶层表格的 `colgroup`/`col`、
   归一化 `colspan/rowspan` 与单元格 `<p>`，使 turndown-plugin-gfm 输出标准 Markdown 表格；
   自定义 `WikiLink` 扩展保留 `data-wiki`，使 `[[Note]]` 往返无损。
+
+### 13.9 日志与测试（v0.10.2）
+
+- **日志系统**：`internal/logging` 构建 `slog` 记录器——stdout 始终输出；设置
+  `OVERVIEW_LOG_FILE` 后同时写入文件，并按大小轮转（`OVERVIEW_LOG_MAX_MB`、`OVERVIEW_LOG_BACKUPS`）；
+  格式 `json`（默认）或 `text`，级别 `debug/info/warn/error`。HTTP 访问日志由 `server` 中间件结构化记录。
+- **测试环境**：`go test ./...` 覆盖 `config / logging / history / archivex / sitegen / trash / ai /
+  openapi / index / markdown / mcp / server / service / store / textproc` 等包；前端用 **Vitest**
+  （`npm test`）对 `markdown/html`、`markdown/doc` 等纯函数做单元测试。`make test` 同时运行两端。
+- **顺带修复**：回收站恢复后残留空条目（`trash.Restore` 未清理元数据目录）——由新增测试发现并修复。
 
 ### 13.2 v0.2 / v0.3 验证记录
 

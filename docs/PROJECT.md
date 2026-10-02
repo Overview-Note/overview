@@ -78,7 +78,7 @@ store · index · s3store · watcher · mcp · server
 **检索**：CJK 全文检索 · 全局搜索
 **AI**：AI 助手（对话/整理/补全）· MCP 服务端（工具由 OpenAPI 生成）
 **访问**：多用户认证（bcrypt/会话/角色）· WebDAV · REST + OpenAPI · PWA · 浏览器快速捕获（Bookmarklet）
-**运维**：单二进制 · Docker · SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · S3 附件后端 · 设置中心 · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
+**运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · S3 附件后端 · 设置中心 · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
 
 ---
 
@@ -100,8 +100,9 @@ store · index · s3store · watcher · mcp · server
 ## 项目状态
 
 - **版本**：v0.10.2（架构稳定，功能覆盖路线图 Phase 2–6 并修复已知问题；Phase 7 待排期）
-- **测试**：`go test ./...` 覆盖核心包（store/index/textproc/service/server/mcp 等）+
-  `httptest` 集成测试；前端 `vue-tsc` 类型检查 + `vite build` + Prettier
+- **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi 等
+  以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试）；前端 `vue-tsc` 类型检查、
+  **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
 - **CI**：GitHub Actions（后端 race 测试、前端类型检查构建、golangci-lint）
 - **交付**：Docker / 单二进制（内嵌前端），浏览器访问
 - **规模**：后端 ~7k 行 Go / 18 个 internal 包；前端 ~4k 行 TS/Vue

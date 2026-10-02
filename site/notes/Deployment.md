@@ -42,6 +42,11 @@ services:
 | `OVERVIEW_AUTH` | `multi` | `multi` or `none` |
 | `OVERVIEW_RENDER` | `false` | Read-only documentation-site mode |
 | `OVERVIEW_SITE_TITLE` | `Overview` | Site title (render mode) |
+| `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `OVERVIEW_LOG_FORMAT` | `json` | `json` or `text` |
+| `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset), rotates on size |
+| `OVERVIEW_LOG_MAX_MB` | `10` | Max log file size before rotation |
+| `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep |
 | `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI) |
 | `OVERVIEW_AI_API_KEY` | — | AI provider key |
