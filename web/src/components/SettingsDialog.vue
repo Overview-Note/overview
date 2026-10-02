@@ -8,7 +8,7 @@ import { useSettingsStore } from "../stores/settings";
 import { useWorkspaceStore } from "../stores/workspace";
 
 const props = defineProps<{ open: boolean }>();
-const emit = defineEmits<{ (e: "close"): void }>();
+const emit = defineEmits<{ (e: "close"): void; (e: "tokens"): void }>();
 
 const settings = useSettingsStore();
 const auth = useAuthStore();
@@ -274,12 +274,21 @@ watch(
           />
         </section>
 
+        <section v-if="isAdmin" class="settings-section">
+          <h4>{{ t("tokens.title") }}</h4>
+          <p class="settings-hint">{{ t("settings.tokensHint") }}</p>
+          <div class="settings-save">
+            <button class="primary" @click="emit('tokens')">
+              {{ t("settings.manageTokens") }}
+            </button>
+          </div>
+        </section>
+
         <footer class="settings-footer">
           <button class="primary" @click="emit('close')">
             {{ t("dialog.confirm") }}
           </button>
-        </footer>
-      </div>
+        </footer>      </div>
     </div>
   </Teleport>
 </template>

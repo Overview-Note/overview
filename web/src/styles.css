@@ -1644,6 +1644,11 @@ mark {
   padding: var(--sp-4);
 }
 
+/* DialogHost (prompt / confirm) always stacks above other dialogs. */
+.overlay.stack {
+  z-index: 300;
+}
+
 .dialog,
 .settings-dialog {
   width: min(420px, calc(100vw - 40px));
@@ -1715,6 +1720,10 @@ mark {
 
 .dialog-wide {
   width: min(480px, calc(100vw - 40px));
+}
+
+.dialog-tokens {
+  width: min(660px, calc(100vw - 40px));
 }
 
 /* Settings dialog */
@@ -1959,6 +1968,15 @@ mark {
   margin: 0 0 8px;
 }
 
+.token-secret-head {
+  font-weight: 650;
+}
+
+.token-hint {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
 .token-secret-row {
   display: flex;
   align-items: center;
@@ -1975,6 +1993,39 @@ mark {
   border: 1px solid var(--border);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+}
+
+.token-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0;
+}
+
+.token-form input {
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.token-form input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.token-name {
+  flex: 1 1 20em;
+  min-width: 14em;
+}
+
+.token-days {
+  flex: 0 0 auto;
+  width: 14em;
 }
 
 /* --------------------------------------------------------------------------

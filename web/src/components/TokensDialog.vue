@@ -12,6 +12,9 @@ const tokens = ref<APIToken[]>([]);
 const error = ref("");
 const secret = ref("");
 const copied = ref(false);
+const name = ref("");
+const expiresDays = ref("");
+const busy = ref(false);
 
 async function refresh() {
   error.value = "";
@@ -28,25 +31,46 @@ watch(
     if (open) {
       secret.value = "";
       copied.value = false;
+      name.value = "";
+      expiresDays.value = "";
+      error.value = "";
       void refresh();
     }
   },
 );
 
-async function addToken() {
+async function generate() {
   error.value = "";
-  const name = await dialogs.ask(t("tokens.namePrompt"), "");
-  if (!name) return;
-  const days = await dialogs.ask(t("tokens.expiryPrompt"), "");
-  if (days === null) return;
-  const trimmed = days.trim();
-  const expiresDays = /^\d+$/.test(trimmed) ? Number(trimmed) : 0;
+  const tokenName = name.value.trim();
+  if (!tokenName) {
+    error.value = t("tokens.namePrompt");
+    return;
+  }
+  const days = expiresDays.value.trim();
+  const daysNum = /^\d+$/.test(days) ? Number(days) : 0;
+  busy.value = true;
   try {
-    const res = await api.createToken(name, expiresDays);
+    const res = await api.createToken(tokenName, daysNum);
     secret.value = res.secret;
+    copied.value = false;
+    name.value = "";
+    expiresDays.value = "";
     await refresh();
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function copySecret() {
+  if (!secret.value) return;
+  try {
+    await navigator.clipboard?.writeText(secret.value);
+    copied.value = true;
+    window.setTimeout(() => (copied.value = false), 1500);
+  } catch {
+    /* clipboard unavailable */
   }
 }
 
@@ -64,16 +88,6 @@ async function revoke(token: APIToken) {
   }
 }
 
-async function copySecret() {
-  try {
-    await navigator.clipboard?.writeText(secret.value);
-    copied.value = true;
-    window.setTimeout(() => (copied.value = false), 1500);
-  } catch {
-    /* clipboard unavailable */
-  }
-}
-
 function fmt(value?: string): string {
   if (!value) return t("tokens.never");
   const d = new Date(value);
@@ -84,18 +98,38 @@ function fmt(value?: string): string {
 <template>
   <Teleport to="body">
     <div v-if="open" class="overlay" @click.self="emit('close')">
-      <div class="dialog dialog-wide">
+      <div class="dialog dialog-tokens">
         <h3>{{ t("tokens.title") }}</h3>
 
         <div v-if="secret" class="token-secret">
-          <p><strong>{{ t("tokens.secretTitle") }}</strong> — {{ t("tokens.secretHint") }}</p>
+          <p class="token-secret-head">{{ t("tokens.secretTitle") }}</p>
+          <p class="token-hint">{{ t("tokens.secretHint") }}</p>
           <div class="token-secret-row">
             <code>{{ secret }}</code>
-            <button @click="copySecret">
+            <button class="primary" @click="copySecret">
               {{ copied ? t("tokens.copied") : t("tokens.copy") }}
             </button>
           </div>
         </div>
+
+        <form class="token-form" @submit.prevent="generate">
+          <input
+            v-model="name"
+            class="token-name"
+            :placeholder="t('tokens.namePrompt')"
+            :disabled="busy"
+          />
+          <input
+            v-model="expiresDays"
+            class="token-days"
+            :placeholder="t('tokens.expiryPrompt')"
+            inputmode="numeric"
+            :disabled="busy"
+          />
+          <button class="primary" type="submit" :disabled="busy">
+            {{ t("tokens.add") }}
+          </button>
+        </form>
 
         <div class="user-list">
           <div v-for="token in tokens" :key="token.id" class="user-row">
@@ -115,7 +149,6 @@ function fmt(value?: string): string {
         </div>
         <p v-if="error" class="auth-error">{{ error }}</p>
         <div class="dialog-actions">
-          <button @click="addToken">{{ t("tokens.add") }}</button>
           <button class="primary" @click="emit('close')">{{ t("tokens.close") }}</button>
         </div>
       </div>

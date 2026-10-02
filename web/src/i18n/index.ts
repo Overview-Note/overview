@@ -147,6 +147,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "settings.copyBookmarklet": "复制书签脚本",
     "settings.data": "数据",
     "settings.dataHint": "导出全部笔记与附件的 ZIP，或从 ZIP 恢复。",
+    "settings.tokensHint": "生成用于 MCP / REST 的长期访问令牌（密钥只显示一次）。",
+    "settings.manageTokens": "管理令牌",
     "settings.export": "导出 ZIP",
     "settings.import": "导入 ZIP",
     "settings.importing": "导入中…",
@@ -390,6 +392,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "settings.data": "Data",
     "settings.dataHint":
       "Export all notes and attachments as a ZIP, or restore from one.",
+    "settings.tokensHint": "Create long-lived tokens for MCP / REST access (shown once).",
+    "settings.manageTokens": "Manage tokens",
     "settings.export": "Export ZIP",
     "settings.import": "Import ZIP",
     "settings.importing": "Importing…",

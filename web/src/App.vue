@@ -130,13 +130,6 @@ async function logout() {
           >
             {{ t("topbar.users") }}
           </button>
-          <button
-            v-if="auth.user?.role === 'admin'"
-            class="topbar-link"
-            @click="tokensOpen = true"
-          >
-            {{ t("topbar.tokens") }}
-          </button>
           <div v-if="auth.mode === 'multi' && auth.user" class="user-menu">
             <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
               <span class="avatar">{{
@@ -163,8 +156,12 @@ async function logout() {
     </template>
     <DialogHost />
     <UsersDialog :open="usersOpen" @close="usersOpen = false" />
-    <TokensDialog :open="tokensOpen" @close="tokensOpen = false" />
-    <SettingsDialog :open="settingsOpen" @close="settingsOpen = false" />
+    <SettingsDialog
+      :open="settingsOpen"
+      @close="settingsOpen = false"
+      @tokens="tokensOpen = true"
+    />
     <ShortcutsDialog :open="shortcutsOpen" @close="shortcutsOpen = false" />
+    <TokensDialog :open="tokensOpen" @close="tokensOpen = false" />
   </div>
 </template>

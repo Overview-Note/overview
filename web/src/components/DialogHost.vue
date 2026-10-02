@@ -21,7 +21,7 @@ function onPromptKey(event: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <div v-if="dialogs.prompt" class="overlay" @click.self="dialogs.resolvePrompt(null)">
+    <div v-if="dialogs.prompt" class="overlay stack" @click.self="dialogs.resolvePrompt(null)">
       <div class="dialog" @keydown="onPromptKey">
         <h3>{{ dialogs.prompt.title }}</h3>
         <input
@@ -40,7 +40,7 @@ function onPromptKey(event: KeyboardEvent) {
 
     <div
       v-if="dialogs.confirm"
-      class="overlay"
+      class="overlay stack"
       @click.self="dialogs.resolveConfirm(false)"
     >
       <div class="dialog">
