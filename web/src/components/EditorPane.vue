@@ -49,6 +49,7 @@ const isPublic = ref(false);
 const showAI = ref(false);
 const aiEnabled = ref(false);
 const showHistory = ref(false);
+const visibilityMenuOpen = ref(false);
 const aiContent = ref("");
 const flashMessage = ref("");
 let flashTimer: number | undefined;
@@ -268,14 +269,25 @@ function isActive(name: string, attrs?: Record<string, unknown>) {
   return editor.value?.isActive(name, attrs) ?? false;
 }
 
-async function togglePublic() {
-  isPublic.value = !isPublic.value;
+function publicURL(): string {
+  return `${location.origin}/public/${currentPath.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function setVisibility(next: boolean) {
+  visibilityMenuOpen.value = false;
+  if (isPublic.value === next) return;
+  isPublic.value = next;
   dirty.value = true;
   scheduleSave();
-  if (isPublic.value) {
-    const url = `${location.origin}/public/${currentPath.split("/").map(encodeURIComponent).join("/")}`;
-    await navigator.clipboard?.writeText(url).catch(() => undefined);
-    await dialogs.askConfirm(t("editor.share"), t("editor.shareMessage", { url }), false);
+  if (next) {
+    void navigator.clipboard?.writeText(publicURL()).catch(() => undefined);
+    flashStatus(t("visibility.copied"));
+  }
+}
+
+function openPublicPage() {
+  if (isPublic.value && currentPath) {
+    window.open(publicURL(), "_blank", "noopener");
   }
 }
 
@@ -377,13 +389,105 @@ onBeforeUnmount(() => {
         >
           {{ t("ai.title") }}
         </button>
-        <button
-          :class="{ on: isPublic }"
-          :title="t('editor.share')"
-          @click="togglePublic"
-        >
-          {{ isPublic ? t("editor.shared") : t("editor.share") }}
-        </button>
+        <div class="vis-select">
+          <button
+            class="vis-trigger"
+            :class="{ on: isPublic }"
+            :title="t('visibility.title')"
+            @click="visibilityMenuOpen = !visibilityMenuOpen"
+          >
+            <svg
+              v-if="isPublic"
+              class="vis-icon"
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" />
+            </svg>
+            <svg
+              v-else
+              class="vis-icon"
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="4" y="10" width="16" height="11" rx="2" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+            <span>{{ isPublic ? t("visibility.public") : t("visibility.private") }}</span>
+          </button>
+          <div
+            v-if="visibilityMenuOpen"
+            class="vis-menu"
+            @mouseleave="visibilityMenuOpen = false"
+          >
+            <button :class="{ on: !isPublic }" @click="setVisibility(false)">
+              <span class="vis-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="4" y="10" width="16" height="11" rx="2" />
+                  <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                </svg>
+              </span>
+              <span class="vis-text">
+                <span class="vis-name">{{ t("visibility.private") }}</span>
+                <small>{{ t("visibility.privateHint") }}</small>
+              </span>
+            </button>
+            <button :class="{ on: isPublic }" @click="setVisibility(true)">
+              <span class="vis-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" />
+                </svg>
+              </span>
+              <span class="vis-text">
+                <span class="vis-name">{{ t("visibility.public") }}</span>
+                <small>{{ t("visibility.publicHint") }}</small>
+              </span>
+            </button>
+            <button v-if="isPublic" class="vis-open" @click="openPublicPage()">
+              <span class="vis-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+                  />
+                </svg>
+              </span>
+              <span class="vis-text">
+                <span class="vis-name">{{ t("visibility.open") }}</span>
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

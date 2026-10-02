@@ -757,6 +757,96 @@ button:disabled {
   font-weight: 550;
 }
 
+/* Per-note visibility selector (memos-style private / public) */
+.vis-select {
+  position: relative;
+}
+
+.vis-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vis-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.vis-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 240px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: var(--sp-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 50;
+}
+
+.vis-menu button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+}
+
+.vis-menu button:hover {
+  background: var(--bg-hover);
+}
+
+.vis-menu button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.vis-menu .vis-icon {
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.vis-menu button.on .vis-icon {
+  color: var(--accent);
+}
+
+.vis-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vis-name {
+  font-size: var(--text-sm);
+  font-weight: 550;
+}
+
+.vis-text small {
+  font-size: var(--text-xs);
+  color: var(--text-soft);
+  font-weight: 400;
+}
+
+.vis-menu button.on .vis-text small {
+  color: var(--accent);
+}
+
+.vis-open {
+  border-top: 1px solid var(--border) !important;
+  margin-top: 2px;
+  border-radius: 0;
+}
+
 .editor-toolbar {
   position: relative;
   display: flex;
@@ -1755,10 +1845,35 @@ mark {
 
 .public-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-5);
   border-bottom: 1px solid var(--border);
+}
+
+.public-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.public-brand svg {
+  color: var(--accent);
+}
+
+.public-back {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.public-back:hover {
+  color: var(--accent);
 }
 
 .public-sub {
