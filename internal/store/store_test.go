@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 func newTestStore(t *testing.T) *Store {

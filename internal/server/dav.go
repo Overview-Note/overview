@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/net/webdav"
 
-	"github.com/overview-app/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/service"
 )
 
 // NewDAV builds a WebDAV handler that exposes the notes directory. When

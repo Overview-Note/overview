@@ -19,8 +19,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/textproc"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/textproc"
 )
 
 //go:embed migrations/*.sql

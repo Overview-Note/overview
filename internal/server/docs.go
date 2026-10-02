@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/overview-app/overview/internal/openapi"
+	"github.com/Overview-Note/overview/internal/openapi"
 )
 
 func (s *Server) handleOpenAPI(w http.ResponseWriter, r *http.Request) {

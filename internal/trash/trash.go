@@ -10,7 +10,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 // Entry describes a trashed note or folder.

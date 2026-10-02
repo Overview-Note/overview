@@ -110,7 +110,7 @@ store · index · s3store · watcher · mcp · server
 ## 快速开始
 
 ```bash
-git clone https://github.com/overview-app/overview.git
+git clone https://github.com/Overview-Note/overview.git
 cd overview
 docker compose up -d --build
 # 打开 http://localhost:5230，完成首次管理员设置

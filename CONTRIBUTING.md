@@ -10,7 +10,7 @@ the project, our conventions, and how to get your changes merged.
 - 📝 **Improve docs** — fixes to `README.md` and `docs/` are very welcome.
 - 🔧 **Send code** — bug fixes, features, tests, refactors.
 
-New contributors: look for issues labeled [`good first issue`](https://github.com/overview-app/overview/labels/good%20first%20issue).
+New contributors: look for issues labeled [`good first issue`](https://github.com/Overview-Note/overview/labels/good%20first%20issue).
 
 ## Development setup
 
@@ -21,7 +21,7 @@ Requirements:
 - **Docker** (optional, for container builds)
 
 ```bash
-git clone https://github.com/overview-app/overview.git
+git clone https://github.com/Overview-Note/overview.git
 cd overview
 
 # terminal 1 — backend on :5230

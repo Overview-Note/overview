@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Documentation
-    url: https://github.com/overview-app/overview/blob/main/docs/DESIGN.md
+    url: https://github.com/Overview-Note/overview/blob/main/docs/DESIGN.md
     about: Architecture, design decisions and roadmap
   - name: Questions & ideas
-    url: https://github.com/overview-app/overview/discussions
+    url: https://github.com/Overview-Note/overview/discussions
     about: Ask questions or discuss ideas with the community

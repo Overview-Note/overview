@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 // Message is a single chat message.

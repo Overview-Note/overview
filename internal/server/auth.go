@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 const sessionMaxAge = 30 * 24 * 3600

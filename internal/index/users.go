@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 var _ core.UserStore = (*Index)(nil)

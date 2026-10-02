@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/overview-app/overview/internal/index"
-	"github.com/overview-app/overview/internal/mcp"
-	"github.com/overview-app/overview/internal/service"
-	"github.com/overview-app/overview/internal/store"
+	"github.com/Overview-Note/overview/internal/index"
+	"github.com/Overview-Note/overview/internal/mcp"
+	"github.com/Overview-Note/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/store"
 )
 
 func newMCPServer(t *testing.T, verify mcp.TokenVerifier) *httptest.Server {

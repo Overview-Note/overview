@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/history"
-	"github.com/overview-app/overview/internal/index"
-	"github.com/overview-app/overview/internal/service"
-	"github.com/overview-app/overview/internal/store"
-	"github.com/overview-app/overview/internal/trash"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/history"
+	"github.com/Overview-Note/overview/internal/index"
+	"github.com/Overview-Note/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/store"
+	"github.com/Overview-Note/overview/internal/trash"
 )
 
 func newService(t *testing.T) *service.Service {

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/service"
 )
 
 // Options configures a Server.

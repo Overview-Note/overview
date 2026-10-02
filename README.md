@@ -2,7 +2,7 @@
 
 > A self-hosted, folder-based Markdown knowledge base — **files as the source of truth**, AI-native, and deployable as a single binary.
 
-[![CI](https://github.com/overview-app/overview/actions/workflows/ci.yml/badge.svg)](https://github.com/overview-app/overview/actions/workflows/ci.yml)
+[![CI](https://github.com/Overview-Note/overview/actions/workflows/ci.yml/badge.svg)](https://github.com/Overview-Note/overview/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -87,7 +87,7 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 ### Docker (recommended)
 
 ```bash
-git clone https://github.com/overview-app/overview.git
+git clone https://github.com/Overview-Note/overview.git
 cd overview
 docker compose up -d --build
 # open http://localhost:5230 and complete the first-run admin setup
@@ -96,7 +96,7 @@ docker compose up -d --build
 ### Prebuilt binary
 
 ```bash
-go install github.com/overview-app/overview/cmd/overview@latest
+go install github.com/Overview-Note/overview/cmd/overview@latest
 OVERVIEW_DATA_DIR=./data overview
 ```
 

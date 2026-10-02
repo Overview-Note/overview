@@ -11,7 +11,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 const sessionTTL = 30 * 24 * time.Hour

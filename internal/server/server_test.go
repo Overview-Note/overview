@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/overview-app/overview/internal/index"
-	"github.com/overview-app/overview/internal/server"
-	"github.com/overview-app/overview/internal/service"
-	"github.com/overview-app/overview/internal/store"
+	"github.com/Overview-Note/overview/internal/index"
+	"github.com/Overview-Note/overview/internal/server"
+	"github.com/Overview-Note/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/store"
 )
 
 func newTestServer(t *testing.T) *httptest.Server {

@@ -15,7 +15,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/oklog/ulid/v2"
 
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 // Store stores assets in an S3 bucket.

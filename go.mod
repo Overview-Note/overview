@@ -1,4 +1,4 @@
-module github.com/overview-app/overview
+module github.com/Overview-Note/overview
 
 go 1.26.5
 

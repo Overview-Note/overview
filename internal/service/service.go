@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/history"
-	"github.com/overview-app/overview/internal/markdown"
-	"github.com/overview-app/overview/internal/trash"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/history"
+	"github.com/Overview-Note/overview/internal/markdown"
+	"github.com/Overview-Note/overview/internal/trash"
 )
 
 // assetRefPattern matches asset references in any of the accepted URL forms,

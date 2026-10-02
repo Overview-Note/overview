@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/index"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/index"
 )
 
 func openTestIndex(t *testing.T) *index.Index {

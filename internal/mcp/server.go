@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/overview-app/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/service"
 )
 
 const protocolVersion = "2024-11-05"

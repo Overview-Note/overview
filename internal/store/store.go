@@ -15,8 +15,8 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/markdown"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/markdown"
 )
 
 // Store is a filesystem-backed note and asset repository.

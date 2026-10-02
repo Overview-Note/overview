@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/overview-app/overview/internal/ai"
-	"github.com/overview-app/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/ai"
+	"github.com/Overview-Note/overview/internal/core"
 )
 
 // AIConfig is the effective AI configuration (runtime overrides + defaults).

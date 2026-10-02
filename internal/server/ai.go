@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/overview-app/overview/internal/ai"
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/ai"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/service"
 )
 
 func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {

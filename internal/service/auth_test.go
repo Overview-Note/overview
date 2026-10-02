@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/overview-app/overview/internal/core"
-	"github.com/overview-app/overview/internal/index"
-	"github.com/overview-app/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/index"
+	"github.com/Overview-Note/overview/internal/service"
 )
 
 func openAuth(t *testing.T, mode string) *service.AuthService {
