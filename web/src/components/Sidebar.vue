@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import type { SearchHit, TreeNode } from "../api";
+import type { TreeNode } from "../api";
 import { t } from "../i18n";
 import { useDialogStore } from "../stores/dialog";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -12,37 +12,11 @@ const dialogs = useDialogStore();
 const router = useRouter();
 const route = useRoute();
 
-const query = ref("");
-const results = ref<SearchHit[]>([]);
-const searching = ref(false);
-let timer: number | undefined;
-
 const activePath = computed(() =>
   route.name === "note" ? String(route.params.path ?? "") : null,
 );
 
-function onSearchInput() {
-  window.clearTimeout(timer);
-  const q = query.value.trim();
-  if (!q) {
-    results.value = [];
-    return;
-  }
-  timer = window.setTimeout(async () => {
-    searching.value = true;
-    try {
-      results.value = await store.search(q);
-    } catch (e) {
-      store.error = (e as Error).message;
-    } finally {
-      searching.value = false;
-    }
-  }, 250);
-}
-
 function open(path: string) {
-  query.value = "";
-  results.value = [];
   router.push({ name: "note", params: { path } });
 }
 
@@ -102,33 +76,7 @@ async function deleteNode(node: TreeNode) {
 
 <template>
   <aside class="sidebar">
-    <div class="sidebar-actions">
-      <button :title="t('sidebar.newNoteTitle')" @click="createNote('')">
-        {{ t("sidebar.newNote") }}
-      </button>
-      <button :title="t('sidebar.newFolderTitle')" @click="createFolder('')">
-        {{ t("sidebar.newFolder") }}
-      </button>
-    </div>
-    <input
-      v-model="query"
-      class="search"
-      type="search"
-      :placeholder="t('sidebar.search')"
-      @input="onSearchInput"
-    />
-    <div v-if="query" class="search-results">
-      <div v-if="searching" class="muted">{{ t("sidebar.searching") }}</div>
-      <div v-for="r in results" :key="r.id" class="result" @click="open(r.path)">
-        <div class="result-title">{{ r.title || r.path }}</div>
-        <div class="result-path">{{ r.path }}</div>
-        <div class="result-snippet" v-html="r.snippet"></div>
-      </div>
-      <div v-if="!searching && results.length === 0" class="muted">
-        {{ t("sidebar.noResults") }}
-      </div>
-    </div>
-    <nav v-else class="tree">
+    <nav class="tree">
       <TreeNodeItem
         v-for="node in store.tree"
         :key="node.path"
@@ -142,5 +90,13 @@ async function deleteNode(node: TreeNode) {
       />
       <div v-if="store.tree.length === 0" class="muted">{{ t("sidebar.empty") }}</div>
     </nav>
+    <div class="sidebar-foot">
+      <button :title="t('sidebar.newNoteTitle')" @click="createNote('')">
+        {{ t("sidebar.newNote") }}
+      </button>
+      <button :title="t('sidebar.newFolderTitle')" @click="createFolder('')">
+        {{ t("sidebar.newFolder") }}
+      </button>
+    </div>
   </aside>
 </template>

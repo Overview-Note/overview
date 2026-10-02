@@ -104,6 +104,8 @@ func (s *Server) routes() {
 	// AI assistance (available only when configured).
 	s.mux.HandleFunc("GET "+base+"/ai/status", s.handleAIStatus)
 	s.mux.HandleFunc("POST "+base+"/ai/chat", s.handleAIChat)
+	s.mux.HandleFunc("GET "+base+"/settings/ai", s.handleGetAISettings)
+	s.mux.HandleFunc("PUT "+base+"/settings/ai", s.handleSaveAISettings)
 
 	// Public (anonymous) read-only access to shared notes.
 	s.mux.HandleFunc("GET "+base+"/public/notes", s.handlePublicNotes)

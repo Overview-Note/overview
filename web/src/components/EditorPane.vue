@@ -494,7 +494,7 @@ onBeforeUnmount(() => {
 
     <div class="editor-body">
       <div ref="scrollEl" class="editor-scroll">
-        <div class="editor-title">{{ store.note?.title || store.note?.path }}</div>
+        <div class="editor-crumb">{{ store.note?.path }}</div>
         <EditorContent :editor="editor" />
       </div>
       <div class="editor-side" v-if="showToc || showAI || showHistory || store.note">

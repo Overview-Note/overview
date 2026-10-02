@@ -195,9 +195,11 @@ func newAuthServer(t *testing.T) (*httptest.Server, *http.Client) {
 	st := store.New(notes, assets)
 	svc := service.New(st, ix, st, nil, nil)
 	auth := service.NewAuth(ix, "multi")
+	aiSvc := service.NewAI(ix, service.AIConfig{Model: "gpt-4o-mini"})
 	ts := httptest.NewServer(server.New(svc, server.Options{
 		MaxUploadBytes: 1 << 20,
 		Auth:           auth,
+		AI:             aiSvc,
 	}).Handler())
 	t.Cleanup(ts.Close)
 	jar, _ := cookiejar.New(nil)
@@ -354,6 +356,52 @@ func TestPublicNotes(t *testing.T) {
 	}
 
 	// Authenticated API is still gated when auth is enabled (auth-less server here).
+}
+
+func TestAISettingsPersistence(t *testing.T) {
+	ts, client := newAuthServer(t)
+	authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/setup",
+		map[string]string{"username": "admin", "password": "secret1"}, nil)
+
+	// Initially unconfigured.
+	var status map[string]any
+	authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/ai/status", nil, &status)
+	if status["enabled"] != false {
+		t.Errorf("ai should start disabled: %v", status)
+	}
+
+	// Admin saves configuration.
+	var saved map[string]any
+	if code := authJSON(t, client, http.MethodPut, ts.URL+"/api/v1/settings/ai",
+		map[string]string{
+			"baseUrl": "https://api.example.com/v1",
+			"apiKey":  "secret-key",
+			"model":   "gpt-4o-mini",
+		}, &saved); code != http.StatusOK {
+		t.Fatalf("save ai settings = %d (%v)", code, saved)
+	}
+	if saved["hasKey"] != true {
+		t.Errorf("expected hasKey true: %v", saved)
+	}
+
+	// Now enabled and model reported.
+	authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/ai/status", nil, &status)
+	if status["enabled"] != true {
+		t.Errorf("ai should be enabled after config: %v", status)
+	}
+	if status["model"] != "gpt-4o-mini" {
+		t.Errorf("model = %v", status["model"])
+	}
+
+	// Settings endpoint never returns the API key.
+	var cfg map[string]any
+	authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/settings/ai", nil, &cfg)
+	if _, leaked := cfg["apiKey"]; leaked {
+		t.Errorf("api key must not be returned: %v", cfg)
+	}
+	if cfg["baseUrl"] != "https://api.example.com/v1" {
+		t.Errorf("baseUrl = %v", cfg["baseUrl"])
+	}
 }
 
 func TestPathValidation(t *testing.T) {

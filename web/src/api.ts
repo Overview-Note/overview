@@ -223,6 +223,24 @@ export const api = {
     return json<{ enabled: boolean; model?: string }>(res);
   },
 
+  async aiSettings(): Promise<{ baseUrl: string; model: string; hasKey: boolean }> {
+    const res = await fetch(`${BASE}/settings/ai`);
+    return json<{ baseUrl: string; model: string; hasKey: boolean }>(res);
+  },
+
+  async saveAISettings(cfg: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  }): Promise<{ baseUrl: string; model: string; hasKey: boolean }> {
+    const res = await fetch(`${BASE}/settings/ai`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    return json<{ baseUrl: string; model: string; hasKey: boolean }>(res);
+  },
+
   async aiChat(
     mode: "chat" | "organize" | "complete",
     payload: { messages?: { role: string; content: string }[]; content?: string },

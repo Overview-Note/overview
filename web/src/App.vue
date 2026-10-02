@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import DialogHost from "./components/DialogHost.vue";
+import SearchBox from "./components/SearchBox.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import Sidebar from "./components/Sidebar.vue";
 import UsersDialog from "./components/UsersDialog.vue";
@@ -18,6 +19,7 @@ const settingsOpen = ref(false);
 const userMenuOpen = ref(false);
 
 const plain = computed(() => route.meta.plain === true);
+const showSearch = computed(() => auth.mode !== "multi" || !!auth.user);
 
 onMounted(async () => {
   if (!auth.loaded) {
@@ -49,53 +51,51 @@ async function logout() {
     </template>
     <template v-else>
       <header class="topbar">
-        <div class="brand">
-          <span class="brand-mark">O</span>
-          <span class="brand-name">Overview</span>
+        <div class="topbar-left">
+          <RouterLink class="brand" :to="{ name: 'home' }">
+            <span class="brand-mark">O</span>
+            <span class="brand-name">Overview</span>
+          </RouterLink>
         </div>
-        <div class="hint" v-if="store.loadingTree">{{ t("app.loading") }}</div>
-        <div class="topbar-right">
+
+        <div class="topbar-center">
+          <SearchBox v-if="showSearch" />
+        </div>
+
+        <nav class="topbar-right">
+          <button class="topbar-link" @click="settingsOpen = true">
+            {{ t("settings.title") }}
+          </button>
           <button
-            class="icon-btn"
-            :title="t('settings.title')"
-            @click="settingsOpen = true"
+            v-if="auth.user"
+            class="topbar-link"
+            @click="router.push({ name: 'trash' })"
           >
-            ⚙
+            {{ t("trash.link") }}
+          </button>
+          <button
+            v-if="auth.user?.role === 'admin'"
+            class="topbar-link"
+            @click="usersOpen = true"
+          >
+            {{ t("topbar.users") }}
           </button>
           <div v-if="auth.mode === 'multi' && auth.user" class="user-menu">
             <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
               <span class="avatar">{{
                 auth.user.username.slice(0, 1).toUpperCase()
               }}</span>
-              <span class="username">{{ auth.user.username }}</span>
             </button>
             <div
               v-if="userMenuOpen"
               class="user-dropdown"
               @mouseleave="userMenuOpen = false"
             >
-              <button
-                v-if="auth.user"
-                @click="
-                  router.push({ name: 'trash' });
-                  userMenuOpen = false;
-                "
-              >
-                {{ t("trash.link") }}
-              </button>
-              <button
-                v-if="auth.user?.role === 'admin'"
-                @click="
-                  usersOpen = true;
-                  userMenuOpen = false;
-                "
-              >
-                {{ t("topbar.users") }}
-              </button>
+              <div class="user-dropdown-name">{{ auth.user.username }}</div>
               <button @click="logout">{{ t("topbar.logout") }}</button>
             </div>
           </div>
-        </div>
+        </nav>
       </header>
       <div class="layout">
         <Sidebar />

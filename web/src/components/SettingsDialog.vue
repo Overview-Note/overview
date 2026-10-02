@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { api } from "../api";
 import { locale, locales, setLocale, t, type Locale } from "../i18n";
+import { useAuthStore } from "../stores/auth";
 import type { FontSize, ThemeMode } from "../stores/settings";
 import { useSettingsStore } from "../stores/settings";
 
@@ -9,9 +10,17 @@ const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ (e: "close"): void }>();
 
 const settings = useSettingsStore();
+const auth = useAuthStore();
 
 const aiEnabled = ref(false);
 const aiModel = ref("");
+const aiBaseUrl = ref("");
+const aiApiKey = ref("");
+const aiHasKey = ref(false);
+const aiSaving = ref(false);
+const aiSaved = ref(false);
+
+const isAdmin = computed(() => auth.user?.role === "admin");
 
 const themes: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.themeSystem" },
@@ -26,17 +35,48 @@ const fonts: { value: FontSize; labelKey: string }[] = [
   { value: "large", labelKey: "settings.fontLarge" },
 ];
 
+async function loadAI() {
+  try {
+    const status = await api.aiStatus();
+    aiEnabled.value = status.enabled;
+    aiModel.value = status.model ?? "";
+  } catch {
+    aiEnabled.value = false;
+  }
+  if (isAdmin.value) {
+    try {
+      const cfg = await api.aiSettings();
+      aiBaseUrl.value = cfg.baseUrl;
+      aiModel.value = cfg.model;
+      aiHasKey.value = cfg.hasKey;
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+async function saveAI() {
+  aiSaving.value = true;
+  aiSaved.value = false;
+  try {
+    const cfg = await api.saveAISettings({
+      baseUrl: aiBaseUrl.value,
+      apiKey: aiApiKey.value,
+      model: aiModel.value,
+    });
+    aiHasKey.value = cfg.hasKey;
+    aiApiKey.value = "";
+    aiSaved.value = true;
+    await loadAI();
+  } finally {
+    aiSaving.value = false;
+  }
+}
+
 watch(
   () => props.open,
-  async (open) => {
-    if (!open) return;
-    try {
-      const status = await api.aiStatus();
-      aiEnabled.value = status.enabled;
-      aiModel.value = status.model ?? "";
-    } catch {
-      aiEnabled.value = false;
-    }
+  (open) => {
+    if (open) void loadAI();
   },
 );
 </script>
@@ -119,12 +159,33 @@ watch(
               {{ aiEnabled ? t("settings.aiEnabled") : t("settings.aiDisabled") }}
             </span>
           </div>
-          <p v-if="aiEnabled" class="settings-hint">
-            {{ t("settings.aiModel", { model: aiModel }) }}
-          </p>
-          <p v-else class="settings-hint settings-code">
-            OVERVIEW_AI_BASE_URL / OVERVIEW_AI_API_KEY / OVERVIEW_AI_MODEL
-          </p>
+
+          <template v-if="isAdmin">
+            <label class="settings-field">
+              <span>{{ t("settings.aiBaseUrl") }}</span>
+              <input v-model="aiBaseUrl" placeholder="https://api.openai.com/v1" />
+            </label>
+            <label class="settings-field">
+              <span>{{ t("settings.aiApiKey") }}</span>
+              <input
+                v-model="aiApiKey"
+                type="password"
+                :placeholder="aiHasKey ? t('settings.aiKeySet') : 'sk-...'"
+              />
+            </label>
+            <label class="settings-field">
+              <span>{{ t("settings.aiModelField") }}</span>
+              <input v-model="aiModel" placeholder="gpt-4o-mini" />
+            </label>
+            <p class="settings-hint">{{ t("settings.aiHint") }}</p>
+            <div class="settings-save">
+              <button class="primary" :disabled="aiSaving" @click="saveAI">
+                {{ aiSaving ? t("settings.saving") : t("settings.save") }}
+              </button>
+              <span v-if="aiSaved" class="status-ok">{{ t("settings.saved") }}</span>
+            </div>
+          </template>
+          <p v-else class="settings-hint">{{ t("settings.aiAdminOnly") }}</p>
         </section>
 
         <footer class="settings-footer">

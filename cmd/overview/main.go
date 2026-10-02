@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/overview-app/overview/internal/ai"
 	"github.com/overview-app/overview/internal/config"
 	"github.com/overview-app/overview/internal/core"
 	"github.com/overview-app/overview/internal/history"
@@ -107,6 +106,13 @@ func main() {
 			logger.Warn("reindex after WebDAV write failed", "error", err)
 		}
 	}, logger)
+	aiSvc := service.NewAI(idx, service.AIConfig{
+		BaseURL: cfg.AIBaseURL,
+		APIKey:  cfg.AIAPIKey,
+		Model:   cfg.AIModel,
+	})
+	aiSvc.Load(context.Background())
+
 	srv := server.New(svc, server.Options{
 		MaxUploadBytes: cfg.MaxUploadMB << 20,
 		Static:         staticFS,
@@ -115,7 +121,7 @@ func main() {
 		Auth:           auth,
 		DAV:            dav,
 		MCP:            mcpHandler,
-		AI:             service.NewAI(ai.New(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)),
+		AI:             aiSvc,
 	})
 	if auth.Required() {
 		if needs, err := auth.NeedsSetup(context.Background()); err == nil && needs {

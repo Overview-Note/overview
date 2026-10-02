@@ -502,6 +502,24 @@ func matchExpr(tokens []string) string {
 
 // noteName returns the file base name without extension, used to resolve
 // wiki-links like [[并发模型]] against nested notes.
+// GetSetting returns a stored setting value, or "" when unset.
+func (ix *Index) GetSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := ix.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return value, err
+}
+
+// SetSetting upserts a setting value.
+func (ix *Index) SetSetting(ctx context.Context, key, value string) error {
+	_, err := ix.db.ExecContext(ctx,
+		`INSERT INTO settings (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	return err
+}
+
 // PublicNotes returns metadata for all notes marked public.
 func (ix *Index) PublicNotes(ctx context.Context) ([]core.NoteMeta, error) {
 	rows, err := ix.db.QueryContext(ctx,
