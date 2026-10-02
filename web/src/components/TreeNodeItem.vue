@@ -6,6 +6,7 @@ import { t } from "../i18n";
 const props = defineProps<{
   node: TreeNode;
   activePath: string | null;
+  depth?: number;
 }>();
 
 const emit = defineEmits<{
@@ -30,7 +31,12 @@ function onClick() {
   <div class="tree-node">
     <div
       class="tree-row"
-      :class="{ active: isActive(), folder: isFolder }"
+      :class="[
+        { active: isActive(), folder: isFolder },
+        isFolder
+          ? `depth-${Math.min(depth ?? 0, 2)}`
+          : `note depth-${Math.min((depth ?? 0) + 1, 3)}`,
+      ]"
       @click="onClick"
     >
       <span class="twist" v-if="isFolder">{{ expanded ? "▾" : "▸" }}</span>
@@ -58,6 +64,7 @@ function onClick() {
         :key="child.path"
         :node="child"
         :active-path="activePath"
+        :depth="(depth ?? 0) + 1"
         @open="emit('open', $event)"
         @create-note="emit('create-note', $event)"
         @create-folder="emit('create-folder', $event)"

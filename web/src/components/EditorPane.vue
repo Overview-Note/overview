@@ -353,6 +353,39 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="editor-pane">
+    <div class="note-bar">
+      <div class="note-bar-title">{{ store.note?.title || store.note?.path }}</div>
+      <div class="note-bar-actions">
+        <button
+          :class="{ on: showToc }"
+          :title="t('editor.toc')"
+          @click="showToc = !showToc"
+        >
+          {{ t("editor.toc") }}
+        </button>
+        <button
+          :class="{ on: showHistory }"
+          :title="t('history.title')"
+          @click="showHistory = !showHistory"
+        >
+          {{ t("history.title") }}
+        </button>
+        <button
+          :class="{ on: showAI }"
+          :title="aiEnabled ? t('ai.title') : t('ai.notConfigured')"
+          @click="toggleAI"
+        >
+          {{ t("ai.title") }}
+        </button>
+        <button
+          :class="{ on: isPublic }"
+          :title="t('editor.share')"
+          @click="togglePublic"
+        >
+          {{ isPublic ? t("editor.shared") : t("editor.share") }}
+        </button>
+      </div>
+    </div>
     <div class="editor-toolbar">
       <div class="toolbar-group">
         <button
@@ -430,34 +463,6 @@ onBeforeUnmount(() => {
         <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
         <button :class="{ on: isActive('table') }" @click="insertTable">
           {{ t("editor.table") }}
-        </button>
-        <button
-          :class="{ on: showToc }"
-          :title="t('editor.toc')"
-          @click="showToc = !showToc"
-        >
-          {{ t("editor.toc") }}
-        </button>
-        <button
-          :class="{ on: isPublic }"
-          :title="t('editor.share')"
-          @click="togglePublic"
-        >
-          {{ isPublic ? t("editor.shared") : t("editor.share") }}
-        </button>
-        <button
-          :class="{ on: showHistory }"
-          :title="t('history.title')"
-          @click="showHistory = !showHistory"
-        >
-          {{ t("history.title") }}
-        </button>
-        <button
-          :class="{ on: showAI }"
-          :title="aiEnabled ? t('ai.title') : t('ai.notConfigured')"
-          @click="toggleAI"
-        >
-          {{ t("ai.title") }}
         </button>
         <span class="sep"></span>
         <button @click="editor?.chain().focus().undo().run()">

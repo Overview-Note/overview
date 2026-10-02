@@ -91,10 +91,18 @@ async function deleteNode(node: TreeNode) {
       <div v-if="store.tree.length === 0" class="muted">{{ t("sidebar.empty") }}</div>
     </nav>
     <div class="sidebar-foot">
-      <button :title="t('sidebar.newNoteTitle')" @click="createNote('')">
+      <button
+        class="foot-primary"
+        :title="t('sidebar.newNoteTitle')"
+        @click="createNote('')"
+      >
         {{ t("sidebar.newNote") }}
       </button>
-      <button :title="t('sidebar.newFolderTitle')" @click="createFolder('')">
+      <button
+        class="foot-secondary"
+        :title="t('sidebar.newFolderTitle')"
+        @click="createFolder('')"
+      >
         {{ t("sidebar.newFolder") }}
       </button>
     </div>
