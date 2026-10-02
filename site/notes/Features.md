@@ -46,10 +46,11 @@ public: true
 ## Operations
 
 - **Single binary** with the frontend embedded (Docker or `go run`)
+- **Structured logging** — JSON or text, to stdout and/or a size-rotated file
 - **Portable archive** — export/import the whole vault (notes + attachments) as a ZIP
-- **Version history** and **trash** with restore
+- **Version history** (with retention) and **trash** with restore
 - **Live sync** — a file watcher reindexes external edits
 - **Pluggable assets** — local filesystem or any S3-compatible store
-- **Static export** with `sitemap.xml` / `robots.txt` for a public docs site
+- **Static export** with a client-side search and `sitemap.xml` / `robots.txt`
 
 See [[MCP and AI]] for integration details.

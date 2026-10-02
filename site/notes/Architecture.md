@@ -38,13 +38,24 @@ public: true
 | Package | Responsibility |
 | --- | --- |
 | `core` | Domain models, ports, sentinel errors |
-| `service` | Use cases (notes, search, auth, links, AI) |
+| `service` | Use cases (notes, search, auth, links, archive, AI) |
 | `store` | Filesystem note/asset repository |
 | `index` | SQLite + FTS5 index, migrations |
 | `textproc` | CJK tokenizer, wiki-links, snippets |
 | `markdown` | Frontmatter parse/serialize |
-| `history`, `trash` | Revision snapshots, soft delete |
+| `history`, `trash` | Revision snapshots (with retention), soft delete |
 | `watcher` | fsnotify-based live reindex |
+| `archivex` | Portable ZIP export/import |
 | `s3store` | S3-compatible asset backend |
 | `mcp`, `openapi` | MCP server, OpenAPI spec |
-| `server` | HTTP routing, middleware, handlers |
+| `sitegen` | Static documentation-site export |
+| `ai` | OpenAI-compatible chat client |
+| `config`, `logging` | Environment config, structured logging |
+| `server`, `webui` | HTTP routing/middleware, embedded frontend |
+
+## Testing
+
+- **Go:** `go test ./...` — unit tests per package plus `httptest` integration tests.
+- **Frontend:** `npm test` (Vitest) for pure logic, `vue-tsc` type-check, `vite build`.
+- **CI:** `.github/workflows/ci.yml` runs the backend race tests, frontend checks and
+  `golangci-lint` on every push/PR.

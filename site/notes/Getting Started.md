@@ -25,6 +25,14 @@ OVERVIEW_DATA_DIR=./data ./overview
 # open http://localhost:5230
 ```
 
+## Demo (no setup)
+
+```bash
+git clone https://github.com/Overview-Note/overview.git
+cd overview
+make demo            # serves demo/ on :5230 (first visit creates an admin)
+```
+
 ## Local development
 
 ```bash
@@ -35,7 +43,7 @@ go run ./cmd/overview
 cd web && npm install && npm run dev
 ```
 
-Requirements: **Go 1.26+**, **Node 22+**, Docker (optional).
+Requirements: **Go 1.26+**, **Node 22+**, Docker (optional). See [[Development]].
 
 ## First steps
 
@@ -50,3 +58,4 @@ Requirements: **Go 1.26+**, **Node 22+**, Docker (optional).
 
 - [[Features]]
 - [[Deployment]]
+- [[Development]]

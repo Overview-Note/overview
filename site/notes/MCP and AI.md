@@ -33,7 +33,8 @@ POST http://<host>:5230/mcp
 Authorization: Bearer <OVERVIEW_MCP_TOKEN>
 ```
 
-Methods: `initialize`, `tools/list`, `tools/call`.
+Methods: `initialize`, `tools/list`, `tools/call`. The tool list is generated from the
+OpenAPI document so it stays in sync with the REST API.
 
 Tools:
 

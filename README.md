@@ -175,6 +175,9 @@ Overview is configured entirely through environment variables.
 
 > AI can also be configured at runtime in **Settings → AI** (admin only) — no restart needed.
 
+`overview export` (static site) additionally reads `OVERVIEW_EXPORT_DIR` (default `_site`)
+and `OVERVIEW_EXPORT_BASE` (URL prefix, default `/`).
+
 ---
 
 ## Integrations
@@ -258,12 +261,13 @@ data/
 ## Development
 
 ```bash
-make dev        # run backend with embedded frontend
-make test       # go test ./...
-make test-web   # frontend type-check (vue-tsc)
+make demo       # run the sample vault in demo/ on :5230 (first visit creates an admin)
+make dev        # run the backend with the embedded frontend
+make test       # run all tests (Go + frontend Vitest)
+make test-web   # frontend type-check + unit tests
 make lint       # golangci-lint + vue-tsc
 make fmt        # gofmt + prettier
-make build      # build the single binary
+make build      # build the single binary (frontend embedded)
 make docker     # build the Docker image
 ```
 

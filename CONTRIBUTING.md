@@ -65,7 +65,7 @@ Run the full check suite locally:
 ```bash
 make fmt        # gofmt + prettier
 make vet        # go vet ./...
-make test       # go test ./...
+make test       # Go tests + frontend (vue-tsc + Vitest)
 make lint       # golangci-lint + vue-tsc
 ```
 
@@ -74,7 +74,7 @@ Or individually:
 ```bash
 go test ./...
 go vet ./...
-cd web && npm run lint && npm run build
+cd web && npm run lint && npm test && npm run build
 ```
 
 All of the above run in CI (`.github/workflows/ci.yml`) on every pull request.
@@ -90,8 +90,10 @@ All of the above run in CI (`.github/workflows/ci.yml`) on every pull request.
 
 ## Tests
 
-- Backend: `go test ./...` — unit tests per package plus `httptest` integration tests.
-- Frontend: `vue-tsc` type-check and `vite build`.
+- Backend: `go test ./...` — unit tests per package plus `httptest` integration tests
+  (config, logging, history, archivex, sitegen, trash, ai, openapi, index, markdown, mcp,
+  server, service, store, textproc).
+- Frontend: `npm test` (Vitest) for pure logic, plus `vue-tsc` type-check and `vite build`.
 - When fixing a bug, add a test that fails before your fix and passes after.
 
 ## Pull request process

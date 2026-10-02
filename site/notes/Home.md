@@ -28,6 +28,7 @@ stored as plain Markdown files; the SQLite index is fully rebuildable.
 - [[Deployment]]
 - [[Architecture]]
 - [[MCP and AI]]
+- [[Development]]
 - [[FAQ]]
 
 ## Links

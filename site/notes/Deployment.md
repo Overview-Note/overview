@@ -39,19 +39,41 @@ services:
 | --- | --- | --- |
 | `OVERVIEW_ADDR` | `:5230` | Listen address |
 | `OVERVIEW_DATA_DIR` | `./data` | Data root |
+| `OVERVIEW_DB` | `<data>/overview.db` | SQLite index path |
+| `OVERVIEW_MAX_UPLOAD_MB` | `32` | Upload size limit |
+| `OVERVIEW_HISTORY_KEEP` | `50` | Revisions kept per note (`0` disables pruning) |
 | `OVERVIEW_AUTH` | `multi` | `multi` or `none` |
+| `OVERVIEW_SITE_TITLE` | `Overview` | Site title (UI and render mode) |
 | `OVERVIEW_RENDER` | `false` | Read-only documentation-site mode |
-| `OVERVIEW_SITE_TITLE` | `Overview` | Site title (render mode) |
 | `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `OVERVIEW_LOG_FORMAT` | `json` | `json` or `text` |
-| `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset), rotates on size |
+| `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset) |
 | `OVERVIEW_LOG_MAX_MB` | `10` | Max log file size before rotation |
-| `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep |
+| `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep (`0` truncates) |
 | `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI) |
 | `OVERVIEW_AI_API_KEY` | — | AI provider key |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | AI model |
 | `OVERVIEW_S3_BUCKET` | — | Enable S3-compatible asset storage |
+| `OVERVIEW_S3_ENDPOINT` | — | S3 endpoint (e.g. `s3.amazonaws.com`) |
+| `OVERVIEW_S3_REGION` | `us-east-1` | S3 region |
+| `OVERVIEW_S3_ACCESS_KEY` / `_SECRET_KEY` | — | S3 credentials |
+
+`overview export` also reads `OVERVIEW_EXPORT_DIR` (default `_site`) and
+`OVERVIEW_EXPORT_BASE` (URL prefix, default `/`).
+
+## Logging
+
+Logs are structured (`slog`). stdout always receives logs; set `OVERVIEW_LOG_FILE` to
+also write to a file, which rotates by size (`OVERVIEW_LOG_MAX_MB`, `OVERVIEW_LOG_BACKUPS`).
+Pick `OVERVIEW_LOG_FORMAT=json` (default) or `text`, and `OVERVIEW_LOG_LEVEL`.
+
+```bash
+OVERVIEW_LOG_FILE=/var/log/overview/overview.log \
+OVERVIEW_LOG_FORMAT=text \
+OVERVIEW_LOG_LEVEL=info \
+./overview
+```
 
 ## Documentation-site mode
 
@@ -65,7 +87,9 @@ docker run -d -p 8080:5230 \
   overview:latest
 ```
 
-This is exactly how this documentation site is built.
+In this mode only a read-only API surface is exposed (public notes, the tree, health and
+API docs); private endpoints return 404 and writes are rejected. This is exactly how this
+documentation site is built.
 
 ## Backups
 
