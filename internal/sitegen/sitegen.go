@@ -45,7 +45,20 @@ type Options struct {
 	OutDir    string
 	Base      string // URL base path, e.g. "/overview/" for GitHub Pages
 	SiteTitle string
-	All       bool // when true, export every note (not just public ones)
+	All       bool   // when true, export every note (not just public ones)
+	Theme     string // "auto" (follow system), "light" or "dark"; default auto
+}
+
+// normalizeTheme maps arbitrary input to one of auto/light/dark.
+func normalizeTheme(theme string) string {
+	switch strings.ToLower(strings.TrimSpace(theme)) {
+	case "light":
+		return "light"
+	case "dark":
+		return "dark"
+	default:
+		return "auto"
+	}
 }
 
 var wikiRe = regexp.MustCompile(`\[\[([^[\]]+?)\]\]`)
@@ -62,6 +75,7 @@ func Generate(opts Options) (int, error) {
 	if opts.SiteTitle == "" {
 		opts.SiteTitle = "Overview"
 	}
+	theme := normalizeTheme(opts.Theme)
 
 	docs, err := loadNotes(opts.NotesDir, opts.All)
 	if err != nil {
@@ -125,6 +139,7 @@ func Generate(opts Options) (int, error) {
 		var buf bytes.Buffer
 		if err := pageTmpl.Execute(&buf, map[string]any{
 			"SiteTitle": opts.SiteTitle,
+			"Theme":     theme,
 			"Title":     p.Title,
 			"Base":      base,
 			"Nav":       nav,
@@ -152,6 +167,7 @@ func Generate(opts Options) (int, error) {
 		var idx bytes.Buffer
 		if err := indexTmpl.Execute(&idx, map[string]any{
 			"SiteTitle": opts.SiteTitle,
+			"Theme":     theme,
 			"Base":      base,
 			"Nav":       nav,
 			"Pages":     pages,

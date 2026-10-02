@@ -565,6 +565,7 @@ P2 — 打磨与生态
 | `OVERVIEW_LOG_BACKUPS` | `3` | 轮转保留的历史文件数（`0` 表示截断不保留） |
 | `OVERVIEW_AUTH` | `multi` | 认证模式：`multi` 或 `none` |
 | `OVERVIEW_SITE_TITLE` | `Overview` | 站点标题（UI 与 render 模式） |
+| `OVERVIEW_SITE_THEME` | `auto` | 静态站主题：`auto`（跟随系统）/`light`/`dark` |
 | `OVERVIEW_RENDER` | `false` | 设为 `true` 变为公开只读文档站 |
 | `OVERVIEW_EXPORT_DIR` | `_site` | `overview export` 输出目录 |
 | `OVERVIEW_EXPORT_BASE` | `/` | `overview export` URL 前缀 |
@@ -681,7 +682,8 @@ P2 — 打磨与生态
   `asset-upload/assets-orphans/assets-purge`、`import/export-zip`、`build`（`export` 别名）。
 - **`write`**：`--file/--stdin/--body` 三选一，`--public`、`--create`、`--if-version`（乐观并发）。
 - **`build`**（ADR-029）：调用 `sitegen.Generate` 生成可部署静态站（HTML/CSS/`search.js`/`search-index.json`）；
-  `--all` 导出全部笔记（默认仅 `public`），`--base`/`--title`/`--out` 可配。
+  `--all` 导出全部笔记（默认仅 `public`），`--base`/`--title`/`--out` 可配；`--theme auto|light|dark`
+  （或 `OVERVIEW_SITE_THEME`）指定主题，默认 `auto` 跟随访客系统偏好。
 
 ### 13.11 MCP 协议升级与工具拉平（v0.11.0，ADR-030/031）
 
@@ -712,6 +714,9 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   切换笔记时用 `AbortController` 取消上一次请求，并在替换 DOM 前清理未完成图片，避免解码争用。
 - **品牌**（ADR-034）：Logo 改为「页面 + 折角 + 文字行」的笔记/文档图形；调色板改为暖色柔和
   纸感灰 + 长春花靛蓝主色，成功/危险与代码高亮去饱和（`--hl-*` 变量）。
+- **静态站主题**（ADR-029）：`sitegen` 支持 `auto/light/dark`——导出时在 `<html>` 写 `data-theme`，
+  CSS 用 `:root[data-theme="dark"]` 固定深色、`@media (prefers-color-scheme:dark)` 处理 `auto`；
+  站点调色板与 App 当前设计令牌保持一致。
 
 ### 13.13 v0.11.0 验证记录
 

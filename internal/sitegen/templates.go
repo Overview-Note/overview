@@ -3,7 +3,7 @@ package sitegen
 import "html/template"
 
 var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{.Theme}}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -44,7 +44,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 `))
 
 var indexTmpl = template.Must(template.New("index").Parse(`<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{.Theme}}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -80,14 +80,18 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!doctype html>
 `))
 
 const siteCSS = `:root{
-  --bg:#fcfbf9;--panel:#f7f5f2;--soft:#f2efeb;--hover:#ebe7e1;--border:#e8e4dd;--border-strong:#d8d3ca;
-  --text:#2b2a27;--muted:#67635c;--soft-text:#908a81;--accent:#5f79d4;--accent-soft:#eef1fb;
+  --bg:#fcfbf9;--panel:#f7f5f2;--soft:#f2efeb;--hover:#ebe7e1;--border:#e5e0d6;--border-strong:#d8d3ca;
+  --text:#26251f;--muted:#565149;--soft-text:#7a7367;--accent:#5f79d4;--accent-soft:#e3e9fb;
   --code:#f5f2ee;--mono:ui-monospace,"SFMono-Regular",Consolas,Menlo,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
 }
-@media (prefers-color-scheme:dark){:root{
+:root[data-theme="dark"]{
   --bg:#1b1a18;--panel:#222120;--soft:#2a2825;--hover:#33302c;--border:#33302b;--border-strong:#46413a;
-  --text:#e9e6e0;--muted:#b1aaa1;--soft-text:#8c857b;--accent:#93a8ef;--accent-soft:#262c46;--code:#232120;
+  --text:#eae7e1;--muted:#bdb7ad;--soft-text:#9a9389;--accent:#93a8ef;--accent-soft:#2c3557;--code:#232120;
+}
+@media (prefers-color-scheme:dark){:root[data-theme="auto"]{
+  --bg:#1b1a18;--panel:#222120;--soft:#2a2825;--hover:#33302c;--border:#33302b;--border-strong:#46413a;
+  --text:#eae7e1;--muted:#bdb7ad;--soft-text:#9a9389;--accent:#93a8ef;--accent-soft:#2c3557;--code:#232120;
 }}
 *{box-sizing:border-box}
 html,body{margin:0}

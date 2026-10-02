@@ -163,6 +163,7 @@ Overview is configured entirely through environment variables.
 | `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep (`0` truncates) |
 | `OVERVIEW_AUTH` | `multi` | `multi` (users + login) or `none` |
 | `OVERVIEW_SITE_TITLE` | `Overview` | Site title (UI and render mode) |
+| `OVERVIEW_SITE_THEME` | `auto` | Static-site theme: `auto` (system), `light`, `dark` |
 | `OVERVIEW_RENDER` | `false` | `true` → public read-only docs site |
 | `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP; falls back to session tokens |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI when set) |

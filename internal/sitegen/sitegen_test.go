@@ -54,3 +54,37 @@ func TestGenerate(t *testing.T) {
 		t.Errorf("search index missing page: %s", idx)
 	}
 }
+
+func TestGenerateTheme(t *testing.T) {
+	notes := t.TempDir()
+	writeNote(t, notes, "Home.md", "# Home\n\nhi")
+
+	for _, tc := range []struct {
+		theme string
+		want  string
+	}{
+		{"", `data-theme="auto"`},
+		{"auto", `data-theme="auto"`},
+		{"light", `data-theme="light"`},
+		{"DARK", `data-theme="dark"`},
+		{"nonsense", `data-theme="auto"`},
+	} {
+		out := t.TempDir()
+		if _, err := sitegen.Generate(sitegen.Options{
+			NotesDir: notes, OutDir: out, SiteTitle: "T", Theme: tc.theme,
+		}); err != nil {
+			t.Fatalf("theme %q: %v", tc.theme, err)
+		}
+		home, _ := os.ReadFile(filepath.Join(out, "index.html"))
+		if !strings.Contains(string(home), tc.want) {
+			t.Errorf("theme %q: index.html missing %s", tc.theme, tc.want)
+		}
+		css, _ := os.ReadFile(filepath.Join(out, "style.css"))
+		if !strings.Contains(string(css), `:root[data-theme="dark"]`) {
+			t.Errorf("theme %q: style.css missing dark selector", tc.theme)
+		}
+		if !strings.Contains(string(css), `prefers-color-scheme:dark`) {
+			t.Errorf("theme %q: style.css missing prefers-color-scheme", tc.theme)
+		}
+	}
+}

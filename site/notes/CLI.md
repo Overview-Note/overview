@@ -84,11 +84,13 @@ overview build ./public                 # public notes only (default _site)
 overview build ./public --base /docs/   # URL prefix for sub-path hosting
 overview build ./public --all           # include notes not marked public
 overview build ./public --title "My Docs"
+overview build ./public --theme dark    # auto (default) | light | dark
 ```
 
 Output contains one `.html` per note, `index.html`, `style.css`, `search.js` and
-`search-index.json`. `export` is an alias of `build`, so the older
-`overview export` command keeps working.
+`search-index.json`. The theme defaults to `auto` (the visitor's system preference);
+`--theme light|dark` (or `OVERVIEW_SITE_THEME`) pins it. `export` is an alias of
+`build`, so the older `overview export` command keeps working.
 
 ## Relationship to the server
 

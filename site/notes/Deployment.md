@@ -60,6 +60,7 @@ services:
 | `OVERVIEW_HISTORY_KEEP` | `50` | Revisions kept per note (`0` disables pruning) |
 | `OVERVIEW_AUTH` | `multi` | `multi` or `none` |
 | `OVERVIEW_SITE_TITLE` | `Overview` | Site title (UI and render mode) |
+| `OVERVIEW_SITE_THEME` | `auto` | Static-site theme: `auto` (follow system), `light` or `dark` |
 | `OVERVIEW_RENDER` | `false` | Read-only documentation-site mode |
 | `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `OVERVIEW_LOG_FORMAT` | `json` | `json` or `text` |
@@ -85,7 +86,11 @@ Render the vault to a deployable static site without running the server:
 ```bash
 overview -C ./data build ./public --base /docs/   # public notes
 overview -C ./data build ./public --all           # include private notes
+overview -C ./data build ./public --theme dark     # force light|dark|auto
 ```
+
+The exported site follows the visitor's system preference by default (`--theme auto`);
+pass `--theme light` or `--theme dark` (or set `OVERVIEW_SITE_THEME`) to pin it.
 
 ## Logging
 

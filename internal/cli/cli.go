@@ -718,6 +718,7 @@ func cmdBuild(cfg config.Config, args []string, env Env) int {
 	title := fs.String("title", "", "site title (default $OVERVIEW_SITE_TITLE)")
 	notes := fs.String("notes", "", "notes directory (default the vault's notes/)")
 	all := fs.Bool("all", false, "include notes that are not marked public")
+	theme := fs.String("theme", "", "site theme: auto|light|dark (default $OVERVIEW_SITE_THEME or auto)")
 	if err := parseArgs(fs, args); err != nil {
 		return 2
 	}
@@ -743,6 +744,7 @@ func cmdBuild(cfg config.Config, args []string, env Env) int {
 		Base:      basePath,
 		SiteTitle: siteTitle,
 		All:       *all,
+		Theme:     envOr(*theme, "OVERVIEW_SITE_THEME", "auto"),
 	})
 	if err != nil {
 		return fail(env, err)
@@ -825,7 +827,7 @@ Server:
   help                               show this help
 
 Static site:
-  build [DIR] [--all] [--base URL] [--title T]
+  build [DIR] [--all] [--base URL] [--title T] [--theme auto|light|dark]
                                      render a deployable static site (HTML,
                                      CSS and client-side search); --all exports
                                      every note, not just public ones
