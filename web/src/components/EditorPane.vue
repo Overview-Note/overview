@@ -46,6 +46,8 @@ let flashTimer: number | undefined;
 let suppress = false;
 let loading = false;
 let saveTimer: number | undefined;
+let mermaidTimer: number | undefined;
+let loadSeq = 0;
 let currentPath = "";
 let baseVersion = "";
 
@@ -168,8 +170,12 @@ function insertAI(payload: { text: string; replace: boolean }) {
 
 async function load(path: string) {
   if (!editor.value) return;
+  const seq = ++loadSeq;
+  window.clearTimeout(mermaidTimer);
   try {
     const loaded = await store.openNote(path);
+    // A newer note was opened while this request was in flight — drop it.
+    if (seq !== loadSeq || !editor.value) return;
     baseVersion = loaded.version;
     isPublic.value = loaded.public;
     window.clearTimeout(saveTimer);
@@ -181,10 +187,22 @@ async function load(path: string) {
     status.value = "idle";
     await nextTick();
     loading = false;
-    void renderMermaid(scrollEl.value);
+    if (seq === loadSeq) scheduleMermaid();
   } catch {
+    if (seq === loadSeq) loading = false;
     // store.error already set
   }
+}
+
+// Mermaid rendering is expensive; debounce it and skip diagrams for notes the
+// user has already navigated away from while flicking through the tree.
+function scheduleMermaid() {
+  window.clearTimeout(mermaidTimer);
+  const seq = loadSeq;
+  mermaidTimer = window.setTimeout(() => {
+    if (seq !== loadSeq) return;
+    void renderMermaid(scrollEl.value);
+  }, 160);
 }
 
 watch(
@@ -192,7 +210,8 @@ watch(
   async ([path], [oldPath]) => {
     if (!editor.value || !path) return;
     if (oldPath && oldPath !== path) {
-      await flush();
+      // Persist the previous note in the background so switching stays snappy.
+      void flush();
     }
     await load(path);
     currentPath = path;
@@ -217,15 +236,20 @@ async function flush() {
   status.value = "saving";
   try {
     const saved = await api.saveNote(path, md, version, isPublic.value);
-    baseVersion = saved.version;
     store.applySaved(saved);
+    // If the user switched notes mid-save, don't touch the new note's state.
+    if (currentPath === path) {
+      baseVersion = saved.version;
+      status.value = "saved";
+    }
     if (saved.title !== previousTitle) {
       await store.refreshTree();
     }
-    status.value = "saved";
   } catch (e) {
-    dirty.value = true;
-    status.value = "idle";
+    if (currentPath === path) {
+      dirty.value = true;
+      status.value = "idle";
+    }
     if (e instanceof ApiError && e.status === 409) {
       await dialogs.askConfirm(
         t("editor.saveConflictTitle"),

@@ -78,7 +78,9 @@ function onDrop(event: DragEvent) {
     >
       <span class="twist" v-if="isFolder">{{ expanded ? "▾" : "▸" }}</span>
       <span class="twist" v-else></span>
-      <span class="label">{{ node.title || node.name }}</span>
+      <span class="label" :title="node.title || node.name">{{
+        node.title || node.name
+      }}</span>
       <span class="row-actions" @click.stop>
         <template v-if="isFolder">
           <button :title="t('tree.newNoteHere')" @click="emit('create-note', node.path)">

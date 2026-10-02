@@ -1,16 +1,52 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { TreeNode } from "../api";
 import { t } from "../i18n";
 import { useDialogStore } from "../stores/dialog";
+import {
+  SIDEBAR_DEFAULT,
+  SIDEBAR_MAX,
+  SIDEBAR_MIN,
+  useSettingsStore,
+} from "../stores/settings";
 import { useWorkspaceStore } from "../stores/workspace";
 import TreeNodeItem from "./TreeNodeItem.vue";
 
 const store = useWorkspaceStore();
 const dialogs = useDialogStore();
+const settings = useSettingsStore();
 const router = useRouter();
 const route = useRoute();
+
+const resizing = ref(false);
+const liveWidth = ref(settings.sidebarWidth);
+const sidebarWidth = computed(() => (resizing.value ? liveWidth.value : settings.sidebarWidth));
+
+function startResize(event: PointerEvent) {
+  event.preventDefault();
+  const startX = event.clientX;
+  const startWidth = settings.sidebarWidth;
+  liveWidth.value = startWidth;
+  resizing.value = true;
+  document.body.classList.add("resizing");
+
+  const move = (e: PointerEvent) => {
+    liveWidth.value = Math.min(
+      SIDEBAR_MAX,
+      Math.max(SIDEBAR_MIN, startWidth + (e.clientX - startX)),
+    );
+  };
+  const stop = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", stop);
+    document.body.classList.remove("resizing");
+    settings.setSidebarWidth(liveWidth.value);
+    resizing.value = false;
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", stop);
+}
 
 const activePath = computed(() =>
   route.name === "note" ? String(route.params.path ?? "") : null,
@@ -86,7 +122,7 @@ async function moveNode(node: TreeNode, target: string) {
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :style="{ width: `${sidebarWidth}px` }">
     <nav class="tree">
       <TreeNodeItem
         v-for="node in store.tree"
@@ -118,5 +154,16 @@ async function moveNode(node: TreeNode, target: string) {
         {{ t("sidebar.newFolder") }}
       </button>
     </div>
+    <div
+      class="sidebar-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      :aria-valuenow="Math.round(sidebarWidth)"
+      :aria-valuemin="SIDEBAR_MIN"
+      :aria-valuemax="SIDEBAR_MAX"
+      :title="t('sidebar.resize')"
+      @pointerdown="startResize"
+      @dblclick="settings.setSidebarWidth(SIDEBAR_DEFAULT)"
+    />
   </aside>
 </template>

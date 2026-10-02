@@ -10,15 +10,18 @@ const emit = defineEmits<{
 }>();
 
 const links = ref<LinksResult>({ outgoing: [], backlinks: [] });
+let seq = 0;
 
 watch(
   () => props.path,
   async (path) => {
     if (!path) return;
+    const id = ++seq;
     try {
-      links.value = await api.links(path);
+      const result = await api.links(path);
+      if (id === seq) links.value = result;
     } catch {
-      links.value = { outgoing: [], backlinks: [] };
+      if (id === seq) links.value = { outgoing: [], backlinks: [] };
     }
   },
   { immediate: true },

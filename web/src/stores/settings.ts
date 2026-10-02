@@ -8,12 +8,23 @@ const KEY_THEME = "overview.theme";
 const KEY_FONT = "overview.fontSize";
 const KEY_COMPRESS = "overview.compress";
 const KEY_FOCUS = "overview.focus";
+const KEY_SIDEBAR = "overview.sidebarWidth";
+
+export const SIDEBAR_MIN = 200;
+export const SIDEBAR_MAX = 560;
+export const SIDEBAR_DEFAULT = 268;
+
+function clampSidebar(px: number): number {
+  if (!Number.isFinite(px)) return SIDEBAR_DEFAULT;
+  return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(px)));
+}
 
 export const useSettingsStore = defineStore("settings", () => {
   const theme = ref<ThemeMode>(readTheme());
   const fontSize = ref<FontSize>(readFont());
   const compressImages = ref(localStorage.getItem(KEY_COMPRESS) !== "off");
   const focusMode = ref(localStorage.getItem(KEY_FOCUS) === "on");
+  const sidebarWidth = ref(readSidebarWidth());
 
   const systemDark = ref(
     window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
@@ -61,17 +72,24 @@ export const useSettingsStore = defineStore("settings", () => {
     setFocus(!focusMode.value);
   }
 
+  function setSidebarWidth(px: number) {
+    sidebarWidth.value = clampSidebar(px);
+    localStorage.setItem(KEY_SIDEBAR, String(sidebarWidth.value));
+  }
+
   return {
     theme,
     fontSize,
     compressImages,
     focusMode,
+    sidebarWidth,
     resolvedTheme,
     setTheme,
     setFontSize,
     setCompress,
     setFocus,
     toggleFocus,
+    setSidebarWidth,
   };
 });
 
@@ -83,4 +101,10 @@ function readTheme(): ThemeMode {
 function readFont(): FontSize {
   const v = localStorage.getItem(KEY_FONT);
   return v === "compact" || v === "relaxed" || v === "large" ? v : "default";
+}
+
+function readSidebarWidth(): number {
+  const stored = localStorage.getItem(KEY_SIDEBAR);
+  if (stored === null) return SIDEBAR_DEFAULT;
+  return clampSidebar(Number(stored));
 }
