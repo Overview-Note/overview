@@ -354,113 +354,119 @@ onBeforeUnmount(() => {
 <template>
   <div class="editor-pane">
     <div class="editor-toolbar">
-      <button
-        :class="{ on: isActive('heading', { level: 1 }) }"
-        @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()"
-      >
-        H1
-      </button>
-      <button
-        :class="{ on: isActive('heading', { level: 2 }) }"
-        @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()"
-      >
-        H2
-      </button>
-      <button
-        :class="{ on: isActive('heading', { level: 3 }) }"
-        @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
-      >
-        H3
-      </button>
-      <span class="sep"></span>
-      <button
-        :class="{ on: isActive('bold') }"
-        @click="editor?.chain().focus().toggleBold().run()"
-      >
-        <b>B</b>
-      </button>
-      <button
-        :class="{ on: isActive('italic') }"
-        @click="editor?.chain().focus().toggleItalic().run()"
-      >
-        <i>I</i>
-      </button>
-      <button
-        :class="{ on: isActive('strike') }"
-        @click="editor?.chain().focus().toggleStrike().run()"
-      >
-        <s>S</s>
-      </button>
-      <button
-        :class="{ on: isActive('code') }"
-        @click="editor?.chain().focus().toggleCode().run()"
-      >
-        &lt;/&gt;
-      </button>
-      <span class="sep"></span>
-      <button
-        :class="{ on: isActive('bulletList') }"
-        @click="editor?.chain().focus().toggleBulletList().run()"
-      >
-        {{ t("editor.listBullet") }}
-      </button>
-      <button
-        :class="{ on: isActive('orderedList') }"
-        @click="editor?.chain().focus().toggleOrderedList().run()"
-      >
-        {{ t("editor.listOrdered") }}
-      </button>
-      <button
-        :class="{ on: isActive('blockquote') }"
-        @click="editor?.chain().focus().toggleBlockquote().run()"
-      >
-        {{ t("editor.quote") }}
-      </button>
-      <button
-        :class="{ on: isActive('codeBlock') }"
-        @click="editor?.chain().focus().toggleCodeBlock().run()"
-      >
-        {{ t("editor.code") }}
-      </button>
-      <span class="sep"></span>
-      <button :class="{ on: isActive('link') }" @click="setLink">
-        {{ t("editor.link") }}
-      </button>
-      <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
-      <button :class="{ on: isActive('table') }" @click="insertTable">
-        {{ t("editor.table") }}
-      </button>
-      <button
-        :class="{ on: showToc }"
-        :title="t('editor.toc')"
-        @click="showToc = !showToc"
-      >
-        {{ t("editor.toc") }}
-      </button>
-      <button :class="{ on: isPublic }" :title="t('editor.share')" @click="togglePublic">
-        {{ isPublic ? t("editor.shared") : t("editor.share") }}
-      </button>
-      <button
-        :class="{ on: showHistory }"
-        :title="t('history.title')"
-        @click="showHistory = !showHistory"
-      >
-        {{ t("history.title") }}
-      </button>
-      <button
-        :class="{ on: showAI }"
-        :title="aiEnabled ? t('ai.title') : t('ai.notConfigured')"
-        @click="toggleAI"
-      >
-        {{ t("ai.title") }}
-      </button>
-      <span class="sep"></span>
-      <button @click="editor?.chain().focus().undo().run()">
-        {{ t("editor.undo") }}
-      </button>
-      <button @click="editor?.chain().focus().redo().run()">
-        {{ t("editor.redo") }}
-      </button>
+      <div class="toolbar-group">
+        <button
+          :class="{ on: isActive('heading', { level: 1 }) }"
+          @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()"
+        >
+          H1
+        </button>
+        <button
+          :class="{ on: isActive('heading', { level: 2 }) }"
+          @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()"
+        >
+          H2
+        </button>
+        <button
+          :class="{ on: isActive('heading', { level: 3 }) }"
+          @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
+        >
+          H3
+        </button>
+        <span class="sep"></span>
+        <button
+          :class="{ on: isActive('bold') }"
+          @click="editor?.chain().focus().toggleBold().run()"
+        >
+          <b>B</b>
+        </button>
+        <button
+          :class="{ on: isActive('italic') }"
+          @click="editor?.chain().focus().toggleItalic().run()"
+        >
+          <i>I</i>
+        </button>
+        <button
+          :class="{ on: isActive('strike') }"
+          @click="editor?.chain().focus().toggleStrike().run()"
+        >
+          <s>S</s>
+        </button>
+        <button
+          :class="{ on: isActive('code') }"
+          @click="editor?.chain().focus().toggleCode().run()"
+        >
+          &lt;/&gt;
+        </button>
+        <span class="sep"></span>
+        <button
+          :class="{ on: isActive('bulletList') }"
+          @click="editor?.chain().focus().toggleBulletList().run()"
+        >
+          {{ t("editor.listBullet") }}
+        </button>
+        <button
+          :class="{ on: isActive('orderedList') }"
+          @click="editor?.chain().focus().toggleOrderedList().run()"
+        >
+          {{ t("editor.listOrdered") }}
+        </button>
+        <button
+          :class="{ on: isActive('blockquote') }"
+          @click="editor?.chain().focus().toggleBlockquote().run()"
+        >
+          {{ t("editor.quote") }}
+        </button>
+        <button
+          :class="{ on: isActive('codeBlock') }"
+          @click="editor?.chain().focus().toggleCodeBlock().run()"
+        >
+          {{ t("editor.code") }}
+        </button>
+        <span class="sep"></span>
+        <button :class="{ on: isActive('link') }" @click="setLink">
+          {{ t("editor.link") }}
+        </button>
+        <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
+        <button :class="{ on: isActive('table') }" @click="insertTable">
+          {{ t("editor.table") }}
+        </button>
+        <button
+          :class="{ on: showToc }"
+          :title="t('editor.toc')"
+          @click="showToc = !showToc"
+        >
+          {{ t("editor.toc") }}
+        </button>
+        <button
+          :class="{ on: isPublic }"
+          :title="t('editor.share')"
+          @click="togglePublic"
+        >
+          {{ isPublic ? t("editor.shared") : t("editor.share") }}
+        </button>
+        <button
+          :class="{ on: showHistory }"
+          :title="t('history.title')"
+          @click="showHistory = !showHistory"
+        >
+          {{ t("history.title") }}
+        </button>
+        <button
+          :class="{ on: showAI }"
+          :title="aiEnabled ? t('ai.title') : t('ai.notConfigured')"
+          @click="toggleAI"
+        >
+          {{ t("ai.title") }}
+        </button>
+        <span class="sep"></span>
+        <button @click="editor?.chain().focus().undo().run()">
+          {{ t("editor.undo") }}
+        </button>
+        <button @click="editor?.chain().focus().redo().run()">
+          {{ t("editor.redo") }}
+        </button>
+      </div>
       <span class="status">
         {{
           flashMessage ||

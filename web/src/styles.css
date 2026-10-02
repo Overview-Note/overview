@@ -176,10 +176,17 @@ button:hover {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible,
-[tabindex]:focus-visible {
+select:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* The rich-text editor must never show a focus ring. */
+.ProseMirror:focus,
+.ProseMirror:focus-visible,
+.ProseMirror *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 button:disabled {
@@ -637,21 +644,36 @@ button:disabled {
   min-height: 0;
 }
 
-.editor-toolbar,
-.table-toolbar {
+.editor-toolbar {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
   padding: 7px var(--sp-4);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
   flex-shrink: 0;
 }
 
+.toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
 .table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px var(--sp-4);
   border-bottom: 1px dashed var(--border);
+  background: var(--bg);
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .editor-toolbar button.on {
@@ -667,7 +689,10 @@ button:disabled {
 }
 
 .editor-toolbar .status {
-  margin-left: auto;
+  position: absolute;
+  right: var(--sp-4);
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 12px;
   color: var(--text-soft);
 }
@@ -698,6 +723,20 @@ button:disabled {
   outline: none;
   line-height: 1.8;
   font-size: calc(var(--base-size) + 1px);
+}
+
+/* ProseMirror draws a focus outline on the editable root; suppress it so the
+   document never shows a bounding box while editing. */
+.tiptap-content:focus,
+.tiptap-content:focus-visible,
+.ProseMirror:focus,
+.ProseMirror:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.ProseMirror-selectednode {
+  outline: none;
 }
 
 /* First heading acts as the document title (Starlight-style). */
@@ -865,11 +904,11 @@ mark {
 
 .editor-side h4 {
   margin: 0 0 var(--sp-2);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
-  color: var(--text-faint);
+  color: var(--text);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
 }
 
 .toc-panel {
@@ -880,17 +919,22 @@ mark {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 3px 10px;
+  padding: 4px 10px;
+  margin: 1px 0;
   border-left: 2px solid transparent;
-  font-size: 13px;
-  color: var(--text-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: color 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
 }
 
 .toc-item:hover {
+  background: var(--bg-hover);
   color: var(--text);
 }
 
@@ -900,6 +944,7 @@ mark {
 
 .toc-item.active {
   color: var(--accent);
+  background: var(--accent-soft);
   border-left-color: var(--accent);
   font-weight: 550;
 }

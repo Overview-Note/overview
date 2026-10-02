@@ -6,7 +6,7 @@ defineProps<{ items: TocItem[] }>();
 const emit = defineEmits<{ (e: "navigate", item: TocItem): void }>();
 
 function indent(level: number): string {
-  return `${(level - 1) * 12}px`;
+  return `${10 + (level - 1) * 14}px`;
 }
 </script>
 
