@@ -13,7 +13,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
 <body>
 <header class="topbar">
   <a class="brand" href="{{.Base}}index.html">
-    <span class="mark">O</span><span>{{.SiteTitle}}</span>
+    <span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 4H6.5A2.5 2.5 0 0 0 4 6.5V9M15 4h2.5A2.5 2.5 0 0 1 20 6.5V9M20 15v2.5a2.5 2.5 0 0 1-2.5 2.5H15M9 20H6.5A2.5 2.5 0 0 1 4 17.5V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.15" fill="currentColor"/></svg></span><span>{{.SiteTitle}}</span>
   </a>
   <div class="search-box">
     <input id="search" type="search" placeholder="Search" autocomplete="off" aria-label="Search" />
@@ -54,7 +54,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!doctype html>
 <body>
 <header class="topbar">
   <a class="brand" href="{{.Base}}index.html">
-    <span class="mark">O</span><span>{{.SiteTitle}}</span>
+    <span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 4H6.5A2.5 2.5 0 0 0 4 6.5V9M15 4h2.5A2.5 2.5 0 0 1 20 6.5V9M20 15v2.5a2.5 2.5 0 0 1-2.5 2.5H15M9 20H6.5A2.5 2.5 0 0 1 4 17.5V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.15" fill="currentColor"/></svg></span><span>{{.SiteTitle}}</span>
   </a>
   <div class="search-box">
     <input id="search" type="search" placeholder="Search" autocomplete="off" aria-label="Search" />
@@ -80,14 +80,14 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!doctype html>
 `))
 
 const siteCSS = `:root{
-  --bg:#fff;--panel:#fafafa;--soft:#f5f6f7;--hover:#eef0f2;--border:#e7e9ec;--border-strong:#d6d9dd;
-  --text:#1a1d21;--muted:#5b6470;--soft-text:#8a93a0;--accent:#2f6fed;--accent-soft:#eaf0fe;
-  --code:#f4f6f8;--mono:ui-monospace,"SFMono-Regular",Consolas,Menlo,monospace;
+  --bg:#fcfbf9;--panel:#f7f5f2;--soft:#f2efeb;--hover:#ebe7e1;--border:#e8e4dd;--border-strong:#d8d3ca;
+  --text:#2b2a27;--muted:#67635c;--soft-text:#908a81;--accent:#5f79d4;--accent-soft:#eef1fb;
+  --code:#f5f2ee;--mono:ui-monospace,"SFMono-Regular",Consolas,Menlo,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
 }
 @media (prefers-color-scheme:dark){:root{
-  --bg:#16181c;--panel:#1b1e23;--soft:#212429;--hover:#282c32;--border:#2b2f36;--border-strong:#3a3f48;
-  --text:#e8eaed;--muted:#a4acb8;--soft-text:#838b97;--accent:#6a9bf5;--accent-soft:#22304a;--code:#1d2026;
+  --bg:#1b1a18;--panel:#222120;--soft:#2a2825;--hover:#33302c;--border:#33302b;--border-strong:#46413a;
+  --text:#e9e6e0;--muted:#b1aaa1;--soft-text:#8c857b;--accent:#93a8ef;--accent-soft:#262c46;--code:#232120;
 }}
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -95,7 +95,8 @@ body{font-family:var(--sans);color:var(--text);background:var(--bg);font-size:16
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .topbar{display:flex;align-items:center;gap:16px;height:52px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
 .brand{display:flex;align-items:center;gap:10px;color:var(--text);font-weight:750;font-size:18px;letter-spacing:-.02em}
-.mark{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;font-weight:800;font-size:18px;display:inline-flex;align-items:center;justify-content:center}
+.mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(145deg,#8ea1ea,#5f79d4);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.mark svg{width:62%;height:62%;display:block}
 .home-link{margin-left:auto;font-size:14px;color:var(--muted)}
 .search-box{margin-left:auto;position:relative;width:min(360px,40vw)}
 .search-box input{width:100%;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);font:inherit;font-size:14px;outline:none}

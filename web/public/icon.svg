@@ -1,5 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <rect width="192" height="192" rx="40" fill="#2563eb"/>
-  <text x="96" y="128" font-family="system-ui, sans-serif" font-size="96" font-weight="700"
-        text-anchor="middle" fill="#ffffff">O</text>
+  <defs>
+    <linearGradient id="g" x1="24" y1="12" x2="168" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8ea1ea" />
+      <stop offset="1" stop-color="#5f79d4" />
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="44" fill="url(#g)" />
+  <g transform="translate(12 12) scale(7)" fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 4H6.5A2.5 2.5 0 0 0 4 6.5V9M15 4h2.5A2.5 2.5 0 0 1 20 6.5V9M20 15v2.5a2.5 2.5 0 0 1-2.5 2.5H15M9 20H6.5A2.5 2.5 0 0 1 4 17.5V15" />
+    <circle cx="12" cy="12" r="2.15" fill="#ffffff" stroke="none" />
+  </g>
 </svg>

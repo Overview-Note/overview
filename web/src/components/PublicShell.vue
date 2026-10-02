@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type NoteMeta } from "../api";
+import BrandMark from "./BrandMark.vue";
 import { t } from "../i18n";
 import type { DocHeading } from "../markdown/doc";
 import { useSiteStore } from "../stores/site";
@@ -37,7 +38,7 @@ function headingClass(level: number): string {
   <div class="public-shell">
     <header class="public-topbar">
       <a class="public-brand" href="/public">
-        <span class="public-mark">O</span>
+        <BrandMark :size="30" />
         <span>{{ site.siteTitle || "Overview" }}</span>
       </a>
       <div class="public-actions">

@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { t } from "../i18n";
+import BrandMark from "../components/BrandMark.vue";
 import { useAuthStore } from "../stores/auth";
 
 const auth = useAuthStore();
@@ -34,7 +35,10 @@ async function submit() {
 <template>
   <div class="auth-page">
     <form class="auth-card" @submit.prevent="submit">
-      <h1>Overview</h1>
+      <div class="auth-head">
+        <BrandMark :size="42" />
+        <h1>Overview</h1>
+      </div>
       <p class="auth-sub">{{ t("auth.setupSub") }}</p>
       <label>
         {{ t("auth.username") }}

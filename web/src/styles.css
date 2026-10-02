@@ -1,37 +1,45 @@
 /* ==========================================================================
-   Overview — design system
+   Overview 鈥?design system
    Reference style: clean documentation (gridea docs): generous whitespace,
    restrained neutral palette with a single accent, clear type hierarchy.
    ========================================================================== */
 
 :root {
-  /* Neutrals */
-  --bg: #ffffff;
-  --bg-panel: #fafafa;
-  --bg-soft: #f5f6f7;
-  --bg-hover: #eef0f2;
-  --bg-active: #e9edf5;
-  --border: #e7e9ec;
-  --border-strong: #d6d9dd;
+  /* Neutrals 鈥?warm, low-contrast "paper" greys instead of cold blue-greys */
+  --bg: #fcfbf9;
+  --bg-panel: #f7f5f2;
+  --bg-soft: #f2efeb;
+  --bg-hover: #ebe7e1;
+  --bg-active: #e9ebf6;
+  --border: #e8e4dd;
+  --border-strong: #d8d3ca;
 
-  /* Text */
-  --text: #1a1d21;
-  --text-muted: #5b6470;
-  --text-soft: #8a93a0;
-  --text-faint: #aab2bd;
+  /* Text 鈥?warm charcoal, never pure black */
+  --text: #2b2a27;
+  --text-muted: #67635c;
+  --text-soft: #908a81;
+  --text-faint: #b2aca2;
 
-  /* Accent */
-  --accent: #2f6fed;
-  --accent-hover: #2359c9;
-  --accent-soft: #eaf0fe;
-  --accent-ring: rgba(47, 111, 237, 0.28);
-  --danger: #d64545;
-  --danger-soft: #fdecec;
-  --success: #2f9e64;
+  /* Accent 鈥?calm periwinkle-indigo, softer than an electric blue */
+  --accent: #5f79d4;
+  --accent-hover: #4d66c2;
+  --accent-soft: #eef1fb;
+  --accent-ring: rgba(95, 121, 212, 0.24);
+  --danger: #c96a6a;
+  --danger-soft: #fbecec;
+  --success: #5aa078;
 
   /* Code */
-  --code-bg: #f4f6f8;
-  --code-border: #e3e6ea;
+  --code-bg: #f5f2ee;
+  --code-border: #e9e4dc;
+
+  /* Syntax highlighting 鈥?muted, editorial tones */
+  --hl-keyword: #9d6fb0;
+  --hl-string: #6a9b72;
+  --hl-number: #a8823f;
+  --hl-title: #5f79d4;
+  --hl-attr: #cf7a6a;
+  --hl-deletion-bg: rgba(207, 122, 106, 0.12);
 
   /* Type scale */
   --font-sans:
@@ -54,51 +62,58 @@
   --radius-sm: 6px;
   --radius: 9px;
   --radius-lg: 14px;
-  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.04);
-  --shadow-2: 0 6px 20px rgba(16, 24, 40, 0.1);
-  --shadow-3: 0 18px 48px rgba(16, 24, 40, 0.16);
+  --shadow-1: 0 1px 2px rgba(74, 62, 51, 0.05);
+  --shadow-2: 0 6px 20px rgba(74, 62, 51, 0.1);
+  --shadow-3: 0 18px 48px rgba(74, 62, 51, 0.14);
 
   --topbar-h: 52px;
 }
 
 :root[data-theme="dark"] {
-  --bg: #16181c;
-  --bg-panel: #1b1e23;
-  --bg-soft: #212429;
-  --bg-hover: #282c32;
-  --bg-active: #2b3440;
-  --border: #2b2f36;
-  --border-strong: #3a3f48;
+  --bg: #1b1a18;
+  --bg-panel: #222120;
+  --bg-soft: #2a2825;
+  --bg-hover: #33302c;
+  --bg-active: #3a3743;
+  --border: #33302b;
+  --border-strong: #46413a;
 
-  --text: #e8eaed;
-  --text-muted: #a4acb8;
-  --text-soft: #838b97;
-  --text-faint: #6a727e;
+  --text: #e9e6e0;
+  --text-muted: #b1aaa1;
+  --text-soft: #8c857b;
+  --text-faint: #706a61;
 
-  --accent: #6a9bf5;
-  --accent-hover: #86adf7;
-  --accent-soft: #22304a;
-  --accent-ring: rgba(106, 155, 245, 0.32);
-  --danger: #f07878;
-  --danger-soft: #3a2426;
-  --success: #63c08a;
+  --accent: #93a8ef;
+  --accent-hover: #a7b9f4;
+  --accent-soft: #262c46;
+  --accent-ring: rgba(147, 168, 239, 0.3);
+  --danger: #e28b8b;
+  --danger-soft: #382626;
+  --success: #79bd93;
 
-  --code-bg: #1d2026;
-  --code-border: #2b2f36;
+  --code-bg: #232120;
+  --code-border: #33302b;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.4);
-  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --hl-keyword: #c9a2dd;
+  --hl-string: #9ed3a6;
+  --hl-number: #e0c48a;
+  --hl-title: #9db4f2;
+  --hl-attr: #f0a99b;
+  --hl-deletion-bg: rgba(240, 169, 155, 0.14);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.42);
+  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.52);
 }
 
 /* --------------------------------------------------------------------------
-   Type scale — everything derives from --base-size so the whole UI stays
+   Type scale 鈥?everything derives from --base-size so the whole UI stays
    consistent with the editor body (which is --text-body).
    -------------------------------------------------------------------------- */
 :root {
-  --text-xs: calc(var(--base-size) - 3px); /* 13px @16 — captions */
-  --text-sm: calc(var(--base-size) - 1px); /* 15px @16 — secondary UI */
-  --text-ui: var(--base-size); /* 16px @16 — primary UI text */
+  --text-xs: calc(var(--base-size) - 3px); /* 13px @16 鈥?captions */
+  --text-sm: calc(var(--base-size) - 1px); /* 15px @16 鈥?secondary UI */
+  --text-ui: var(--base-size); /* 16px @16 鈥?primary UI text */
   --text-body: var(--base-size); /* editor matches the surrounding UI */
 }
 
@@ -303,18 +318,20 @@ button:disabled {
 }
 
 .brand-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 18px;
-  font-weight: 800;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  letter-spacing: 0;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #8ea1ea 0%, #5f79d4 100%);
+  color: #fff;
   box-shadow: var(--shadow-1);
+  flex-shrink: 0;
+}
+
+.brand-mark svg {
+  width: 62%;
+  height: 62%;
+  display: block;
 }
 
 .brand-name {
@@ -1202,7 +1219,7 @@ button:disabled {
 }
 
 .math-error {
-  color: #c0392b;
+  color: var(--danger);
 }
 
 /* Mermaid diagrams ------------------------------------------------------- */
@@ -1229,7 +1246,7 @@ button:disabled {
 }
 
 .tiptap-content .mermaid.mermaid-error {
-  color: #c0392b;
+  color: var(--danger);
   text-align: left;
   white-space: pre-wrap;
   font-family: var(--font-mono);
@@ -1248,46 +1265,46 @@ button:disabled {
 .tiptap-content pre code .hljs-built_in,
 .tiptap-content pre code .hljs-name,
 .tiptap-content pre code .hljs-tag {
-  color: #a626a4;
+  color: var(--hl-keyword);
 }
 
 .tiptap-content pre code .hljs-string,
 .tiptap-content pre code .hljs-attr,
 .tiptap-content pre code .hljs-template-tag,
 .tiptap-content pre code .hljs-addition {
-  color: #50a14f;
+  color: var(--hl-string);
 }
 
 .tiptap-content pre code .hljs-number,
 .tiptap-content pre code .hljs-literal,
 .tiptap-content pre code .hljs-type,
 .tiptap-content pre code .hljs-params {
-  color: #986801;
+  color: var(--hl-number);
 }
 
 .tiptap-content pre code .hljs-title,
 .tiptap-content pre code .hljs-section,
 .tiptap-content pre code .hljs-function .hljs-title,
 .tiptap-content pre code .hljs-title.function_ {
-  color: #4078f2;
+  color: var(--hl-title);
 }
 
 .tiptap-content pre code .hljs-attribute,
 .tiptap-content pre code .hljs-variable,
 .tiptap-content pre code .hljs-template-variable {
-  color: #e45649;
+  color: var(--hl-attr);
 }
 
 .tiptap-content pre code .hljs-symbol,
 .tiptap-content pre code .hljs-bullet,
 .tiptap-content pre code .hljs-link,
 .tiptap-content pre code .hljs-meta {
-  color: #4078f2;
+  color: var(--hl-title);
 }
 
 .tiptap-content pre code .hljs-deletion {
-  color: #e45649;
-  background: rgba(228, 86, 73, 0.12);
+  color: var(--hl-attr);
+  background: var(--hl-deletion-bg);
 }
 
 .tiptap-content pre code .hljs-emphasis {
@@ -1305,12 +1322,12 @@ button:disabled {
 }
 
 mark {
-  background: #fff2a8;
+  background: #f6eaa0;
   color: inherit;
 }
 
 :root[data-theme="dark"] mark {
-  background: #4a411a;
+  background: #46401f;
 }
 
 /* --------------------------------------------------------------------------
@@ -1900,6 +1917,12 @@ mark {
   box-shadow: var(--shadow-2);
 }
 
+.auth-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .auth-card h1 {
   margin: 0;
   font-size: 22px;
@@ -2042,7 +2065,7 @@ mark {
 }
 
 /* --------------------------------------------------------------------------
-   Public pages — documentation-site style
+   Public pages 鈥?documentation-site style
    -------------------------------------------------------------------------- */
 
 .public-shell {
@@ -2074,19 +2097,6 @@ mark {
   font-size: 18px;
   letter-spacing: -0.02em;
   text-decoration: none;
-}
-
-.public-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 800;
-  font-size: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .public-actions {
@@ -2256,7 +2266,7 @@ mark {
   padding-left: 34px;
 }
 
-/* Document typography — align the shared editor styles with the docs site. */
+/* Document typography 鈥?align the shared editor styles with the docs site. */
 .public-doc > h1 {
   max-width: 760px;
   margin: 0.2em auto 0.5em;

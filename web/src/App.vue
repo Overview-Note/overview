@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import BrandMark from "./components/BrandMark.vue";
 import DialogHost from "./components/DialogHost.vue";
 import SearchBox from "./components/SearchBox.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
@@ -85,7 +86,7 @@ async function logout() {
       <header class="topbar">
         <div class="topbar-left">
           <RouterLink class="brand" :to="{ name: 'home' }">
-            <span class="brand-mark">O</span>
+            <BrandMark :size="30" />
             <span class="brand-name">Overview</span>
           </RouterLink>
         </div>
