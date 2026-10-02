@@ -13,6 +13,8 @@ add the **hierarchy memos lacks**, and keep your content as **plain Markdown fil
 fully own. It ships as one Go binary with the frontend embedded, indexes content with
 SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Context Protocol (MCP)**.
 
+![Overview editor](assets/preview.png)
+
 ---
 
 ## Why Overview?
