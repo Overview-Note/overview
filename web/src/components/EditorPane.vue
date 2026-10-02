@@ -23,6 +23,7 @@ import { t } from "../i18n";
 import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
 import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
 import { useDialogStore } from "../stores/dialog";
+import { useSettingsStore } from "../stores/settings";
 import { useWorkspaceStore } from "../stores/workspace";
 import AiPanel from "./AiPanel.vue";
 import HistoryPanel from "./HistoryPanel.vue";
@@ -34,6 +35,7 @@ const props = defineProps<{ path: string }>();
 
 const store = useWorkspaceStore();
 const dialogs = useDialogStore();
+const settings = useSettingsStore();
 const router = useRouter();
 
 const status = ref<"idle" | "saving" | "saved">("idle");
@@ -48,7 +50,6 @@ const showAI = ref(false);
 const aiEnabled = ref(false);
 const showHistory = ref(false);
 const aiContent = ref("");
-const compressImages = ref(localStorage.getItem("overview.compress") !== "off");
 const flashMessage = ref("");
 let flashTimer: number | undefined;
 let suppress = false;
@@ -75,7 +76,7 @@ function mdToHtml(md: string): string {
 
 async function uploadAndInsert(original: File) {
   try {
-    const file = compressImages.value ? await compressImage(original) : original;
+    const file = settings.compressImages ? await compressImage(original) : original;
     const asset = await api.uploadAsset(file);
     editor.value?.chain().focus().setImage({ src: asset.url, alt: file.name }).run();
     if (file !== original && original.size > 0) {
@@ -95,11 +96,6 @@ function flashStatus(message: string) {
   flashTimer = window.setTimeout(() => {
     flashMessage.value = "";
   }, 4000);
-}
-
-function toggleCompress() {
-  compressImages.value = !compressImages.value;
-  localStorage.setItem("overview.compress", compressImages.value ? "on" : "off");
 }
 
 function handleFiles(files?: FileList | null): boolean {
@@ -431,13 +427,6 @@ onBeforeUnmount(() => {
         {{ t("editor.link") }}
       </button>
       <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
-      <button
-        :class="{ on: compressImages }"
-        :title="t('editor.compressToggle')"
-        @click="toggleCompress"
-      >
-        {{ t("editor.compress") }}
-      </button>
       <button :class="{ on: isActive('table') }" @click="insertTable">
         {{ t("editor.table") }}
       </button>

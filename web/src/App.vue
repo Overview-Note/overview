@@ -2,9 +2,10 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import DialogHost from "./components/DialogHost.vue";
+import SettingsDialog from "./components/SettingsDialog.vue";
 import Sidebar from "./components/Sidebar.vue";
 import UsersDialog from "./components/UsersDialog.vue";
-import { locale, locales, setLocale, t, type Locale } from "./i18n";
+import { t } from "./i18n";
 import { useAuthStore } from "./stores/auth";
 import { useWorkspaceStore } from "./stores/workspace";
 
@@ -13,6 +14,8 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const usersOpen = ref(false);
+const settingsOpen = ref(false);
+const userMenuOpen = ref(false);
 
 const plain = computed(() => route.meta.plain === true);
 
@@ -33,6 +36,7 @@ watch(
 );
 
 async function logout() {
+  userMenuOpen.value = false;
   await auth.logout().catch(() => undefined);
   router.replace({ name: "login" });
 }
@@ -45,31 +49,52 @@ async function logout() {
     </template>
     <template v-else>
       <header class="topbar">
-        <div class="brand">Overview</div>
+        <div class="brand">
+          <span class="brand-mark">O</span>
+          <span class="brand-name">Overview</span>
+        </div>
         <div class="hint" v-if="store.loadingTree">{{ t("app.loading") }}</div>
         <div class="topbar-right">
-          <select
-            class="lang-select"
-            :value="locale"
-            :title="t('topbar.language')"
-            @change="setLocale(($event.target as HTMLSelectElement).value as Locale)"
+          <button
+            class="icon-btn"
+            :title="t('settings.title')"
+            @click="settingsOpen = true"
           >
-            <option v-for="l in locales" :key="l.value" :value="l.value">
-              {{ l.label }}
-            </option>
-          </select>
-          <span v-if="auth.mode === 'multi' && auth.user" class="username">
-            {{ auth.user.username }}
-          </span>
-          <button v-if="auth.user" @click="router.push({ name: 'trash' })">
-            {{ t("trash.link") }}
+            ⚙
           </button>
-          <button v-if="auth.user?.role === 'admin'" @click="usersOpen = true">
-            {{ t("topbar.users") }}
-          </button>
-          <button v-if="auth.mode === 'multi' && auth.user" @click="logout">
-            {{ t("topbar.logout") }}
-          </button>
+          <div v-if="auth.mode === 'multi' && auth.user" class="user-menu">
+            <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
+              <span class="avatar">{{
+                auth.user.username.slice(0, 1).toUpperCase()
+              }}</span>
+              <span class="username">{{ auth.user.username }}</span>
+            </button>
+            <div
+              v-if="userMenuOpen"
+              class="user-dropdown"
+              @mouseleave="userMenuOpen = false"
+            >
+              <button
+                v-if="auth.user"
+                @click="
+                  router.push({ name: 'trash' });
+                  userMenuOpen = false;
+                "
+              >
+                {{ t("trash.link") }}
+              </button>
+              <button
+                v-if="auth.user?.role === 'admin'"
+                @click="
+                  usersOpen = true;
+                  userMenuOpen = false;
+                "
+              >
+                {{ t("topbar.users") }}
+              </button>
+              <button @click="logout">{{ t("topbar.logout") }}</button>
+            </div>
+          </div>
         </div>
       </header>
       <div class="layout">
@@ -81,5 +106,6 @@ async function logout() {
     </template>
     <DialogHost />
     <UsersDialog :open="usersOpen" @close="usersOpen = false" />
+    <SettingsDialog :open="settingsOpen" @close="settingsOpen = false" />
   </div>
 </template>

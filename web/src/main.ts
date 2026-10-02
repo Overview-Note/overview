@@ -4,11 +4,15 @@ import { setUnauthorizedHandler } from "./api";
 import App from "./App.vue";
 import { router } from "./router";
 import { useAuthStore } from "./stores/auth";
+import { useSettingsStore } from "./stores/settings";
 import "./styles.css";
 
 const app = createApp(App);
 app.use(createPinia());
 app.use(router);
+
+// Apply theme/font preferences before first paint.
+useSettingsStore();
 
 setUnauthorizedHandler(() => {
   const auth = useAuthStore();
