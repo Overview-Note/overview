@@ -1139,10 +1139,16 @@ button:disabled {
   display: flex;
   align-items: flex-start;
   gap: 0.55em;
+  /* Items are single-line rows; keep them tight. */
+  margin: 0.15em 0;
 }
 
 .tiptap-content ul[data-type="taskList"] li > label {
-  margin-top: 0.28em;
+  display: inline-flex;
+  align-items: center;
+  /* Vertically center the box on the first text line (line-height 1.7). */
+  min-height: calc(1.7 * 1em);
+  margin: 0;
   user-select: none;
 }
 
@@ -1151,9 +1157,19 @@ button:disabled {
   min-width: 0;
 }
 
+/* ProseMirror wraps item text in a <p>; its default margins made rows tall. */
+.tiptap-content ul[data-type="taskList"] li > div > p {
+  margin: 0;
+}
+
+.tiptap-content ul[data-type="taskList"] li > div > p + p {
+  margin-top: 0.4em;
+}
+
 .tiptap-content ul[data-type="taskList"] input[type="checkbox"] {
   width: 1em;
   height: 1em;
+  margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
 }
@@ -1161,6 +1177,11 @@ button:disabled {
 .tiptap-content ul[data-type="taskList"] li[data-checked="true"] > div {
   color: var(--text-faint);
   text-decoration: line-through;
+}
+
+/* Nested task lists stay indented under their parent item. */
+.tiptap-content ul[data-type="taskList"] ul[data-type="taskList"] {
+  margin-top: 0.15em;
 }
 
 /* Math (KaTeX) ----------------------------------------------------------- */
