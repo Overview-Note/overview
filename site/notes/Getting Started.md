@@ -15,6 +15,16 @@ docker compose up -d --build
 # open http://localhost:5230 and complete the first-run admin setup
 ```
 
+## Single binary
+
+Download the binary for your OS/arch from
+[Releases](https://github.com/Overview-Note/overview/releases) and run it:
+
+```bash
+OVERVIEW_DATA_DIR=./data ./overview
+# open http://localhost:5230
+```
+
 ## Local development
 
 ```bash
@@ -30,10 +40,11 @@ Requirements: **Go 1.26+**, **Node 22+**, Docker (optional).
 ## First steps
 
 1. Open the app and create your first note with **＋ Note**.
-2. Organize with folders — the sidebar mirrors your directory tree.
-3. Type `/` in the editor for slash commands (tables, code, dividers).
-4. Paste or drop an image to upload it.
-5. Toggle a note's visibility to **Public** to share a read-only globe page.
+2. Organize with folders — the sidebar mirrors your directory tree (drag to move).
+3. Type `/` in the editor for slash commands (tables, tasks, math, diagrams, code).
+4. Paste or drop an image to upload it; use `[[Note]]` to link notes.
+5. Toggle a note's visibility to **Public** to share a read-only page, or click
+   **Public page** to view it in the docs-style layout.
 
 ## Next
 

@@ -6,6 +6,15 @@ public: true
 
 # Deployment
 
+## Single binary
+
+Download the binary for your OS/arch from
+[Releases](https://github.com/Overview-Note/overview/releases) and run it:
+
+```bash
+OVERVIEW_DATA_DIR=/var/lib/overview ./overview
+```
+
 ## Docker Compose
 
 ```yaml

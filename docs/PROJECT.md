@@ -73,12 +73,12 @@ store · index · s3store · watcher · mcp · server
 
 ## 功能清单（当前版本）
 
-**内容与组织**：层级目录 · Markdown 存储 · 双链与反链 · 每篇私有/公开 + 独立公开页
-**编辑**：富文本（Tiptap）· 图片粘贴/拖拽 + 压缩 · 表格 + 就近浮动工具条 · 斜杠命令 · 大纲
+**内容与组织**：层级目录 · Markdown 存储 · 双链与反链 · 每篇私有/公开 + 独立公开页 · 拖拽移动
+**编辑**：富文本（Tiptap）· 代码高亮 · 任务列表 · 数学公式（KaTeX）· Mermaid 图表 · GFM 脚注 · 图片粘贴/拖拽 + 压缩 · 表格 + 就近浮动工具条 · 斜杠命令 · 大纲 · 专注模式 + 快捷键面板
 **检索**：CJK 全文检索 · 全局搜索
-**AI**：AI 助手（对话/整理/补全）· MCP 服务端
-**访问**：多用户认证（bcrypt/会话/角色）· WebDAV · REST + OpenAPI · PWA
-**运维**：单二进制 · SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · S3 附件后端 · 设置中心
+**AI**：AI 助手（对话/整理/补全）· MCP 服务端（工具由 OpenAPI 生成）
+**访问**：多用户认证（bcrypt/会话/角色）· WebDAV · REST + OpenAPI · PWA · 浏览器快速捕获（Bookmarklet）
+**运维**：单二进制 · Docker · SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · S3 附件后端 · 设置中心 · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
 
 ---
 
@@ -99,11 +99,15 @@ store · index · s3store · watcher · mcp · server
 
 ## 项目状态
 
-- **版本**：v0.9.0（架构稳定，功能覆盖路线图前四阶段）
+- **版本**：v0.10.2（架构稳定，功能覆盖路线图 Phase 2–6 并修复已知问题；Phase 7 待排期）
 - **测试**：`go test ./...` 覆盖核心包（store/index/textproc/service/server/mcp 等）+
-  `httptest` 集成测试；前端 `vue-tsc` 类型检查 + `vite build`
+  `httptest` 集成测试；前端 `vue-tsc` 类型检查 + `vite build` + Prettier
 - **CI**：GitHub Actions（后端 race 测试、前端类型检查构建、golangci-lint）
-- **规模**：后端 ~6k 行 Go / 17 个 internal 包；前端 ~3k 行 TS/Vue
+- **交付**：Docker / 单二进制（内嵌前端），浏览器访问
+- **规模**：后端 ~7k 行 Go / 18 个 internal 包；前端 ~4k 行 TS/Vue
+- **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.10.2 已修复 render 模式越权、历史无清理、
+  导出站无搜索、WebDAV 全量重建、OpenAPI 缺项与表格/wiki 往返；仍待办的是标签/置顶/实时协作/评论
+  等功能（Phase 7）与 i18n 语言扩充（暂缓）
 
 ---
 
@@ -128,7 +132,9 @@ docker compose up -d --build
 - 寻找 `good first issue` 标签的入门任务
 - 架构约定请参考 [`DESIGN.md`](DESIGN.md)（含架构决策记录 ADR）
 
-**接下来的方向**：移动端原生 App · 实时协作编辑 · 标签管理 UI · 知识图谱视图。
+**接下来的方向**（Phase 7，未排期）：标签系统（管理 UI / 过滤 / 补全）· 置顶与保存视图 ·
+实时协作与评论 · 版本 Diff 与草稿持久化 · 修复 render 模式越权 · Webhook / OIDC / gRPC ·
+移动端原生 App。详见 [`DESIGN.md`](DESIGN.md) §12。
 
 ---
 

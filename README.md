@@ -52,10 +52,13 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 
 ### ✍️ Editing
 - **Rich editor** — Vue 3 + Tiptap: headings, lists, quotes, code, images, tables
+- **Code highlighting**, **task lists**, **math (KaTeX)** and **Mermaid diagrams**, plus
+  **GFM footnotes** — all stored as plain Markdown
 - **Images** — paste / drag-and-drop, with optional **client-side compression** (WebP/JPEG)
-- **Slash commands** — type `/` for headings, lists, tables, dividers, code blocks
+- **Slash commands** — type `/` for headings, lists, tasks, tables, math, diagrams, code blocks
 - **Outline (TOC)** — scroll-linked table of contents
 - **Table bubble menu** — row/column controls appear right above the active table
+- **Focus mode** (`F9`) and a **keyboard-shortcuts** panel (`?`)
 
 ### 🔎 Search & navigation
 - **Full-text search** with SQLite FTS5 and a custom **CJK unigram + bigram tokenizer**
@@ -73,14 +76,17 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
 - **REST API** — versioned under `/api/v1`, documented via OpenAPI at `/api/docs`
 - **PWA** — installable app shell
+- **Quick capture** — a bookmarklet that saves a page's title/URL/selection as a note
 
 ### 🛠 Operations
 - **Single binary** with the frontend embedded (`docker run` or `go run`)
 - **SQLite migrations**, atomic writes, optimistic concurrency (ETag / 409)
 - **Version history** (revision snapshots) and **trash** (soft delete + restore)
 - **Live sync** — a file watcher reindexes external edits
+- **Portable archive** — export/import the whole vault (notes + assets) as a ZIP
 - **Pluggable storage** — local filesystem or any S3-compatible object store
 - **Settings center** — theme (system/light/dark), font size, language, compression, AI config
+- **Static export & sitemap/robots** — publish public notes as a read-only site
 
 ---
 
@@ -108,10 +114,15 @@ docker compose up -d --build
 
 ### Prebuilt binary
 
+Download the binary for your OS/arch from
+[Releases](https://github.com/Overview-Note/overview/releases), or install with Go:
+
 ```bash
 go install github.com/Overview-Note/overview/cmd/overview@latest
 OVERVIEW_DATA_DIR=./data overview
 ```
+
+Open http://localhost:5230 and complete the first-run admin setup.
 
 ### Local development
 
@@ -141,8 +152,11 @@ Overview is configured entirely through environment variables.
 | `OVERVIEW_DATA_DIR` | `./data` | Data root (`notes/`, `assets/`, DB, …) |
 | `OVERVIEW_DB` | `<data>/overview.db` | SQLite index path |
 | `OVERVIEW_MAX_UPLOAD_MB` | `32` | Upload size limit |
+| `OVERVIEW_HISTORY_KEEP` | `50` | Revisions kept per note (`0` disables pruning) |
 | `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `OVERVIEW_AUTH` | `multi` | `multi` (users + login) or `none` |
+| `OVERVIEW_SITE_TITLE` | `Overview` | Site title (UI and render mode) |
+| `OVERVIEW_RENDER` | `false` | `true` → public read-only docs site |
 | `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP; falls back to session tokens |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI when set) |
 | `OVERVIEW_AI_API_KEY` | — | AI provider API key |
@@ -254,6 +268,8 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 
 ## Roadmap
 
+**Shipped**
+
 - [x] Folder hierarchy, Markdown storage, FTS5 search
 - [x] Rich editor (images, tables, slash commands, TOC)
 - [x] Wiki-links & backlinks
@@ -263,11 +279,19 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] S3 assets, PWA, OpenAPI docs, settings center
 - [x] Code highlighting, task lists, math (KaTeX), Mermaid diagrams, footnotes
 - [x] Drag-and-drop tree, ZIP import/export, browser quick capture, focus mode
-- [ ] Mobile-native app
-- [ ] Collaboration / real-time editing
-- [ ] Graph view & tags management UI
+- [x] Sitemap/robots, public pages styled as a docs site
+- [x] Render-mode API whitelist, history retention, static-site search, incremental WebDAV,
+  full OpenAPI spec, lossless table/wiki-link round-trip
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for the full roadmap.
+**Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
+
+- [ ] Tags: management UI, tag tree, tag filtering, `#` autocomplete
+- [ ] Pin / favorites, saved filter views, timeline view
+- [ ] Real-time collaboration (SSE/WebSocket), comments, notifications
+- [ ] Version diff view, draft persistence, non-image attachments in the UI
+- [ ] Outbound webhooks, OIDC/SSO, gRPC, mobile-native app, more languages
+
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the full roadmap and known limitations.
 
 ---
 

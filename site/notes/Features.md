@@ -16,10 +16,13 @@ public: true
 ## Editing
 
 - **Rich editor** — Vue 3 + Tiptap: headings, lists, quotes, code, images, tables
+- **Code highlighting, task lists, math (KaTeX), Mermaid diagrams, GFM footnotes** — all
+  stored as plain Markdown
 - **Images** — paste / drag-and-drop with optional client-side compression
-- **Slash commands** — type `/` for headings, lists, tables, code blocks
+- **Slash commands** — type `/` for headings, lists, tasks, tables, math, diagrams, code
 - **Outline (TOC)** — scroll-linked table of contents
 - **Table bubble menu** — row/column controls above the active table
+- **Focus mode** (`F9`) and a keyboard-shortcuts panel (`?`)
 
 ## Search
 
@@ -38,12 +41,15 @@ public: true
 - **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
 - **REST API** — versioned under `/api/v1`, OpenAPI at `/api/docs`
 - **PWA** — installable app shell
+- **Quick capture** — a bookmarklet saves a page's title, URL and selection as a note
 
 ## Operations
 
-- **Single binary** with the frontend embedded
+- **Single binary** with the frontend embedded (Docker or `go run`)
+- **Portable archive** — export/import the whole vault (notes + attachments) as a ZIP
 - **Version history** and **trash** with restore
 - **Live sync** — a file watcher reindexes external edits
 - **Pluggable assets** — local filesystem or any S3-compatible store
+- **Static export** with `sitemap.xml` / `robots.txt` for a public docs site
 
 See [[MCP and AI]] for integration details.

@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.9.0（可见性 + 开源发布）
+> 版本：v0.10.2（已知问题修复）
 > 更新日期：2026-10-02
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -19,6 +19,8 @@
 | v0.7.0 | 规模化与运维 | 增量索引、文件监视器、版本历史、回收站、附件孤儿清理、S3 后端、PWA、OpenAPI |
 | v0.8.0 | 设置与设计系统 | 设置中心（外观/编辑器/AI）、运行时 AI 配置、顶栏搜索、Starlight 风格布局与统一排版 |
 | v0.9.0 | 可见性与开源 | 每篇私有/公开可见性选择器、独立公开页（globe）、开源文档与协作基建 |
+| v0.10.0 | 对标 memos 补齐 | 代码高亮 / 任务列表 / KaTeX / Mermaid / 脚注、拖拽移动、ZIP 导入导出、浏览器快速捕获、专注模式与快捷键面板、MCP 工具由 OpenAPI 生成、sitemap/robots、i18n 增繁中/日/德 |
+| v0.10.2 | 已知问题修复 | render 模式白名单、历史保留策略、导出站搜索、WebDAV 增量重建、OpenAPI 补全、表格/wiki 往返修复 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -368,21 +370,27 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | 存储型 XSS | 快照服务端转义；前端仅渲染已转义内容 |
 | 附件 | `X-Content-Type-Options: nosniff`；非图片强制 `Content-Disposition: attachment`；SVG 不内联 |
 | 上传体积 | `http.MaxBytesReader` + `ParseMultipartForm` |
-| 认证 | **尚未实现**（路线图） |
+| 认证 | 多用户（bcrypt + 会话 + 角色），`auth=multi` 时对 `/api/v1/*` 与附件强制认证；`auth=none` 为单用户模式 |
+| 密钥 | AI/MCP/S3 密钥仅存服务端，接口永不回传 |
 | 日志 | 结构化 JSON，无敏感内容 |
 
-> ⚠️ 仍无鉴权，公网部署前须加认证或置于受保护反向代理之后。
+> ✅ render 模式已收紧为**白名单**：`renderGuard` 仅放行 `health`、`auth/state`、
+> `tree`、`note`、`public/*`、`openapi.json`、`/api/docs` 与附件读取；其余 `/api/` 路径
+> 一律 404（`history`、`trash`、`assets/orphans`、`search`、`settings` 等），写方法返回 405。
+> 覆盖测试见 `internal/server/render_test.go`。
 
 ---
 
 ## 11. 已知限制与权衡
 
-1. 索引与文件最终一致：外部直接改文件不会自动入库，需 `/reindex` 或重启（文件监视器列入路线图）。
-2. 文件夹级变更（重命名/删除）触发全量重建，大库开销偏高（增量索引列入路线图）。
-3. 标题一旦写入 frontmatter 不随正文 H1 变化。
-4. Tiptap 的 Markdown 往返对复杂结构非无损。
-5. 单实例：SQLite + 本地文件系统，无法水平扩展（如需多实例，替换 `core` 端口实现）。
-6. 附件路径为 `/api/v1/assets/...`，跨库迁移需重写（可移植性列入路线图）。
+1. 文件夹级重命名/移动走后缀替换重建（`ReplacePrefix`），超大库仍有开销；单文件变更已增量。
+2. 标题一旦写入 frontmatter 不随正文 H1 变化。
+3. Tiptap 的 Markdown 往返：表格与 wiki 链接已修复为无损（见 §13.8），其他复杂结构仍可能被规范化。
+4. 单实例：SQLite + 本地文件系统，无法水平扩展（如需多实例，替换 `core` 端口实现）。
+5. i18n 覆盖中/英/繁中/日/德 5 种语言，非 memos 的 40+（按需扩展，暂缓）。
+
+> 已修复（原「已知问题」）：render 模式只读端点越权、版本历史无清理、静态导出站无搜索、
+> WebDAV 写入全量重建、OpenAPI spec 端点缺失、表格/wiki 链接往返损坏。
 
 ---
 
@@ -419,8 +427,8 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - [x] 主题（跟随系统/浅/深）与字号偏好
 - [x] 顶栏全局搜索（Ctrl+K）
 - [x] Starlight 风格布局与统一排版阶梯
-- [ ] 表格就近浮动工具条（编辑体验优化）
-- [ ] 多级菜单第三级缩进微调
+- [x] 表格就近浮动工具条（编辑体验优化）
+- [x] 多级菜单第三级缩进微调
 
 **Phase 6 — 对标 memos 的体验补齐（v0.10）**
 
@@ -444,6 +452,41 @@ P2 — 打磨与生态
 - [x] sitemap.xml / robots.txt（渲染与公开站）
 - [x] i18n 补充 ja / zh-TW / de
 
+**Phase 7 — 未完成 / 待办（下一阶段候选）**
+
+> 与 memos v0.31 对比后仍缺失、或自身体验上的缺口，按主题归类，尚未排期。
+
+组织与检索
+- [ ] 标签系统：标签管理 UI、标签树、按标签过滤、编辑器 `#` 自动补全（现仅作为可搜索字段）
+- [ ] 置顶（Pin）/ 收藏
+- [ ] 保存的筛选视图（类似 memos CEL Shortcuts）
+- [ ] 时间线视图（按更新时间聚合）
+
+协作与实时
+- [ ] 实时刷新 / 多人协作（SSE/WebSocket）
+- [ ] 评论、反应、@提及
+- [ ] 通知
+
+编辑体验
+- [ ] 版本历史 Diff 视图（现仅原文预览）
+- [ ] 草稿本地持久化（防意外关闭）
+- [ ] 非图片附件的插入 UI（现文件选择器仅 `image/*`）
+
+平台与运维
+- [ ] 出站 Webhook（签名 + SSRF 防护）
+- [ ] 内嵌 WebView2 的原生窗口（免依赖浏览器）
+- [ ] OIDC / SSO
+- [ ] Mobile 原生 App（PWA 已具备）
+- [ ] REST 之外补 gRPC
+
+**Phase 6.5 — 已知问题修复（v0.10.2）**
+- [x] render 模式收紧为白名单，隐藏 history/trash/orphans/search/settings
+- [x] 版本历史保留策略（`OVERVIEW_HISTORY_KEEP`，默认 50，按笔记裁剪）
+- [x] 静态导出站内置搜索（`search-index.json` + `search.js`）
+- [x] WebDAV 写入按受影响路径增量重建索引
+- [x] OpenAPI spec 补齐 `/settings/ai`、`/assets/{path}`、`/export`、`/import`，并说明 `/dav`、`/mcp`
+- [x] 编辑器表格 / wiki 链接 Markdown 往返修复（`sanitizeEditorHtml`、保留 `data-wiki`）
+
 ---
 
 ## 13. 附录
@@ -456,8 +499,13 @@ P2 — 打磨与生态
 | `OVERVIEW_DATA_DIR` | `./data` | 数据根目录 |
 | `OVERVIEW_DB` | `<data>/overview.db` | SQLite 路径 |
 | `OVERVIEW_MAX_UPLOAD_MB` | `32` | 上传上限 |
+| `OVERVIEW_HISTORY_KEEP` | `50` | 每篇笔记保留的历史版本数（`0` 不裁剪） |
 | `OVERVIEW_LOG_LEVEL` | `info` | 日志级别 |
 | `OVERVIEW_AUTH` | `multi` | 认证模式：`multi` 或 `none` |
+| `OVERVIEW_SITE_TITLE` | `Overview` | 站点标题（UI 与 render 模式） |
+| `OVERVIEW_RENDER` | `false` | 设为 `true` 变为公开只读文档站 |
+| `OVERVIEW_EXPORT_DIR` | `_site` | `overview export` 输出目录 |
+| `OVERVIEW_EXPORT_BASE` | `/` | `overview export` URL 前缀 |
 | `OVERVIEW_MCP_TOKEN` | 空 | MCP Bearer 令牌；空且 auth=multi 时用会话令牌 |
 | `OVERVIEW_AI_BASE_URL` | 空 | OpenAI 兼容基址（如 `https://api.openai.com/v1`）；空则禁用 AI |
 | `OVERVIEW_AI_API_KEY` | 空 | AI 密钥 |
@@ -515,6 +563,24 @@ P2 — 打磨与生态
 - **排版系统**（ADR-026）：所有 UI 文本基于 `--base-size` 派生的 `--text-xs/sm/ui/body`；编辑器正文 `--text-body` 与周边一致。字号设置切换时**整站同步缩放**。
 - **布局重做**：全宽顶栏（品牌左、居中搜索 `Ctrl K`、右侧导航）、左侧分组式多级导航（顶层大写分组、按深度区分字重/缩进/配色）、内容区大标题 + 右侧「大纲」栏，参考 Starlight 文档站。
 - **操作分层**（ADR-027）：编辑器上方新增**笔记栏**承载大纲/历史版本/AI/分享等页面级动作；格式化工具栏只保留排版类操作。
+
+### 13.8 已知问题修复与交付（v0.10.2）
+
+- **render 模式白名单**：`renderGuard` 增加 `renderAllowed(path)`，仅放行
+  `health`、`auth/state`、`tree`、`note`、`public/notes`、`public/note`、`openapi.json`、
+  `/api/docs` 与附件；`history`/`trash`/`assets/orphans`/`search`/`settings` 返回 404，写方法 405。
+  回归测试：`internal/server/render_test.go`。
+- **版本历史保留**：`history.Store` 支持 `keep`，`Snapshot` 后按修改时间裁剪旧快照；
+  环境变量 `OVERVIEW_HISTORY_KEEP`（默认 50，0 表示不裁剪）。
+- **导出站搜索**：`sitegen` 生成 `search-index.json`（标题 + 正文纯文本）与 `search.js`，
+  顶栏提供无依赖的即时搜索（方向键 + Enter + Esc）。
+- **WebDAV 增量重建**：`recordingFS` 包住 `webdav.FileSystem`，记录写入/删除/重命名路径，
+  去抖后对每个路径调用 `service.ReindexPath`（替代原先的全量 `Reindex`）。
+- **OpenAPI 补全**：新增 `/settings/ai`、`/assets/{path}`、`/export`、`/import`，并在文档描述中
+  说明 `/dav` 与 `/mcp` 两个非 REST 面。
+- **表格 / wiki 链接往返**：前端 `sanitizeEditorHtml` 移除 Tiptap 顶层表格的 `colgroup`/`col`、
+  归一化 `colspan/rowspan` 与单元格 `<p>`，使 turndown-plugin-gfm 输出标准 Markdown 表格；
+  自定义 `WikiLink` 扩展保留 `data-wiki`，使 `[[Note]]` 往返无损。
 
 ### 13.2 v0.2 / v0.3 验证记录
 
