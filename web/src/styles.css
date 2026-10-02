@@ -177,11 +177,17 @@ button {
   transition:
     background 0.12s ease,
     color 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    transform 0.12s ease;
 }
 
 button:hover {
   background: var(--bg-hover);
+}
+
+/* Respond on press, not on release (Apple: feedback must be immediate). */
+button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 button:focus-visible,
@@ -958,8 +964,10 @@ button:disabled {
   max-width: 760px;
   margin: 0 auto;
   outline: none;
-  line-height: 1.8;
+  line-height: 1.7;
   font-size: var(--text-body);
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
 }
 
 /* ProseMirror draws a focus outline on the editable root; suppress it so the
@@ -1062,13 +1070,28 @@ button:disabled {
   width: 100%;
   table-layout: fixed;
   overflow: hidden;
+  /* Information-dense content gets tighter leading than body copy. */
+  font-size: 0.95em;
+  line-height: 1.4;
 }
 
 .tiptap-content th,
 .tiptap-content td {
   border: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: 5px 10px;
   vertical-align: top;
+}
+
+/* ProseMirror wraps every cell in a <p>; its default margins made rows far
+   taller than the text. Collapse them so a row hugs its content. */
+.tiptap-content th p,
+.tiptap-content td p {
+  margin: 0;
+}
+
+.tiptap-content th > p + p,
+.tiptap-content td > p + p {
+  margin-top: 0.4em;
 }
 
 .tiptap-content th {
@@ -2013,7 +2036,9 @@ mark {
   height: 52px;
   padding: 0 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  /* Translucent material: content scrolls under instead of a hard opaque bar. */
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -2340,4 +2365,30 @@ html[data-focus="on"] .note-bar::after {
 
 .shortcut-row span {
   color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Accessibility preferences
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .public-topbar {
+    background: var(--bg);
+    backdrop-filter: none;
+  }
 }
