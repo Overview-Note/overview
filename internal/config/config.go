@@ -18,6 +18,10 @@ type Config struct {
 	MaxUploadMB int64
 	HistoryKeep int
 	LogLevel    string
+	LogFormat   string
+	LogFile     string
+	LogMaxMB    int
+	LogBackups  int
 	AuthMode    string
 	MCPToken    string
 	AIBaseURL   string
@@ -55,6 +59,14 @@ func Load() Config {
 	if err != nil || historyKeep < 0 {
 		historyKeep = 50
 	}
+	logMaxMB, err := strconv.Atoi(env("OVERVIEW_LOG_MAX_MB", "10"))
+	if err != nil || logMaxMB <= 0 {
+		logMaxMB = 10
+	}
+	logBackups, err := strconv.Atoi(env("OVERVIEW_LOG_BACKUPS", "3"))
+	if err != nil || logBackups < 0 {
+		logBackups = 3
+	}
 	return Config{
 		Addr:        env("OVERVIEW_ADDR", ":5230"),
 		DataDir:     dataDir,
@@ -66,6 +78,10 @@ func Load() Config {
 		MaxUploadMB: maxUpload,
 		HistoryKeep: historyKeep,
 		LogLevel:    env("OVERVIEW_LOG_LEVEL", "info"),
+		LogFormat:   env("OVERVIEW_LOG_FORMAT", "json"),
+		LogFile:     env("OVERVIEW_LOG_FILE", ""),
+		LogMaxMB:    logMaxMB,
+		LogBackups:  logBackups,
 		AuthMode:    env("OVERVIEW_AUTH", "multi"),
 		MCPToken:    env("OVERVIEW_MCP_TOKEN", ""),
 		AIBaseURL:   env("OVERVIEW_AI_BASE_URL", ""),

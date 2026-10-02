@@ -16,6 +16,7 @@ import (
 	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/history"
 	"github.com/Overview-Note/overview/internal/index"
+	"github.com/Overview-Note/overview/internal/logging"
 	"github.com/Overview-Note/overview/internal/mcp"
 	"github.com/Overview-Note/overview/internal/s3store"
 	"github.com/Overview-Note/overview/internal/server"
@@ -34,7 +35,9 @@ var version = "0.10.2"
 // environment variables, plus OVERVIEW_EXPORT_DIR and OVERVIEW_EXPORT_BASE.
 func runExport() {
 	cfg := config.Load()
-	logger := newLogger(cfg.LogLevel)
+	lg := setupLogger(cfg)
+	defer lg.Close()
+	logger := lg.Logger
 	outDir := envOr("OVERVIEW_EXPORT_DIR", "_site")
 	base := envOr("OVERVIEW_EXPORT_BASE", "/")
 
@@ -92,8 +95,9 @@ func main() {
 // serve runs the HTTP server until the process receives a termination signal.
 func serve() {
 	cfg := config.Load()
-	logger := newLogger(cfg.LogLevel)
-	slog.SetDefault(logger)
+	lg := setupLogger(cfg)
+	defer lg.Close()
+	logger := lg.Logger
 
 	if err := cfg.EnsureDirs(); err != nil {
 		logger.Error("prepare data dirs", "error", err)
@@ -245,17 +249,20 @@ func serve() {
 	logger.Info("stopped")
 }
 
-func newLogger(level string) *slog.Logger {
-	var lvl slog.Level
-	switch level {
-	case "debug":
-		lvl = slog.LevelDebug
-	case "warn":
-		lvl = slog.LevelWarn
-	case "error":
-		lvl = slog.LevelError
-	default:
-		lvl = slog.LevelInfo
+// setupLogger builds the application logger (stdout + optional rotating file)
+// and installs it as the slog default.
+func setupLogger(cfg config.Config) *logging.Logger {
+	lg, err := logging.New(logging.Options{
+		Level:   cfg.LogLevel,
+		Format:  cfg.LogFormat,
+		File:    cfg.LogFile,
+		MaxMB:   cfg.LogMaxMB,
+		Backups: cfg.LogBackups,
+	})
+	if err != nil {
+		// Fall back to stdout-only so logging never blocks startup.
+		lg, _ = logging.New(logging.Options{Level: cfg.LogLevel, Format: cfg.LogFormat})
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl}))
+	slog.SetDefault(lg.Logger)
+	return lg
 }
