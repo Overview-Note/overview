@@ -15,6 +15,22 @@ Download the binary for your OS/arch from
 OVERVIEW_DATA_DIR=/var/lib/overview ./overview
 ```
 
+## Prebuilt image (GHCR)
+
+Multi-arch images (linux/amd64, linux/arm64) are published to the GitHub
+Container Registry on every `v*` tag:
+
+```bash
+docker run -d -p 5230:5230 \
+  -v ov-data:/data \
+  -e OVERVIEW_ADDR=":5230" \
+  -e OVERVIEW_DATA_DIR=/data \
+  -e OVERVIEW_AUTH=multi \
+  ghcr.io/overview-note/overview:latest
+```
+
+Tags: `latest`, `X.Y.Z`, and `X.Y`.
+
 ## Docker Compose
 
 ```yaml
@@ -84,7 +100,7 @@ docker run -d -p 8080:5230 \
   -e OVERVIEW_RENDER=true \
   -e OVERVIEW_SITE_TITLE="Overview Docs" \
   -v "$(pwd)/site/notes:/data/notes" \
-  overview:latest
+  ghcr.io/overview-note/overview:latest
 ```
 
 In this mode only a read-only API surface is exposed (public notes, the tree, health and

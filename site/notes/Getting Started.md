@@ -8,11 +8,19 @@ public: true
 
 ## Quick start (Docker)
 
+Prebuilt image:
+
+```bash
+docker run -d -p 5230:5230 -v ov-data:/data ghcr.io/overview-note/overview:latest
+# open http://localhost:5230 and complete the first-run admin setup
+```
+
+Or build from source:
+
 ```bash
 git clone https://github.com/Overview-Note/overview.git
 cd overview
 docker compose up -d --build
-# open http://localhost:5230 and complete the first-run admin setup
 ```
 
 ## Single binary
