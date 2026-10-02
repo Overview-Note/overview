@@ -98,13 +98,13 @@ func (ix *Index) migrate(ctx context.Context) error {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, string(stmt)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("migration %s: %w", name, err)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`,
 			version, time.Now().UTC().Format(time.RFC3339)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -133,7 +133,7 @@ func (ix *Index) Upsert(ctx context.Context, n core.Note) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err := upsert(ctx, tx, n); err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func (ix *Index) DeleteByPath(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if err := deleteByPath(ctx, tx, path); err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (ix *Index) Sync(ctx context.Context, notes []core.Note) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `DELETE FROM notes`); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (ix *Index) ReplacePrefix(ctx context.Context, prefix string, notes []core.
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	like := escapeLike(prefix) + "/%"
 	if _, err := tx.ExecContext(ctx,
