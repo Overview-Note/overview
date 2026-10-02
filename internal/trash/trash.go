@@ -92,7 +92,12 @@ func (s *Store) Restore(id, destPath string) error {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return err
 	}
-	return os.Rename(src, destPath)
+	if err := os.Rename(src, destPath); err != nil {
+		return err
+	}
+	// Remove the leftover metadata directory so the restored item no longer
+	// appears in the trash listing.
+	return os.RemoveAll(filepath.Join(s.dir, id))
 }
 
 // Meta returns the metadata of a trashed entry.

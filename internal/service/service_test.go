@@ -109,8 +109,27 @@ func TestHistoryAndTrash(t *testing.T) {
 	if _, err := svc.GetNote(ctx, "doc.md"); err != nil {
 		t.Errorf("note should be restored: %v", err)
 	}
-	if err := svc.PurgeTrash(ctx, entries[0].ID); err != nil {
+	// A restored item must no longer be listed in the trash.
+	if rest, _ := svc.Trash(ctx); len(rest) != 0 {
+		t.Errorf("trash should be empty after restore, got %d", len(rest))
+	}
+
+	// Delete again and purge permanently.
+	if err := svc.Delete(ctx, "doc.md"); err != nil {
+		t.Fatal(err)
+	}
+	pending, err := svc.Trash(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("trash entries = %d, want 1", len(pending))
+	}
+	if err := svc.PurgeTrash(ctx, pending[0].ID); err != nil {
 		t.Errorf("purge: %v", err)
+	}
+	if left, _ := svc.Trash(ctx); len(left) != 0 {
+		t.Errorf("trash should be empty after purge, got %d", len(left))
 	}
 }
 

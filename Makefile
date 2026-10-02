@@ -24,13 +24,13 @@ build-web: ## Build the Vue frontend into internal/webui/dist
 build-go: ## Compile the Go binary (expects frontend built)
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/overview
 
-test: test-go ## Run all tests
+test: test-go test-web ## Run all tests (Go + frontend)
 
 test-go: ## Run Go tests
 	go test ./...
 
-test-web: ## Type-check the frontend
-	cd web && npm run lint
+test-web: ## Type-check and unit-test the frontend
+	cd web && npm run lint && npm test
 
 lint: ## Run linters (golangci-lint + frontend typecheck)
 	golangci-lint run ./...
