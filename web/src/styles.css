@@ -777,17 +777,31 @@ button:disabled {
   min-width: 0;
 }
 
-.table-toolbar {
+/* Floating table toolbar anchored above the active table. */
+.table-bubble {
+  position: fixed;
+  z-index: 150;
+  transform: translateY(calc(-100% - 8px));
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   gap: 2px;
-  padding: 7px var(--sp-4);
-  border-bottom: 1px dashed var(--border);
+  padding: 4px;
   background: var(--bg);
-  font-size: var(--text-xs);
-  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  white-space: nowrap;
+}
+
+.table-bubble button {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  padding: 5px 9px;
+}
+
+.table-bubble button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .editor-toolbar button.on {
@@ -817,10 +831,20 @@ button:disabled {
   min-height: 0;
 }
 
+/* Left column holding the formatting toolbar and the document, so both share
+   the same horizontal centre (independent of the right-side panel). */
+.editor-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .editor-scroll {
   flex: 1;
   overflow: auto;
-  padding: 56px 64px 160px;
+  padding: 40px 64px 160px;
 }
 
 .editor-crumb {

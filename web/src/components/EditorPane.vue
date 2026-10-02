@@ -51,6 +51,7 @@ const aiEnabled = ref(false);
 const showHistory = ref(false);
 const aiContent = ref("");
 const flashMessage = ref("");
+const tableMenu = ref<{ left: number; top: number } | null>(null);
 let flashTimer: number | undefined;
 let suppress = false;
 let saveTimer: number | undefined;
@@ -184,7 +185,30 @@ const editor = useEditor({
     aiContent.value = editor.value?.getText() ?? "";
     scheduleSave();
   },
+  onSelectionUpdate: () => updateTableMenu(),
 });
+
+// Position the floating table toolbar just above the table containing the
+// cursor, so table commands sit next to the table itself.
+function updateTableMenu() {
+  const ed = editor.value;
+  if (!ed || !ed.isActive("table")) {
+    tableMenu.value = null;
+    return;
+  }
+  const { state, view } = ed;
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name === "table") {
+      const pos = $from.before(depth);
+      const rect = view.coordsAtPos(pos);
+      tableMenu.value = { left: rect.left, top: rect.top };
+      return;
+    }
+  }
+  tableMenu.value = null;
+}
 
 function insertAI(payload: { text: string; replace: boolean }) {
   if (!editor.value) return;
@@ -336,8 +360,13 @@ onBeforeRouteLeave(async () => {
   return true;
 });
 
+function onViewportChange() {
+  updateTableMenu();
+}
+
 onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
+  window.addEventListener("resize", onViewportChange);
   try {
     aiEnabled.value = (await api.aiStatus()).enabled;
   } catch {
@@ -348,6 +377,7 @@ onBeforeUnmount(() => {
   window.clearTimeout(saveTimer);
   window.clearTimeout(flashTimer);
   window.removeEventListener("beforeunload", onBeforeUnload);
+  window.removeEventListener("resize", onViewportChange);
 });
 </script>
 
@@ -386,128 +416,114 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
-    <div class="editor-toolbar">
-      <div class="toolbar-group">
-        <button
-          :class="{ on: isActive('heading', { level: 1 }) }"
-          @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()"
-        >
-          H1
-        </button>
-        <button
-          :class="{ on: isActive('heading', { level: 2 }) }"
-          @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()"
-        >
-          H2
-        </button>
-        <button
-          :class="{ on: isActive('heading', { level: 3 }) }"
-          @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
-        >
-          H3
-        </button>
-        <span class="sep"></span>
-        <button
-          :class="{ on: isActive('bold') }"
-          @click="editor?.chain().focus().toggleBold().run()"
-        >
-          <b>B</b>
-        </button>
-        <button
-          :class="{ on: isActive('italic') }"
-          @click="editor?.chain().focus().toggleItalic().run()"
-        >
-          <i>I</i>
-        </button>
-        <button
-          :class="{ on: isActive('strike') }"
-          @click="editor?.chain().focus().toggleStrike().run()"
-        >
-          <s>S</s>
-        </button>
-        <button
-          :class="{ on: isActive('code') }"
-          @click="editor?.chain().focus().toggleCode().run()"
-        >
-          &lt;/&gt;
-        </button>
-        <span class="sep"></span>
-        <button
-          :class="{ on: isActive('bulletList') }"
-          @click="editor?.chain().focus().toggleBulletList().run()"
-        >
-          {{ t("editor.listBullet") }}
-        </button>
-        <button
-          :class="{ on: isActive('orderedList') }"
-          @click="editor?.chain().focus().toggleOrderedList().run()"
-        >
-          {{ t("editor.listOrdered") }}
-        </button>
-        <button
-          :class="{ on: isActive('blockquote') }"
-          @click="editor?.chain().focus().toggleBlockquote().run()"
-        >
-          {{ t("editor.quote") }}
-        </button>
-        <button
-          :class="{ on: isActive('codeBlock') }"
-          @click="editor?.chain().focus().toggleCodeBlock().run()"
-        >
-          {{ t("editor.code") }}
-        </button>
-        <span class="sep"></span>
-        <button :class="{ on: isActive('link') }" @click="setLink">
-          {{ t("editor.link") }}
-        </button>
-        <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
-        <button :class="{ on: isActive('table') }" @click="insertTable">
-          {{ t("editor.table") }}
-        </button>
-        <span class="sep"></span>
-        <button @click="editor?.chain().focus().undo().run()">
-          {{ t("editor.undo") }}
-        </button>
-        <button @click="editor?.chain().focus().redo().run()">
-          {{ t("editor.redo") }}
-        </button>
-      </div>
-      <span class="status">
-        {{
-          flashMessage ||
-          (status === "saving"
-            ? t("editor.saving")
-            : status === "saved"
-              ? t("editor.saved")
-              : dirty
-                ? t("editor.unsaved")
-                : "")
-        }}
-      </span>
-    </div>
-    <div v-if="isActive('table')" class="table-toolbar">
-      <button @click="editor?.chain().focus().addRowAfter().run()">
-        {{ t("editor.addRow") }}
-      </button>
-      <button @click="editor?.chain().focus().addColumnAfter().run()">
-        {{ t("editor.addCol") }}
-      </button>
-      <button @click="editor?.chain().focus().deleteRow().run()">
-        {{ t("editor.delRow") }}
-      </button>
-      <button @click="editor?.chain().focus().deleteColumn().run()">
-        {{ t("editor.delCol") }}
-      </button>
-      <button @click="editor?.chain().focus().deleteTable().run()">
-        {{ t("editor.delTable") }}
-      </button>
-    </div>
 
     <div class="editor-body">
-      <div ref="scrollEl" class="editor-scroll">
-        <div class="editor-crumb">{{ store.note?.path }}</div>
-        <EditorContent :editor="editor" />
+      <div class="editor-main">
+        <div class="editor-toolbar">
+          <div class="toolbar-group">
+            <button
+              :class="{ on: isActive('heading', { level: 1 }) }"
+              @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()"
+            >
+              H1
+            </button>
+            <button
+              :class="{ on: isActive('heading', { level: 2 }) }"
+              @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()"
+            >
+              H2
+            </button>
+            <button
+              :class="{ on: isActive('heading', { level: 3 }) }"
+              @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()"
+            >
+              H3
+            </button>
+            <span class="sep"></span>
+            <button
+              :class="{ on: isActive('bold') }"
+              @click="editor?.chain().focus().toggleBold().run()"
+            >
+              <b>B</b>
+            </button>
+            <button
+              :class="{ on: isActive('italic') }"
+              @click="editor?.chain().focus().toggleItalic().run()"
+            >
+              <i>I</i>
+            </button>
+            <button
+              :class="{ on: isActive('strike') }"
+              @click="editor?.chain().focus().toggleStrike().run()"
+            >
+              <s>S</s>
+            </button>
+            <button
+              :class="{ on: isActive('code') }"
+              @click="editor?.chain().focus().toggleCode().run()"
+            >
+              &lt;/&gt;
+            </button>
+            <span class="sep"></span>
+            <button
+              :class="{ on: isActive('bulletList') }"
+              @click="editor?.chain().focus().toggleBulletList().run()"
+            >
+              {{ t("editor.listBullet") }}
+            </button>
+            <button
+              :class="{ on: isActive('orderedList') }"
+              @click="editor?.chain().focus().toggleOrderedList().run()"
+            >
+              {{ t("editor.listOrdered") }}
+            </button>
+            <button
+              :class="{ on: isActive('blockquote') }"
+              @click="editor?.chain().focus().toggleBlockquote().run()"
+            >
+              {{ t("editor.quote") }}
+            </button>
+            <button
+              :class="{ on: isActive('codeBlock') }"
+              @click="editor?.chain().focus().toggleCodeBlock().run()"
+            >
+              {{ t("editor.code") }}
+            </button>
+            <span class="sep"></span>
+            <button :class="{ on: isActive('link') }" @click="setLink">
+              {{ t("editor.link") }}
+            </button>
+            <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
+            <button :class="{ on: isActive('table') }" @click="insertTable">
+              {{ t("editor.table") }}
+            </button>
+            <span class="sep"></span>
+            <button @click="editor?.chain().focus().undo().run()">
+              {{ t("editor.undo") }}
+            </button>
+            <button @click="editor?.chain().focus().redo().run()">
+              {{ t("editor.redo") }}
+            </button>
+          </div>
+          <span class="status">
+            {{
+              flashMessage ||
+              (status === "saving"
+                ? t("editor.saving")
+                : status === "saved"
+                  ? t("editor.saved")
+                  : dirty
+                    ? t("editor.unsaved")
+                    : "")
+            }}
+          </span>
+        </div>
+        <div ref="scrollEl" class="editor-scroll" @scroll="updateTableMenu">
+          <div class="editor-crumb">{{ store.note?.path }}</div>
+          <EditorContent :editor="editor" />
+        </div>
       </div>
+
       <div class="editor-side" v-if="showToc || showAI || showHistory || store.note">
         <TocPanel v-if="showToc" :items="toc" @navigate="navigateHeading" />
         <AiPanel
