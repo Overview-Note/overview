@@ -72,6 +72,17 @@ async function deleteNode(node: TreeNode) {
     await dialogs.askConfirm(t("sidebar.deleteFailed"), (e as Error).message, false);
   }
 }
+
+async function moveNode(node: TreeNode, target: string) {
+  try {
+    const to = await store.moveNode(node, target);
+    if (activePath.value === node.path) {
+      router.push({ name: "note", params: { path: to } });
+    }
+  } catch (e) {
+    await dialogs.askConfirm(t("sidebar.moveFailed"), (e as Error).message, false);
+  }
+}
 </script>
 
 <template>
@@ -87,6 +98,7 @@ async function deleteNode(node: TreeNode) {
         @create-folder="createFolder"
         @rename="renameNode"
         @delete="deleteNode"
+        @move="moveNode"
       />
       <div v-if="store.tree.length === 0" class="muted">{{ t("sidebar.empty") }}</div>
     </nav>

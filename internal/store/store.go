@@ -138,6 +138,22 @@ func (s *Store) Write(_ context.Context, rel, body, expectedVersion string, publ
 	return buildNote(toSlashPath(rel), raw, info), nil
 }
 
+// WriteRaw writes raw bytes to a note path without front-matter processing.
+// It is used by archive import to preserve files exactly as exported.
+func (s *Store) WriteRaw(_ context.Context, rel string, raw []byte) error {
+	if !isMarkdown(rel) {
+		rel += ".md"
+	}
+	full, err := resolve(s.notesDir, rel)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		return err
+	}
+	return atomicWrite(full, raw)
+}
+
 // Delete removes a note or folder recursively.
 func (s *Store) Delete(_ context.Context, rel string) error {
 	full, err := resolve(s.notesDir, rel)
@@ -294,6 +310,36 @@ func (s *Store) Save(_ context.Context, name string, r io.Reader) (core.Asset, e
 		Size:        size,
 		ContentType: contentType(full),
 	}, nil
+}
+
+// Restore writes an asset at an explicit vault-relative path. It is used by
+// archive import to preserve original attachment paths.
+func (s *Store) Restore(_ context.Context, rel string, r io.Reader) error {
+	full, err := resolve(s.assetsDir, rel)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(full), ".overview-tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := io.Copy(tmp, r); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, full)
 }
 
 // ListAssets returns metadata for every stored asset.

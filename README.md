@@ -86,6 +86,17 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 
 ## Quick Start
 
+### Try the demo (no setup)
+
+```bash
+git clone https://github.com/Overview-Note/overview.git
+cd overview
+make demo            # serves ./demo on http://localhost:5230, auth disabled
+```
+
+The `demo/` vault showcases code highlighting, task lists, KaTeX math, Mermaid
+diagrams, footnotes and wiki-links. See [`demo/README.md`](demo/README.md).
+
 ### Docker (recommended)
 
 ```bash
@@ -250,6 +261,8 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] MCP server, AI assistant (chat / organize / complete)
 - [x] Version history, trash, incremental indexing + file watcher
 - [x] S3 assets, PWA, OpenAPI docs, settings center
+- [x] Code highlighting, task lists, math (KaTeX), Mermaid diagrams, footnotes
+- [x] Drag-and-drop tree, ZIP import/export, browser quick capture, focus mode
 - [ ] Mobile-native app
 - [ ] Collaboration / real-time editing
 - [ ] Graph view & tags management UI

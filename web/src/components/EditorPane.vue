@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { BubbleMenu, EditorContent, useEditor } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
@@ -10,17 +10,36 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableHeader from "@tiptap/extension-table-header";
 import TableCell from "@tiptap/extension-table-cell";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { TableOfContents } from "@tiptap/extension-table-of-contents";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import { marked } from "marked";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 import { api, ApiError } from "../api";
+import { lowlight } from "../editor/lowlight";
+import {
+  BlockMath,
+  FootnoteDefs,
+  FootnoteRef,
+  InlineMath,
+  MermaidBlock,
+} from "../editor/nodes";
 import { SlashCommand, slashItems, type SlashItem } from "../editor/slash";
 import { compressImage } from "../media/compress";
 import type { TocItem } from "../editor/toc";
 import { t } from "../i18n";
 import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
+import { mermaidToDivs, renderMermaid } from "../markdown/diagrams";
+import { footnotesToHtml } from "../markdown/footnotes";
+import { katexToHtml } from "../markdown/math";
+import {
+  registerFootnoteRules,
+  registerMathRules,
+  registerMermaidRules,
+} from "../markdown/rules";
 import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
 import { useDialogStore } from "../stores/dialog";
 import { useSettingsStore } from "../stores/settings";
@@ -69,10 +88,13 @@ const turndown = new TurndownService({
 });
 turndown.use(gfm);
 registerWikiRule(turndown);
+registerMathRules(turndown);
+registerMermaidRules(turndown);
+registerFootnoteRules(turndown);
 
 function mdToHtml(md: string): string {
-  const html = marked.parse(wikiToHtml(md), { async: false }) as string;
-  return resolveAssetSrc(html);
+  const html = marked.parse(wikiToHtml(footnotesToHtml(md)), { async: false }) as string;
+  return mermaidToDivs(katexToHtml(resolveAssetSrc(html)));
 }
 
 async function uploadAndInsert(original: File) {
@@ -134,8 +156,19 @@ const editor = useEditor({
   extensions: [
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4] },
-      codeBlock: { HTMLAttributes: { class: "code-block" } },
+      codeBlock: false,
     }),
+    CodeBlockLowlight.configure({
+      lowlight,
+      HTMLAttributes: { class: "code-block" },
+    }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    InlineMath,
+    BlockMath,
+    MermaidBlock,
+    FootnoteRef,
+    FootnoteDefs,
     Image.configure({ inline: false, allowBase64: false }),
     Link.configure({ openOnClick: false, autolink: true }),
     Placeholder.configure({ placeholder: t("editor.placeholder") }),
@@ -209,6 +242,7 @@ async function load(path: string) {
     suppress = false;
     dirty.value = false;
     status.value = "idle";
+    void nextTick(() => renderMermaid(scrollEl.value));
   } catch {
     // store.error already set
   }
@@ -328,6 +362,38 @@ function insertTable() {
     .focus()
     .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
     .run();
+}
+
+function insertInlineMath() {
+  void (async () => {
+    const tex = await dialogs.ask(t("editor.mathPrompt"), "");
+    if (!tex) return;
+    editor.value?.chain().focus().insertInlineMath(tex).run();
+  })();
+}
+
+function insertBlockMath() {
+  void (async () => {
+    const tex = await dialogs.ask(t("editor.mathPrompt"), "");
+    if (!tex) return;
+    editor.value?.chain().focus().insertBlockMath(tex).run();
+  })();
+}
+
+function insertMermaid() {
+  void (async () => {
+    const source = await dialogs.ask(
+      t("editor.mermaidPrompt"),
+      "graph TD\n  A[开始] --> B[结束]",
+    );
+    if (!source) return;
+    editor.value
+      ?.chain()
+      .focus()
+      .insertContent({ type: "mermaidBlock", attrs: { source } })
+      .run();
+    void nextTick(() => renderMermaid(scrollEl.value));
+  })();
 }
 
 function onPickImage(event: Event) {
@@ -564,6 +630,13 @@ onBeforeUnmount(() => {
               {{ t("editor.code") }}
             </button>
             <span class="sep"></span>
+            <button
+              :class="{ on: isActive('taskList') }"
+              @click="editor?.chain().focus().toggleTaskList().run()"
+            >
+              {{ t("editor.taskList") }}
+            </button>
+            <span class="sep"></span>
             <button :class="{ on: isActive('link') }" @click="setLink">
               {{ t("editor.link") }}
             </button>
@@ -571,6 +644,9 @@ onBeforeUnmount(() => {
             <button :class="{ on: isActive('table') }" @click="insertTable">
               {{ t("editor.table") }}
             </button>
+            <button @click="insertInlineMath">{{ t("editor.mathInline") }}</button>
+            <button @click="insertBlockMath">{{ t("editor.mathBlock") }}</button>
+            <button @click="insertMermaid">{{ t("editor.mermaid") }}</button>
             <span class="sep"></span>
             <button @click="editor?.chain().focus().undo().run()">
               {{ t("editor.undo") }}

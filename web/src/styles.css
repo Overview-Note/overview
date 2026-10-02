@@ -533,6 +533,17 @@ button:disabled {
   font-weight: 550;
 }
 
+.tree-row[draggable="true"] {
+  cursor: grab;
+}
+
+.tree-row.drag-over {
+  background: var(--accent-soft);
+  outline: 1px dashed var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
 /* Folder rows: level-0 group headers are the strongest, deeper folders
    progressively lighter. */
 .tree-row.folder {
@@ -1092,6 +1103,160 @@ button:disabled {
   background: var(--accent-soft);
   border-radius: 4px;
   padding: 0.05em 0.32em;
+  text-decoration: none;
+}
+
+/* Task lists ------------------------------------------------------------- */
+.tiptap-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.2em;
+}
+
+.tiptap-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55em;
+}
+
+.tiptap-content ul[data-type="taskList"] li > label {
+  margin-top: 0.28em;
+  user-select: none;
+}
+
+.tiptap-content ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tiptap-content ul[data-type="taskList"] input[type="checkbox"] {
+  width: 1em;
+  height: 1em;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.tiptap-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+/* Math (KaTeX) ----------------------------------------------------------- */
+.tiptap-content .math-inline {
+  padding: 0 0.15em;
+}
+
+.tiptap-content .math-block {
+  overflow-x: auto;
+  padding: 0.4em 0;
+  text-align: center;
+}
+
+.tiptap-content .math-block.ProseMirror-selectednode,
+.tiptap-content .math-inline.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.math-error {
+  color: #c0392b;
+}
+
+/* Mermaid diagrams ------------------------------------------------------- */
+.tiptap-content .mermaid {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.tiptap-content .mermaid.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
+.tiptap-content .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.tiptap-content .mermaid-source {
+  display: none;
+}
+
+.tiptap-content .mermaid.mermaid-error {
+  color: #c0392b;
+  text-align: left;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* Code block syntax highlighting (lowlight / highlight.js tokens) -------- */
+.tiptap-content pre code .hljs-comment,
+.tiptap-content pre code .hljs-quote {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.tiptap-content pre code .hljs-keyword,
+.tiptap-content pre code .hljs-selector-tag,
+.tiptap-content pre code .hljs-built_in,
+.tiptap-content pre code .hljs-name,
+.tiptap-content pre code .hljs-tag {
+  color: #a626a4;
+}
+
+.tiptap-content pre code .hljs-string,
+.tiptap-content pre code .hljs-attr,
+.tiptap-content pre code .hljs-template-tag,
+.tiptap-content pre code .hljs-addition {
+  color: #50a14f;
+}
+
+.tiptap-content pre code .hljs-number,
+.tiptap-content pre code .hljs-literal,
+.tiptap-content pre code .hljs-type,
+.tiptap-content pre code .hljs-params {
+  color: #986801;
+}
+
+.tiptap-content pre code .hljs-title,
+.tiptap-content pre code .hljs-section,
+.tiptap-content pre code .hljs-function .hljs-title,
+.tiptap-content pre code .hljs-title.function_ {
+  color: #4078f2;
+}
+
+.tiptap-content pre code .hljs-attribute,
+.tiptap-content pre code .hljs-variable,
+.tiptap-content pre code .hljs-template-variable {
+  color: #e45649;
+}
+
+.tiptap-content pre code .hljs-symbol,
+.tiptap-content pre code .hljs-bullet,
+.tiptap-content pre code .hljs-link,
+.tiptap-content pre code .hljs-meta {
+  color: #4078f2;
+}
+
+.tiptap-content pre code .hljs-deletion {
+  color: #e45649;
+  background: rgba(228, 86, 73, 0.12);
+}
+
+.tiptap-content pre code .hljs-emphasis {
+  font-style: italic;
+}
+
+.tiptap-content pre code .hljs-strong {
+  font-weight: 700;
+}
+
+/* Footnote footnotes (marked GFM) ---------------------------------------- */
+.tiptap-content sup a,
+.tiptap-content .footnote-ref a {
   text-decoration: none;
 }
 
@@ -1926,4 +2091,70 @@ mark {
   .editor-scroll {
     padding: 32px 24px 120px;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Focus mode
+   -------------------------------------------------------------------------- */
+
+html[data-focus="on"] .topbar,
+html[data-focus="on"] .sidebar {
+  display: none;
+}
+
+html[data-focus="on"] .content {
+  max-width: none;
+}
+
+html[data-focus="on"] .editor-main {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+html[data-focus="on"] .note-bar::after {
+  content: "Esc";
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+/* --------------------------------------------------------------------------
+   Shortcuts dialog
+   -------------------------------------------------------------------------- */
+
+.shortcuts-dialog {
+  width: min(520px, calc(100vw - 40px));
+  max-height: min(80vh, 720px);
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-3);
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 6px 0;
+  font-size: var(--text-sm);
+}
+
+.shortcut-row kbd {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 5px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+
+.shortcut-row span {
+  color: var(--text-muted);
 }

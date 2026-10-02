@@ -3,6 +3,7 @@ import EmptyState from "./components/EmptyState.vue";
 import EditorPane from "./components/EditorPane.vue";
 import { useAuthStore } from "./stores/auth";
 import { useSiteStore } from "./stores/site";
+import CaptureView from "./views/CaptureView.vue";
 import LoginView from "./views/LoginView.vue";
 import PublicHomeView from "./views/PublicHomeView.vue";
 import PublicNoteView from "./views/PublicNoteView.vue";
@@ -20,6 +21,7 @@ export const router = createRouter({
       props: true,
     },
     { path: "/trash", name: "trash", component: TrashView },
+    { path: "/capture", name: "capture", component: CaptureView, meta: { plain: true } },
     { path: "/login", name: "login", component: LoginView, meta: { plain: true } },
     { path: "/setup", name: "setup", component: SetupView, meta: { plain: true } },
     {
@@ -47,6 +49,7 @@ router.beforeEach(async (to) => {
   if (site.render) {
     if (to.name === "home") return { name: "public-home" };
     if (to.name === "note") return { name: "public", params: { path: to.params.path } };
+    if (to.name === "capture") return { name: "public-home" };
     return true;
   }
 

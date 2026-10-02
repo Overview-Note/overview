@@ -7,11 +7,13 @@ export type FontSize = "compact" | "default" | "relaxed" | "large";
 const KEY_THEME = "overview.theme";
 const KEY_FONT = "overview.fontSize";
 const KEY_COMPRESS = "overview.compress";
+const KEY_FOCUS = "overview.focus";
 
 export const useSettingsStore = defineStore("settings", () => {
   const theme = ref<ThemeMode>(readTheme());
   const fontSize = ref<FontSize>(readFont());
   const compressImages = ref(localStorage.getItem(KEY_COMPRESS) !== "off");
+  const focusMode = ref(localStorage.getItem(KEY_FOCUS) === "on");
 
   const systemDark = ref(
     window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
@@ -25,11 +27,12 @@ export const useSettingsStore = defineStore("settings", () => {
   );
 
   watch(
-    [resolvedTheme, fontSize],
+    [resolvedTheme, fontSize, focusMode],
     () => {
       const root = document.documentElement;
       root.dataset.theme = resolvedTheme.value;
       root.dataset.font = fontSize.value;
+      root.dataset.focus = focusMode.value ? "on" : "off";
     },
     { immediate: true },
   );
@@ -49,14 +52,26 @@ export const useSettingsStore = defineStore("settings", () => {
     localStorage.setItem(KEY_COMPRESS, on ? "on" : "off");
   }
 
+  function setFocus(on: boolean) {
+    focusMode.value = on;
+    localStorage.setItem(KEY_FOCUS, on ? "on" : "off");
+  }
+
+  function toggleFocus() {
+    setFocus(!focusMode.value);
+  }
+
   return {
     theme,
     fontSize,
     compressImages,
+    focusMode,
     resolvedTheme,
     setTheme,
     setFontSize,
     setCompress,
+    setFocus,
+    toggleFocus,
   };
 });
 

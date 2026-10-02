@@ -70,6 +70,13 @@ type Index interface {
 	PublicBody(ctx context.Context, path string) (string, error)
 }
 
+// RawWriter is an optional capability for writing raw note bytes at an
+// explicit path without frontmatter processing. It is used by archive import to
+// restore files faithfully.
+type RawWriter interface {
+	WriteRaw(ctx context.Context, rel string, raw []byte) error
+}
+
 // PathLocator exposes the absolute filesystem path of a vault-relative path.
 // It is implemented by filesystem-backed repositories to support operations
 // like moving entries to the trash.
@@ -103,4 +110,10 @@ type AssetStore interface {
 	ListAssets(ctx context.Context) ([]Asset, error)
 	// DeleteAsset removes the asset at rel.
 	DeleteAsset(ctx context.Context, rel string) error
+}
+
+// AssetRestorer is an optional capability implemented by asset stores that can
+// import an asset at an explicit vault-relative path (used by archive import).
+type AssetRestorer interface {
+	Restore(ctx context.Context, rel string, r io.Reader) error
 }

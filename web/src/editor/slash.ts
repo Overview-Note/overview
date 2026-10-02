@@ -64,6 +64,12 @@ export function slashItems(tr: (key: string) => string): SlashItem[] {
           .run(),
     },
     {
+      title: tr("slash.task"),
+      hint: tr("slash.taskhint"),
+      run: (editor, range) =>
+        editor.chain().focus().deleteRange(range).toggleTaskList().run(),
+    },
+    {
       title: tr("slash.hr"),
       hint: tr("slash.hrhint"),
       run: (editor, range) =>

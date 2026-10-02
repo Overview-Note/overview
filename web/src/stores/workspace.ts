@@ -74,6 +74,18 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     return to;
   }
 
+  async function moveNode(node: TreeNode, targetFolder: string): Promise<string> {
+    const dir = targetFolder;
+    const name = node.path.includes("/")
+      ? node.path.slice(node.path.lastIndexOf("/") + 1)
+      : node.path;
+    const to = `${dir ? dir + "/" : ""}${name}`;
+    if (to === node.path) return to;
+    await api.rename(node.path, to);
+    await refreshTree();
+    return to;
+  }
+
   async function removeNode(node: TreeNode): Promise<void> {
     await api.deleteNode(node.path);
     await refreshTree();
@@ -93,6 +105,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     createNote,
     createFolder,
     renameNode,
+    moveNode,
     removeNode,
   };
 });

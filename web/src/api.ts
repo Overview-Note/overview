@@ -288,6 +288,21 @@ export const api = {
     if (!res.ok) throw await parseError(res);
   },
 
+  async importArchive(
+    file: File,
+  ): Promise<{ notes: number; assets: number; skipped: number }> {
+    const res = await fetch(`${BASE}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/zip" },
+      body: file,
+    });
+    return json<{ notes: number; assets: number; skipped: number }>(res);
+  },
+
+  exportArchiveURL(): string {
+    return `${BASE}/export`;
+  },
+
   async search(q: string): Promise<SearchHit[]> {
     const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}`);
     const data = await json<{ results: SearchHit[] }>(res);

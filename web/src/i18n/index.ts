@@ -1,9 +1,11 @@
 import { ref } from "vue";
 
-export type Locale = "zh" | "en";
+export type Locale = "zh" | "en" | "zh-TW" | "ja" | "de";
 
 const STORAGE_KEY = "overview.locale";
 
+// Base locales carry the full key set; extra locales may override a subset and
+// fall back to English for anything missing.
 const messages: Record<Locale, Record<string, string>> = {
   zh: {
     "app.loading": "载入中…",
@@ -27,6 +29,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "sidebar.createFailed": "创建失败",
     "sidebar.renameFailed": "重命名失败",
     "sidebar.deleteFailed": "删除失败",
+    "sidebar.moveFailed": "移动失败",
 
     "tree.newNoteHere": "在此新建笔记",
     "tree.newFolderHere": "在此新建文件夹",
@@ -44,6 +47,12 @@ const messages: Record<Locale, Record<string, string>> = {
     "editor.compressToggle": "上传前压缩图片（可切换，默认开启）",
     "editor.compressed": "已压缩，节省 {percent}%",
     "editor.table": "表格",
+    "editor.taskList": "☑ 待办",
+    "editor.mathInline": "公式",
+    "editor.mathBlock": "块公式",
+    "editor.mathPrompt": "输入 LaTeX 公式",
+    "editor.mermaid": "图表",
+    "editor.mermaidPrompt": "输入 Mermaid 图表代码",
     "editor.toc": "大纲",
     "visibility.title": "可见性",
     "visibility.private": "私有",
@@ -59,6 +68,16 @@ const messages: Record<Locale, Record<string, string>> = {
     "public.empty": "暂无公开笔记",
     "public.allNotes": "全部公开笔记",
     "public.notFound": "页面不存在或未公开",
+    "capture.title": "快速捕获",
+    "capture.noteTitle": "标题",
+    "capture.folder": "保存到文件夹",
+    "capture.folderHint": "留空保存到根目录",
+    "capture.url": "来源链接",
+    "capture.text": "摘录内容",
+    "capture.save": "保存笔记",
+    "capture.saving": "保存中…",
+    "capture.cancel": "取消",
+    "capture.untitled": "未命名",
     "settings.title": "设置",
     "settings.appearance": "外观",
     "settings.theme": "主题",
@@ -85,6 +104,28 @@ const messages: Record<Locale, Record<string, string>> = {
     "settings.aiHint":
       "兼容 OpenAI 的接口（OpenAI / DeepSeek / Ollama / vLLM 等）。配置后 AI 助手立即可用。",
     "settings.aiAdminOnly": "仅管理员可修改 AI 配置。",
+    "settings.focus": "专注",
+    "shortcuts.title": "键盘快捷键",
+    "shortcuts.groupGlobal": "全局",
+    "shortcuts.groupEditing": "编辑",
+    "shortcuts.search": "全局搜索",
+    "shortcuts.focus": "切换专注模式",
+    "shortcuts.help": "打开快捷键帮助",
+    "shortcuts.bold": "加粗",
+    "shortcuts.italic": "斜体",
+    "shortcuts.code": "行内代码",
+    "shortcuts.slash": "唤出斜杠命令",
+    "shortcuts.exitFocus": "退出专注模式",
+    "settings.capture": "快速捕获",
+    "settings.captureHint":
+      "把链接拖到书签栏，浏览任意网页时一键把标题、链接与选中文字保存到 Overview。",
+    "settings.copyBookmarklet": "复制书签脚本",
+    "settings.data": "数据",
+    "settings.dataHint": "导出全部笔记与附件的 ZIP，或从 ZIP 恢复。",
+    "settings.export": "导出 ZIP",
+    "settings.import": "导入 ZIP",
+    "settings.importing": "导入中…",
+    "settings.importDone": "已导入 {notes} 篇笔记、{assets} 个附件",
     "settings.save": "保存",
     "settings.saving": "保存中…",
     "settings.saved": "已保存",
@@ -177,6 +218,8 @@ const messages: Record<Locale, Record<string, string>> = {
     "slash.codehint": "代码片段",
     "slash.table": "表格",
     "slash.tablehint": "插入 3×3 表格",
+    "slash.task": "待办列表",
+    "slash.taskhint": "可勾选的任务清单",
     "slash.hr": "分割线",
     "slash.hrhint": "水平分割线",
   },
@@ -202,6 +245,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "sidebar.createFailed": "Create failed",
     "sidebar.renameFailed": "Rename failed",
     "sidebar.deleteFailed": "Delete failed",
+    "sidebar.moveFailed": "Move failed",
 
     "tree.newNoteHere": "New note here",
     "tree.newFolderHere": "New folder here",
@@ -219,6 +263,12 @@ const messages: Record<Locale, Record<string, string>> = {
     "editor.compressToggle": "Compress images before upload (toggle; on by default)",
     "editor.compressed": "Compressed, saved {percent}%",
     "editor.table": "Table",
+    "editor.taskList": "☑ Tasks",
+    "editor.mathInline": "Math",
+    "editor.mathBlock": "Block math",
+    "editor.mathPrompt": "Enter LaTeX",
+    "editor.mermaid": "Diagram",
+    "editor.mermaidPrompt": "Enter Mermaid source",
     "editor.toc": "Outline",
     "visibility.title": "Visibility",
     "visibility.private": "Private",
@@ -234,6 +284,16 @@ const messages: Record<Locale, Record<string, string>> = {
     "public.empty": "No public notes yet",
     "public.allNotes": "All public notes",
     "public.notFound": "Page not found or not public",
+    "capture.title": "Quick capture",
+    "capture.noteTitle": "Title",
+    "capture.folder": "Save to folder",
+    "capture.folderHint": "Leave empty for the root",
+    "capture.url": "Source URL",
+    "capture.text": "Excerpt",
+    "capture.save": "Save note",
+    "capture.saving": "Saving…",
+    "capture.cancel": "Cancel",
+    "capture.untitled": "Untitled",
     "settings.title": "Settings",
     "settings.appearance": "Appearance",
     "settings.theme": "Theme",
@@ -261,6 +321,29 @@ const messages: Record<Locale, Record<string, string>> = {
     "settings.aiHint":
       "Any OpenAI-compatible endpoint (OpenAI / DeepSeek / Ollama / vLLM). The AI assistant becomes available immediately after saving.",
     "settings.aiAdminOnly": "Only administrators can edit AI configuration.",
+    "settings.focus": "Focus",
+    "shortcuts.title": "Keyboard shortcuts",
+    "shortcuts.groupGlobal": "Global",
+    "shortcuts.groupEditing": "Editing",
+    "shortcuts.search": "Global search",
+    "shortcuts.focus": "Toggle focus mode",
+    "shortcuts.help": "Open shortcut help",
+    "shortcuts.bold": "Bold",
+    "shortcuts.italic": "Italic",
+    "shortcuts.code": "Inline code",
+    "shortcuts.slash": "Open slash commands",
+    "shortcuts.exitFocus": "Exit focus mode",
+    "settings.capture": "Quick capture",
+    "settings.captureHint":
+      "Drag the bookmarklet to your bookmarks bar to save a page's title, URL and selection to Overview in one click.",
+    "settings.copyBookmarklet": "Copy bookmarklet",
+    "settings.data": "Data",
+    "settings.dataHint":
+      "Export all notes and attachments as a ZIP, or restore from one.",
+    "settings.export": "Export ZIP",
+    "settings.import": "Import ZIP",
+    "settings.importing": "Importing…",
+    "settings.importDone": "Imported {notes} notes and {assets} assets",
     "settings.save": "Save",
     "settings.saving": "Saving…",
     "settings.saved": "Saved",
@@ -355,15 +438,105 @@ const messages: Record<Locale, Record<string, string>> = {
     "slash.codehint": "Code snippet",
     "slash.table": "Table",
     "slash.tablehint": "Insert a 3×3 table",
+    "slash.task": "Task list",
+    "slash.taskhint": "Checklist with checkboxes",
     "slash.hr": "Divider",
     "slash.hrhint": "Horizontal rule",
   },
+  "zh-TW": {
+    "topbar.users": "使用者管理",
+    "topbar.logout": "登出",
+    "topbar.language": "語言",
+    "sidebar.newNote": "＋ 筆記",
+    "sidebar.newFolder": "＋ 資料夾",
+    "sidebar.search": "搜尋…",
+    "sidebar.empty": "還沒有內容，點擊上方新建",
+    "editor.placeholder": "開始記錄，輸入 / 觸發命令，或貼上 / 拖入圖片…",
+    "editor.taskList": "☑ 待辦",
+    "editor.mathInline": "公式",
+    "editor.mathBlock": "區塊公式",
+    "editor.mermaid": "圖表",
+    "visibility.private": "私人",
+    "visibility.public": "公開",
+    "settings.title": "設定",
+    "settings.appearance": "外觀",
+    "settings.theme": "主題",
+    "settings.language": "語言",
+    "settings.editor": "編輯器",
+    "capture.title": "快速擷取",
+    "capture.save": "儲存筆記",
+    "capture.cancel": "取消",
+  },
+  ja: {
+    "topbar.users": "ユーザー管理",
+    "topbar.logout": "ログアウト",
+    "topbar.language": "言語",
+    "sidebar.newNote": "＋ ノート",
+    "sidebar.newFolder": "＋ フォルダ",
+    "sidebar.search": "検索…",
+    "sidebar.empty": "まだ何もありません。上から新規作成してください",
+    "editor.placeholder": "書き始める、/ でコマンド、画像を貼り付け／ドロップ…",
+    "editor.taskList": "☑ タスク",
+    "editor.mathInline": "数式",
+    "editor.mathBlock": "ブロック数式",
+    "editor.mermaid": "図",
+    "visibility.private": "非公開",
+    "visibility.public": "公開",
+    "settings.title": "設定",
+    "settings.appearance": "外観",
+    "settings.theme": "テーマ",
+    "settings.language": "言語",
+    "settings.editor": "エディター",
+    "capture.title": "クイックキャプチャ",
+    "capture.save": "ノートを保存",
+    "capture.cancel": "キャンセル",
+  },
+  de: {
+    "topbar.users": "Benutzerverwaltung",
+    "topbar.logout": "Abmelden",
+    "topbar.language": "Sprache",
+    "sidebar.newNote": "＋ Notiz",
+    "sidebar.newFolder": "＋ Ordner",
+    "sidebar.search": "Suchen…",
+    "sidebar.empty": "Noch keine Inhalte – oben neu anlegen",
+    "editor.placeholder": "Schreiben, / für Befehle, Bilder einfügen/ziehen…",
+    "editor.taskList": "☑ Aufgaben",
+    "editor.mathInline": "Formel",
+    "editor.mathBlock": "Blockformel",
+    "editor.mermaid": "Diagramm",
+    "visibility.private": "Privat",
+    "visibility.public": "Öffentlich",
+    "settings.title": "Einstellungen",
+    "settings.appearance": "Erscheinungsbild",
+    "settings.theme": "Design",
+    "settings.language": "Sprache",
+    "settings.editor": "Editor",
+    "capture.title": "Schnellerfassung",
+    "capture.save": "Notiz speichern",
+    "capture.cancel": "Abbrechen",
+  },
+};
+
+const ALL_LOCALES: Locale[] = ["zh", "en", "zh-TW", "ja", "de"];
+
+const HTML_LANG: Record<Locale, string> = {
+  zh: "zh-CN",
+  en: "en",
+  "zh-TW": "zh-TW",
+  ja: "ja",
+  de: "de",
 };
 
 function detect(): Locale {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === "zh" || saved === "en") return saved;
-  return navigator.language?.toLowerCase().startsWith("zh") ? "zh" : "en";
+  const saved = localStorage.getItem(STORAGE_KEY) as Locale | null;
+  if (saved && ALL_LOCALES.includes(saved)) return saved;
+  const lang = navigator.language?.toLowerCase() ?? "en";
+  if (lang.startsWith("zh")) {
+    return /(tw|hk|mo|hant)/.test(lang) ? "zh-TW" : "zh";
+  }
+  if (lang.startsWith("ja")) return "ja";
+  if (lang.startsWith("de")) return "de";
+  return "en";
 }
 
 export const locale = ref<Locale>(detect());
@@ -371,12 +544,12 @@ export const locale = ref<Locale>(detect());
 export function setLocale(next: Locale) {
   locale.value = next;
   localStorage.setItem(STORAGE_KEY, next);
-  document.documentElement.lang = next === "zh" ? "zh-CN" : "en";
+  document.documentElement.lang = HTML_LANG[next] ?? "en";
 }
 
 export function t(key: string, params?: Record<string, string | number>): string {
-  const table = messages[locale.value] ?? messages.zh;
-  let text = table[key] ?? messages.zh[key] ?? key;
+  const table = messages[locale.value] ?? messages.en;
+  let text = table[key] ?? messages.en[key] ?? messages.zh[key] ?? key;
   if (params) {
     for (const [name, value] of Object.entries(params)) {
       text = text.split(`{${name}}`).join(String(value));
@@ -387,7 +560,10 @@ export function t(key: string, params?: Record<string, string | number>): string
 
 export const locales: { value: Locale; label: string }[] = [
   { value: "zh", label: "中文" },
+  { value: "zh-TW", label: "繁體" },
   { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
+  { value: "de", label: "Deutsch" },
 ];
 
 setLocale(locale.value);

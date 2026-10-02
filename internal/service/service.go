@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Overview-Note/overview/internal/archivex"
 	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/history"
 	"github.com/Overview-Note/overview/internal/markdown"
@@ -25,17 +26,44 @@ var assetRefPattern = regexp.MustCompile(`(?:/api/v1/assets/|/api/assets/|/asset
 
 // Service is the application service facade.
 type Service struct {
-	repo    core.NoteRepository
-	index   core.Index
-	assets  core.AssetStore
-	history *history.Store
-	trash   *trash.Store
+	repo     core.NoteRepository
+	index    core.Index
+	assets   core.AssetStore
+	history  *history.Store
+	trash    *trash.Store
+	exporter *archivex.Exporter
+	importer *archivex.Importer
 }
 
 // New constructs a Service. history and trash may be nil to disable those
 // features.
 func New(repo core.NoteRepository, index core.Index, assets core.AssetStore, hist *history.Store, tr *trash.Store) *Service {
-	return &Service{repo: repo, index: index, assets: assets, history: hist, trash: tr}
+	return &Service{
+		repo:     repo,
+		index:    index,
+		assets:   assets,
+		history:  hist,
+		trash:    tr,
+		exporter: archivex.NewExporter(repo, assets),
+		importer: archivex.NewImporter(repo, assets),
+	}
+}
+
+// ExportArchive writes the whole vault (notes + assets) as a ZIP stream.
+func (s *Service) ExportArchive(ctx context.Context, w io.Writer) error {
+	return s.exporter.Export(ctx, w)
+}
+
+// ImportArchive restores a vault from a ZIP archive and rebuilds the index.
+func (s *Service) ImportArchive(ctx context.Context, r io.ReaderAt, size int64) (archivex.Result, error) {
+	res, err := s.importer.Import(ctx, r, size)
+	if err != nil {
+		return res, err
+	}
+	if err := s.Reindex(ctx); err != nil {
+		return res, err
+	}
+	return res, nil
 }
 
 // Tree assembles the directory tree from a cheap filesystem listing merged

@@ -1,29 +1,57 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import DialogHost from "./components/DialogHost.vue";
 import SearchBox from "./components/SearchBox.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
+import ShortcutsDialog from "./components/ShortcutsDialog.vue";
 import Sidebar from "./components/Sidebar.vue";
 import UsersDialog from "./components/UsersDialog.vue";
 import { t } from "./i18n";
 import { useAuthStore } from "./stores/auth";
+import { useSettingsStore } from "./stores/settings";
 import { useSiteStore } from "./stores/site";
 import { useWorkspaceStore } from "./stores/workspace";
 
 const store = useWorkspaceStore();
 const auth = useAuthStore();
+const settings = useSettingsStore();
 const site = useSiteStore();
 const route = useRoute();
 const router = useRouter();
 const usersOpen = ref(false);
 const settingsOpen = ref(false);
+const shortcutsOpen = ref(false);
 const userMenuOpen = ref(false);
 
 const plain = computed(() => site.render || route.meta.plain === true);
 const showSearch = computed(() => auth.mode !== "multi" || !!auth.user);
 
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === "F9") {
+    event.preventDefault();
+    settings.toggleFocus();
+    return;
+  }
+  if (event.key === "?" && !isTyping(event.target)) {
+    event.preventDefault();
+    shortcutsOpen.value = true;
+    return;
+  }
+  if (event.key === "Escape" && settings.focusMode) {
+    settings.setFocus(false);
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener("keydown", onKeydown);
   if (!auth.loaded) {
     await auth.loadState().catch(() => undefined);
   }
@@ -31,6 +59,8 @@ onMounted(async () => {
     await store.refreshTree().catch(() => undefined);
   }
 });
+
+onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
 watch(
   () => auth.user,
@@ -65,6 +95,21 @@ async function logout() {
         </div>
 
         <nav class="topbar-right">
+          <button
+            class="topbar-link"
+            :class="{ on: settings.focusMode }"
+            :title="t('shortcuts.focus')"
+            @click="settings.toggleFocus()"
+          >
+            {{ t("settings.focus") }}
+          </button>
+          <button
+            class="topbar-link"
+            :title="t('shortcuts.title')"
+            @click="shortcutsOpen = true"
+          >
+            ?
+          </button>
           <button class="topbar-link" @click="settingsOpen = true">
             {{ t("settings.title") }}
           </button>
@@ -109,5 +154,6 @@ async function logout() {
     <DialogHost />
     <UsersDialog :open="usersOpen" @close="usersOpen = false" />
     <SettingsDialog :open="settingsOpen" @close="settingsOpen = false" />
+    <ShortcutsDialog :open="shortcutsOpen" @close="shortcutsOpen = false" />
   </div>
 </template>

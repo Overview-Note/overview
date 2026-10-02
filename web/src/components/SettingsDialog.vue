@@ -5,12 +5,66 @@ import { locale, locales, setLocale, t, type Locale } from "../i18n";
 import { useAuthStore } from "../stores/auth";
 import type { FontSize, ThemeMode } from "../stores/settings";
 import { useSettingsStore } from "../stores/settings";
+import { useWorkspaceStore } from "../stores/workspace";
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ (e: "close"): void }>();
 
 const settings = useSettingsStore();
 const auth = useAuthStore();
+const store = useWorkspaceStore();
+
+const importInput = ref<HTMLInputElement | null>(null);
+const importBusy = ref(false);
+const importResult = ref("");
+const importError = ref("");
+
+const bookmarklet = computed(() => {
+  const base = `${location.origin}/capture`;
+  const js =
+    `javascript:(function(){` +
+    `var q='?url='+encodeURIComponent(location.href)` +
+    `+'&title='+encodeURIComponent(document.title)` +
+    `+'&text='+encodeURIComponent((window.getSelection&&String(window.getSelection()))||'');` +
+    `window.open('${base}'+q,'_blank');` +
+    `})();`;
+  return js;
+});
+
+async function copyBookmarklet() {
+  await navigator.clipboard?.writeText(bookmarklet.value).catch(() => undefined);
+}
+
+async function downloadExport() {
+  const link = document.createElement("a");
+  link.href = api.exportArchiveURL();
+  link.download = "";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function onPickImport(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  importBusy.value = true;
+  importResult.value = "";
+  importError.value = "";
+  try {
+    const res = await api.importArchive(file);
+    importResult.value = t("settings.importDone", {
+      notes: res.notes,
+      assets: res.assets,
+    });
+    await store.refreshTree();
+  } catch (e) {
+    importError.value = (e as Error).message;
+  } finally {
+    importBusy.value = false;
+  }
+}
 
 const aiEnabled = ref(false);
 const aiModel = ref("");
@@ -186,6 +240,38 @@ watch(
             </div>
           </template>
           <p v-else class="settings-hint">{{ t("settings.aiAdminOnly") }}</p>
+        </section>
+
+        <section class="settings-section">
+          <h4>{{ t("settings.capture") }}</h4>
+          <p class="settings-hint">{{ t("settings.captureHint") }}</p>
+          <div class="settings-save">
+            <button class="primary" @click="copyBookmarklet">
+              {{ t("settings.copyBookmarklet") }}
+            </button>
+          </div>
+        </section>
+
+        <section v-if="isAdmin" class="settings-section">
+          <h4>{{ t("settings.data") }}</h4>
+          <p class="settings-hint">{{ t("settings.dataHint") }}</p>
+          <div class="settings-save">
+            <button class="primary" @click="downloadExport">
+              {{ t("settings.export") }}
+            </button>
+            <button :disabled="importBusy" @click="importInput?.click()">
+              {{ importBusy ? t("settings.importing") : t("settings.import") }}
+            </button>
+          </div>
+          <p v-if="importResult" class="status-ok">{{ importResult }}</p>
+          <p v-if="importError" class="auth-error">{{ importError }}</p>
+          <input
+            ref="importInput"
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+            @change="onPickImport"
+          />
         </section>
 
         <footer class="settings-footer">

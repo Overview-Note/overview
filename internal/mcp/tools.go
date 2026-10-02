@@ -26,52 +26,7 @@ func str(desc string) map[string]any {
 }
 
 func toolDefs() []toolDef {
-	return []toolDef{
-		{
-			Name:        "notes_list",
-			Description: "List the note directory tree. Returns folders and notes with their paths and titles.",
-			InputSchema: obj(map[string]any{}),
-		},
-		{
-			Name:        "notes_search",
-			Description: "Full-text search across notes. Returns matching notes with highlighted snippets.",
-			InputSchema: obj(map[string]any{
-				"query": str("Search query (supports CJK substring matching)"),
-				"limit": map[string]any{"type": "integer", "description": "Max results (default 20)"},
-			}, "query"),
-		},
-		{
-			Name:        "notes_read",
-			Description: "Read a single note by its vault-relative path (e.g. '技术/Go/并发模型.md').",
-			InputSchema: obj(map[string]any{
-				"path": str("Vault-relative note path"),
-			}, "path"),
-		},
-		{
-			Name:        "notes_write",
-			Description: "Create or overwrite a note with Markdown content. Use baseVersion '*' to create a new note, or omit/empty to overwrite an existing one.",
-			InputSchema: obj(map[string]any{
-				"path":        str("Vault-relative note path (may omit the .md extension)"),
-				"body":        str("Markdown body"),
-				"baseVersion": str("Optimistic concurrency token; '*' creates only if absent"),
-				"public":      map[string]any{"type": "boolean", "description": "Expose the note for anonymous read-only access"},
-			}, "path", "body"),
-		},
-		{
-			Name:        "notes_delete",
-			Description: "Delete a note or folder by path.",
-			InputSchema: obj(map[string]any{
-				"path": str("Vault-relative path"),
-			}, "path"),
-		},
-		{
-			Name:        "notes_links",
-			Description: "Get the outgoing wiki-links and backlinks of a note.",
-			InputSchema: obj(map[string]any{
-				"path": str("Vault-relative note path"),
-			}, "path"),
-		},
-	}
+	return generatedToolDefs()
 }
 
 type callParams struct {
@@ -83,6 +38,10 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, *rp
 	var p callParams
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, &rpcError{Code: -32602, Message: "invalid params"}
+	}
+	// Only tools published in the OpenAPI-derived surface may be invoked.
+	if execFor(p.Name) == "" {
+		return nil, &rpcError{Code: -32602, Message: "unknown tool: " + p.Name}
 	}
 	result, err := s.runTool(ctx, p.Name, p.Arguments)
 	if err != nil {

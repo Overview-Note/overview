@@ -5,13 +5,16 @@ BINARY := bin/overview
 VERSION ?= 0.2.0-dev
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: help dev build build-web build-go test test-go test-web lint fmt vet clean docker site site-export
+.PHONY: help dev demo build build-web build-go test test-go test-web lint fmt vet clean docker site site-export
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 dev: ## Run backend (embedded frontend) on :5230
 	go run ./cmd/overview
+
+demo: ## Run a no-auth demo instance with the sample vault in demo/ on :5230
+	OVERVIEW_AUTH=none OVERVIEW_DATA_DIR=./demo go run ./cmd/overview
 
 build: build-web build-go ## Build frontend then single binary
 

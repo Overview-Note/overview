@@ -114,9 +114,17 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPI)
 	s.mux.HandleFunc("GET /api/docs", s.handleAPIDocs)
 
+	// SEO: crawler directives and (render-mode) sitemap.
+	s.mux.HandleFunc("GET /robots.txt", s.handleRobots)
+	s.mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
+
 	// Asset maintenance.
 	s.mux.HandleFunc("GET "+base+"/assets/orphans", s.handleOrphanAssets)
 	s.mux.HandleFunc("POST "+base+"/assets/orphans/purge", s.handlePurgeOrphans)
+
+	// Portable archive export / import.
+	s.mux.HandleFunc("GET "+base+"/export", s.handleExport)
+	s.mux.HandleFunc("POST "+base+"/import", s.handleImport)
 
 	// Version history.
 	s.mux.HandleFunc("GET "+base+"/history", s.handleHistoryList)

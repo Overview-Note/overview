@@ -422,6 +422,28 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - [ ] 表格就近浮动工具条（编辑体验优化）
 - [ ] 多级菜单第三级缩进微调
 
+**Phase 6 — 对标 memos 的体验补齐（v0.10）**
+
+> 来源：与 memos v0.31 的功能对标分析。优先级 P0（日常刚需）→ P2（加分项）。
+
+P0 — 写作刚需
+- [x] 代码块语法高亮（编辑与预览）
+- [x] 任务列表 / checkbox（GFM task list）
+- [x] 拖拽移动 / 排序笔记树
+
+P1 — 表达与集成
+- [x] 数学公式（KaTeX）
+- [x] Mermaid 图表 / diagrams
+- [x] ZIP 导入 / 导出（笔记 + 附件 + 元数据）
+- [x] 浏览器快速捕获（Bookmarklet / 扩展）
+- [x] MCP 工具由 OpenAPI 生成，并补齐 spec 缺失端点
+
+P2 — 打磨与生态
+- [x] GFM 脚注
+- [x] 专注模式 / 快捷键面板
+- [x] sitemap.xml / robots.txt（渲染与公开站）
+- [x] i18n 补充 ja / zh-TW / de
+
 ---
 
 ## 13. 附录
