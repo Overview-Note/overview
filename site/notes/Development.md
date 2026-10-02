@@ -8,7 +8,7 @@ public: true
 
 ## Layout
 
-- `cmd/overview` — server entry point (`overview`, `overview export`)
+- `cmd/overview` — entry point: server, static export, and the [[CLI]] commands
 - `internal/` — layered Go packages (see [[Architecture]])
 - `web/` — Vue 3 + Vite frontend, built into `internal/webui/dist` and embedded
 - `site/notes/` — the notes that generate this documentation site

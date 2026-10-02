@@ -108,3 +108,16 @@ func (c Config) EnsureDirs() error {
 	}
 	return nil
 }
+
+// WithDataDir returns a copy of the config rooted at a different data
+// directory, recomputing every derived path. It is used by the CLI so commands
+// can target a vault without exporting environment variables.
+func (c Config) WithDataDir(dataDir string) Config {
+	c.DataDir = dataDir
+	c.NotesDir = filepath.Join(dataDir, "notes")
+	c.AssetsDir = filepath.Join(dataDir, "assets")
+	c.DBPath = filepath.Join(dataDir, "overview.db")
+	c.HistoryDir = filepath.Join(dataDir, ".history")
+	c.TrashDir = filepath.Join(dataDir, ".trash")
+	return c
+}

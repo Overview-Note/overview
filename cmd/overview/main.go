@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Overview-Note/overview/internal/cli"
 	"github.com/Overview-Note/overview/internal/config"
 	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/history"
@@ -61,34 +62,25 @@ func envOr(key, def string) string {
 	return def
 }
 
-func printUsage() {
-	fmt.Print(`Overview - self-hosted Markdown knowledge base
-
-Usage:
-  overview                     start the server (default :5230)
-  overview export              export public notes to a static site
-  overview version             print the version
-  overview help                show this help
-
-Configuration is via OVERVIEW_* environment variables (see docs/DESIGN.md).
-`)
-}
-
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "serve":
+			serve()
+			return
 		case "export":
 			runExport()
 			return
 		case "version", "--version", "-v":
 			fmt.Println("overview", version)
 			return
-		case "help", "--help", "-h":
-			printUsage()
-			return
 		}
+		os.Exit(cli.Run(os.Args[1:], cli.Env{
+			Stdin:  os.Stdin,
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		}))
 	}
-
 	serve()
 }
 

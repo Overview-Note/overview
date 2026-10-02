@@ -85,6 +85,8 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Version history** (revision snapshots) and **trash** (soft delete + restore)
 - **Live sync** — a file watcher reindexes external edits
 - **Portable archive** — export/import the whole vault (notes + assets) as a ZIP
+- **CLI** — every vault operation (list, read, write, search, move, history, trash, …)
+  runs directly against `data/` with no server, for scripts and tools
 - **Pluggable storage** — local filesystem or any S3-compatible object store
 - **Settings center** — theme (system/light/dark), font size, language, compression, AI config
 - **Static export & sitemap/robots** — publish public notes as a read-only site
@@ -199,6 +201,29 @@ Tools: `notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`
 
 - Interactive docs: `/api/docs`
 - Machine-readable spec: `/api/v1/openapi.json`
+
+---
+
+## Command-line interface
+
+The same operations exposed by the REST API are available as commands that run
+**directly against the data directory** (no server). Handy for scripting, editors,
+and AI tools — Overview becomes a plain Markdown editor/index over a folder.
+
+```bash
+overview list                                   # note tree
+overview search "并发模型" --limit 10
+overview read "Guide/Intro.md"                  # print the Markdown body
+overview write "Guide/Intro.md" --file draft.md --public
+printf '# Deploy\n\nnotes\n' | overview write "Ops/Deploy.md" --stdin
+overview move "Guide/Intro.md" "Archived/Intro.md"
+overview history "Guide/Intro.md"               # revisions
+overview restore "Guide/Intro.md" <id>
+overview export-zip vault.zip && overview import vault.zip
+```
+
+Global flags: `-C, --data-dir DIR` (target a vault) and `--json` (machine-readable
+output). Run `overview help` for the full list. See [[CLI]] in the docs site.
 
 ---
 
