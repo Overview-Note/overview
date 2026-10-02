@@ -120,6 +120,7 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 | ADR-032 | 前端路由全部懒加载并按需注入编辑器重依赖 | 首屏不再加载 TipTap/KaTeX/lowlight/mermaid | 初始 JS 从 ~1.1MB 降至 ~154KB |
 | ADR-033 | 静态资源在 Go 侧 gzip 压缩 + 哈希资源 immutable 缓存 | Lighthouse 从 80+ 提升到 99 | 前端资源不再走 `http.FileServer` 裸服务 |
 | ADR-034 | 品牌改为笔记/文档图形 + 暖色柔和调色板 | 定位是笔记软件；降低刺眼对比但保留层级 | 设计令牌整体调整，符号色改为变量 |
+| ADR-035 | 新增持久 API/MCP 令牌（管理界面 + `/auth/tokens` API，仅存 SHA-256 哈希） | 环境变量无法在界面管理，会话令牌无 UI 且短期 | 令牌与登录会话共用 Bearer 认证，`OVERVIEW_MCP_TOKEN` 作为回退 |
 
 ---
 
@@ -247,6 +248,9 @@ Base：`/api/v1`
 | GET | `/auth/users` | 用户列表（仅管理员） |
 | POST | `/auth/users` | 创建用户（仅管理员） |
 | DELETE | `/auth/users/{id}` | 删除用户（仅管理员） |
+| GET | `/auth/tokens` | API/MCP 令牌列表（仅管理员） |
+| POST | `/auth/tokens` | 生成令牌，明文仅返回一次（仅管理员） |
+| DELETE | `/auth/tokens/{id}` | 吊销令牌（仅管理员） |
 | GET | `/public/notes` | 公开笔记列表（匿名） |
 | GET | `/public/note?path=` | 公开笔记正文（匿名，非公开返回 404） |
 | GET | `/ai/status` | AI 是否可用及模型名 |
@@ -570,7 +574,7 @@ P2 — 打磨与生态
 | `OVERVIEW_RENDER` | `false` | 设为 `true` 变为公开只读文档站 |
 | `OVERVIEW_EXPORT_DIR` | `_site` | `overview export` 输出目录 |
 | `OVERVIEW_EXPORT_BASE` | `/` | `overview export` URL 前缀 |
-| `OVERVIEW_MCP_TOKEN` | 空 | MCP Bearer 令牌；空且 auth=multi 时用会话令牌（协议 `2026-07-28`） |
+| `OVERVIEW_MCP_TOKEN` | 空 | MCP 静态 Bearer 令牌；空且 auth=multi 时用会话令牌或 UI 生成的 API 令牌 |
 | `OVERVIEW_AI_BASE_URL` | 空 | OpenAI 兼容基址（如 `https://api.openai.com/v1`）；空则禁用 AI |
 | `OVERVIEW_AI_API_KEY` | 空 | AI 密钥 |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | 模型名 |
@@ -700,6 +704,9 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   `folder_create`、`notes_history/revision/restore`、`trash_list/restore/purge`、
   `assets_upload/orphans/purge`、`notes_reindex`、`public_notes/public_note`。
   Schema 由 OpenAPI 生成，`notes_rename`/`assets_upload` 等用手写覆盖。
+- **令牌管理（ADR-035）**：管理员在 Web UI「API 令牌」生成/吊销长期令牌（`GET/POST/DELETE
+  /api/v1/auth/tokens`），仅存哈希、明文只显示一次；令牌同时可用于 REST 的 `Bearer`
+  认证；未配置时回退到服务端 `OVERVIEW_MCP_TOKEN` 或登录会话令牌。
 
 ### 13.12 性能与品牌（v0.11.0，ADR-032/033/034）
 

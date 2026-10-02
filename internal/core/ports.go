@@ -117,3 +117,13 @@ type AssetStore interface {
 type AssetRestorer interface {
 	Restore(ctx context.Context, rel string, r io.Reader) error
 }
+
+// TokenStore persists long-lived API/MCP tokens. Only a hash of the token is
+// stored; the plaintext is returned to the caller once at creation.
+type TokenStore interface {
+	CreateAPIToken(ctx context.Context, t APIToken, tokenHash string) error
+	ListAPITokens(ctx context.Context) ([]APIToken, error)
+	DeleteAPIToken(ctx context.Context, id string) error
+	APITokenByHash(ctx context.Context, tokenHash string) (APIToken, error)
+	TouchAPIToken(ctx context.Context, id string, at time.Time) error
+}

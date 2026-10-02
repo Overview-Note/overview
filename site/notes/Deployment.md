@@ -67,7 +67,7 @@ services:
 | `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset) |
 | `OVERVIEW_LOG_MAX_MB` | `10` | Max log file size before rotation |
 | `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep (`0` truncates) |
-| `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP (protocol `2026-07-28`) |
+| `OVERVIEW_MCP_TOKEN` | — | Static bearer token for MCP (protocol `2026-07-28`); prefer UI-managed API tokens |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI) |
 | `OVERVIEW_AI_API_KEY` | — | AI provider key |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | AI model |

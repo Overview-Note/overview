@@ -103,3 +103,14 @@ type Asset struct {
 	ContentType string    `json:"contentType"`
 	Created     time.Time `json:"created,omitempty"`
 }
+
+// APIToken is a long-lived bearer credential for the API and MCP. The secret is
+// only shown once at creation; the store keeps a hash plus a short prefix.
+type APIToken struct {
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Prefix   string     `json:"prefix"`
+	Created  time.Time  `json:"created"`
+	LastUsed *time.Time `json:"lastUsed,omitempty"`
+	Expires  *time.Time `json:"expires,omitempty"`
+}

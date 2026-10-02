@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Overview-Note/overview/internal/core"
 )
@@ -185,4 +186,66 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
+}
+
+type createTokenRequest struct {
+	Name        string `json:"name"`
+	ExpiresDays int    `json:"expiresDays"`
+}
+
+func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	if s.opts.Tokens == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"tokens": []any{}})
+		return
+	}
+	tokens, err := s.opts.Tokens.List(r.Context())
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tokens": tokens})
+}
+
+func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	if s.opts.Tokens == nil {
+		writeError(w, http.StatusBadRequest, "token management is not enabled")
+		return
+	}
+	var req createTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	var ttl time.Duration
+	if req.ExpiresDays > 0 {
+		ttl = time.Duration(req.ExpiresDays) * 24 * time.Hour
+	}
+	token, secret, err := s.opts.Tokens.Create(r.Context(), req.Name, ttl)
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	// The secret is returned exactly once; it is never retrievable again.
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "secret": secret})
+}
+
+func (s *Server) handleDeleteToken(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	if s.opts.Tokens == nil {
+		writeError(w, http.StatusBadRequest, "token management is not enabled")
+		return
+	}
+	if err := s.opts.Tokens.Revoke(r.Context(), r.PathValue("id")); err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
 }

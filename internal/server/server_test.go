@@ -201,6 +201,7 @@ func newAuthServer(t *testing.T) (*httptest.Server, *http.Client) {
 	ts := httptest.NewServer(server.New(svc, server.Options{
 		MaxUploadBytes: 1 << 20,
 		Auth:           auth,
+		Tokens:         service.NewTokenService(ix),
 		AI:             aiSvc,
 	}).Handler())
 	t.Cleanup(ts.Close)
@@ -411,6 +412,60 @@ func TestPathValidation(t *testing.T) {
 	resp, _ := doJSON(t, http.MethodGet, ts.URL+"/api/v1/note?path="+url.QueryEscape("../secret"), nil)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("escape path status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestAPITokenFlow(t *testing.T) {
+	ts, client := newAuthServer(t)
+	authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/setup",
+		map[string]string{"username": "admin", "password": "secret1"}, nil)
+
+	// Create a token; the secret is returned once.
+	var created struct {
+		Token  map[string]any `json:"token"`
+		Secret string         `json:"secret"`
+	}
+	code := authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/tokens",
+		map[string]any{"name": "opencode"}, &created)
+	if code != http.StatusOK || created.Secret == "" {
+		t.Fatalf("create token = %d %+v", code, created)
+	}
+
+	// Listed.
+	var listed struct {
+		Tokens []map[string]any `json:"tokens"`
+	}
+	authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/auth/tokens", nil, &listed)
+	if len(listed.Tokens) != 1 {
+		t.Fatalf("tokens = %v", listed.Tokens)
+	}
+
+	// The token authenticates REST as Bearer.
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/tree", nil)
+	req.Header.Set("Authorization", "Bearer "+created.Secret)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("token-authenticated tree = %d, want 200", resp.StatusCode)
+	}
+
+	// Revoke, then the token no longer works.
+	id, _ := created.Token["id"].(string)
+	if code := authJSON(t, client, http.MethodDelete, ts.URL+"/api/v1/auth/tokens/"+id, nil, nil); code != http.StatusOK {
+		t.Fatalf("revoke = %d", code)
+	}
+	req2, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/tree", nil)
+	req2.Header.Set("Authorization", "Bearer "+created.Secret)
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("revoked token tree = %d, want 401", resp2.StatusCode)
 	}
 }
 

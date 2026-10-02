@@ -100,6 +100,7 @@ func serve() {
 
 	svc := service.New(st, idx, assets, hist, tr)
 	auth := service.NewAuth(idx, cfg.AuthMode)
+	tokens := service.NewTokenService(idx)
 	_ = idx.DeleteExpiredSessions(context.Background(), time.Now().UTC())
 
 	var mcpHandler http.Handler
@@ -108,14 +109,23 @@ func serve() {
 		switch {
 		case cfg.MCPToken != "":
 			token := cfg.MCPToken
-			verify = func(_ context.Context, provided string) error {
-				if provided != token {
-					return errors.New("invalid token")
+			verify = func(ctx context.Context, provided string) error {
+				if provided == token {
+					return nil
 				}
-				return nil
+				if _, err := tokens.Verify(ctx, provided); err == nil {
+					return nil
+				}
+				if _, err := auth.Authenticate(ctx, provided); err == nil {
+					return nil
+				}
+				return errors.New("invalid token")
 			}
 		case auth.Required():
 			verify = func(ctx context.Context, provided string) error {
+				if _, err := tokens.Verify(ctx, provided); err == nil {
+					return nil
+				}
 				_, err := auth.Authenticate(ctx, provided)
 				return err
 			}
@@ -146,6 +156,7 @@ func serve() {
 		Version:        version,
 		Logger:         logger,
 		Auth:           auth,
+		Tokens:         tokens,
 		DAV:            dav,
 		MCP:            mcpHandler,
 		AI:             aiSvc,

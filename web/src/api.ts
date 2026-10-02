@@ -17,6 +17,15 @@ export interface User {
   updated: string;
 }
 
+export interface APIToken {
+  id: string;
+  name: string;
+  prefix: string;
+  created: string;
+  lastUsed?: string;
+  expires?: string;
+}
+
 export interface AuthState {
   mode: "none" | "multi";
   needsSetup: boolean;
@@ -370,6 +379,27 @@ export const api = {
 
   async deleteUser(id: string): Promise<void> {
     const res = await fetch(`${BASE}/auth/users/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async listTokens(): Promise<APIToken[]> {
+    const res = await fetch(`${BASE}/auth/tokens`);
+    return (await json<{ tokens: APIToken[] }>(res)).tokens;
+  },
+
+  async createToken(name: string, expiresDays = 0): Promise<{ token: APIToken; secret: string }> {
+    const res = await fetch(`${BASE}/auth/tokens`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, expiresDays }),
+    });
+    return json<{ token: APIToken; secret: string }>(res);
+  },
+
+  async deleteToken(id: string): Promise<void> {
+    const res = await fetch(`${BASE}/auth/tokens/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
     if (!res.ok) throw await parseError(res);

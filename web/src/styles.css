@@ -1946,6 +1946,37 @@ mark {
   font-size: var(--text-sm);
 }
 
+.token-secret {
+  margin: var(--sp-2) 0;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.token-secret p {
+  margin: 0 0 8px;
+}
+
+.token-secret-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.token-secret-row code {
+  flex: 1;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
 /* --------------------------------------------------------------------------
    Auth
    -------------------------------------------------------------------------- */

@@ -291,6 +291,25 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "200": { description: Deleted }
+  /auth/tokens:
+    get:
+      summary: List API/MCP tokens (admin)
+      tags: [auth]
+      responses:
+        "200": { description: Tokens }
+    post:
+      summary: Create an API/MCP token (admin); the secret is returned once
+      tags: [auth]
+      responses:
+        "200": { description: "Created token and one-time secret" }
+  /auth/tokens/{id}:
+    delete:
+      summary: Revoke an API/MCP token (admin)
+      tags: [auth]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Revoked }
   /settings/ai:
     get:
       summary: Get the AI configuration (admin)

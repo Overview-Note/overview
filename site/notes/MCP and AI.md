@@ -50,6 +50,13 @@ Methods: `server/discover`, `initialize`, `tools/list`, `tools/call`, `ping`
 (legacy). The tool list is generated from the OpenAPI document so it stays in
 sync with the REST API.
 
+### Tokens
+
+Create and revoke **API tokens** in the web UI (admins: **API tokens** in the
+top bar). The secret is shown once; the same bearer token also authenticates the
+REST API. Alternatively set `OVERVIEW_MCP_TOKEN` on the server for a single
+static token, or use a login session token.
+
 Tools:
 
 | Tool | Description |

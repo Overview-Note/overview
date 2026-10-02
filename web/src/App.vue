@@ -7,6 +7,7 @@ import SearchBox from "./components/SearchBox.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import ShortcutsDialog from "./components/ShortcutsDialog.vue";
 import Sidebar from "./components/Sidebar.vue";
+import TokensDialog from "./components/TokensDialog.vue";
 import UsersDialog from "./components/UsersDialog.vue";
 import { t } from "./i18n";
 import { useAuthStore } from "./stores/auth";
@@ -21,6 +22,7 @@ const site = useSiteStore();
 const route = useRoute();
 const router = useRouter();
 const usersOpen = ref(false);
+const tokensOpen = ref(false);
 const settingsOpen = ref(false);
 const shortcutsOpen = ref(false);
 const userMenuOpen = ref(false);
@@ -128,6 +130,13 @@ async function logout() {
           >
             {{ t("topbar.users") }}
           </button>
+          <button
+            v-if="auth.user?.role === 'admin'"
+            class="topbar-link"
+            @click="tokensOpen = true"
+          >
+            {{ t("topbar.tokens") }}
+          </button>
           <div v-if="auth.mode === 'multi' && auth.user" class="user-menu">
             <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
               <span class="avatar">{{
@@ -154,6 +163,7 @@ async function logout() {
     </template>
     <DialogHost />
     <UsersDialog :open="usersOpen" @close="usersOpen = false" />
+    <TokensDialog :open="tokensOpen" @close="tokensOpen = false" />
     <SettingsDialog :open="settingsOpen" @close="settingsOpen = false" />
     <ShortcutsDialog :open="shortcutsOpen" @close="shortcutsOpen = false" />
   </div>

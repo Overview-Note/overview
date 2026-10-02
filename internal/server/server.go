@@ -24,6 +24,7 @@ type Options struct {
 	Version        string
 	Logger         *slog.Logger
 	Auth           *service.AuthService
+	Tokens         *service.TokenService
 	DAV            http.Handler
 	MCP            http.Handler
 	AI             *service.AIService
@@ -126,6 +127,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/auth/users", s.handleListUsers)
 	s.mux.HandleFunc("POST "+base+"/auth/users", s.handleCreateUser)
 	s.mux.HandleFunc("DELETE "+base+"/auth/users/{id}", s.handleDeleteUser)
+	s.mux.HandleFunc("GET "+base+"/auth/tokens", s.handleListTokens)
+	s.mux.HandleFunc("POST "+base+"/auth/tokens", s.handleCreateToken)
+	s.mux.HandleFunc("DELETE "+base+"/auth/tokens/{id}", s.handleDeleteToken)
 
 	s.mux.HandleFunc("GET "+base+"/health", s.handleHealth)
 	s.mux.HandleFunc("GET "+base+"/tree", s.handleTree)
@@ -309,6 +313,13 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		user, err := s.opts.Auth.Authenticate(r.Context(), s.sessionToken(r))
+		if err != nil && s.opts.Tokens != nil {
+			// Long-lived API tokens authenticate as an administrator.
+			if tok, terr := s.opts.Tokens.Verify(r.Context(), s.sessionToken(r)); terr == nil {
+				user = core.User{ID: "token:" + tok.ID, Username: tok.Name, Role: core.RoleAdmin}
+				err = nil
+			}
+		}
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "authentication required")
 			return

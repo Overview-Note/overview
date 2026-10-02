@@ -195,12 +195,16 @@ are re-indexed automatically.
 
 **MCP (Model Context Protocol)**
 
-Point an MCP client at `http://<host>:5230/mcp` with `Authorization: Bearer <OVERVIEW_MCP_TOKEN>`.
+Point an MCP client at `http://<host>:5230/mcp` with `Authorization: Bearer <token>`.
 Implements the current spec (`2026-07-28`: stateless `_meta`, `server/discover`,
 `resultType`) while remaining compatible with older `initialize`-handshake clients.
 The tool surface mirrors the CLI/REST API: notes (list/search/read/write/delete/move/
 rename/links/resolve), folders, history (list/read/restore), trash (list/restore/purge),
 assets (upload/orphans/purge), reindex and public notes.
+
+Tokens: create and revoke **API tokens** in the web UI (admins → **API tokens**); the
+secret is shown once and also works as a REST bearer token. Alternatively set the
+static `OVERVIEW_MCP_TOKEN` on the server.
 
 **OpenAPI**
 
