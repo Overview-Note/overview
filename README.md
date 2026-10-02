@@ -197,7 +197,9 @@ are re-indexed automatically.
 Point an MCP client at `http://<host>:5230/mcp` with `Authorization: Bearer <OVERVIEW_MCP_TOKEN>`.
 Implements the current spec (`2026-07-28`: stateless `_meta`, `server/discover`,
 `resultType`) while remaining compatible with older `initialize`-handshake clients.
-Tools: `notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`, `notes_links`.
+The tool surface mirrors the CLI/REST API: notes (list/search/read/write/delete/move/
+rename/links/resolve), folders, history (list/read/restore), trash (list/restore/purge),
+assets (upload/orphans/purge), reindex and public notes.
 
 **OpenAPI**
 

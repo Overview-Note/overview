@@ -87,8 +87,8 @@ overview build ./public --title "My Docs"
 ```
 
 Output contains one `.html` per note, `index.html`, `style.css`, `search.js` and
-`search-index.json`. This mirrors `overview export`, but is a normal CLI command
-that reads the current on-disk state directly.
+`search-index.json`. `export` is an alias of `build`, so the older
+`overview export` command keeps working.
 
 ## Relationship to the server
 

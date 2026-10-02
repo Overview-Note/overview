@@ -12,10 +12,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Overview-Note/overview/internal/history"
 	"github.com/Overview-Note/overview/internal/index"
 	"github.com/Overview-Note/overview/internal/mcp"
 	"github.com/Overview-Note/overview/internal/service"
 	"github.com/Overview-Note/overview/internal/store"
+	"github.com/Overview-Note/overview/internal/trash"
 )
 
 func newMCPServer(t *testing.T, verify mcp.TokenVerifier) *httptest.Server {
@@ -31,7 +33,9 @@ func newMCPServer(t *testing.T, verify mcp.TokenVerifier) *httptest.Server {
 	}
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
-	svc := service.New(st, ix, st, nil, nil)
+	hist := history.New(filepath.Join(root, ".history"), 50)
+	tr := trash.New(filepath.Join(root, ".trash"))
+	svc := service.New(st, ix, st, hist, tr)
 	ts := httptest.NewServer(mcp.New(svc, verify))
 	t.Cleanup(ts.Close)
 	return ts
@@ -189,6 +193,53 @@ func TestMCPTools(t *testing.T) {
 
 	if _, isErr = callTool(t, ts, "", "notes_delete", map[string]any{"path": "mcp/demo.md"}); isErr {
 		t.Error("delete failed")
+	}
+}
+
+func TestMCPParityTools(t *testing.T) {
+	ts := newMCPServer(t, nil)
+
+	// The tool surface should be broad (parity with CLI/REST).
+	tools := rpc(t, ts, "", "tools/list", map[string]any{})
+	tr, _ := tools["result"].(map[string]any)
+	list, _ := tr["tools"].([]any)
+	if len(list) < 20 {
+		t.Fatalf("expected >=20 tools, got %d", len(list))
+	}
+
+	// folder_create + notes_write + notes_move + notes_history + trash.
+	if _, isErr := callTool(t, ts, "", "folder_create", map[string]any{"path": "proj"}); isErr {
+		t.Fatal("folder_create failed")
+	}
+	if _, isErr := callTool(t, ts, "", "notes_write", map[string]any{
+		"path": "proj/a.md", "body": "v1", "baseVersion": "*",
+	}); isErr {
+		t.Fatal("write a failed")
+	}
+	if _, isErr := callTool(t, ts, "", "notes_write", map[string]any{
+		"path": "proj/a.md", "body": "v2",
+	}); isErr {
+		t.Fatal("overwrite a failed")
+	}
+
+	// Revisions live under the path they were written at, so read history
+	// before moving the note.
+	text, isErr := callTool(t, ts, "", "notes_history", map[string]any{"path": "proj/a.md"})
+	if isErr || !strings.Contains(text, "savedAt") {
+		t.Fatalf("history = %s (err=%v)", text, isErr)
+	}
+
+	text, isErr = callTool(t, ts, "", "notes_move", map[string]any{"from": "proj/a.md", "to": "proj/b.md"})
+	if isErr || !strings.Contains(text, "proj/b.md") {
+		t.Fatalf("move = %s (err=%v)", text, isErr)
+	}
+
+	if _, isErr := callTool(t, ts, "", "notes_delete", map[string]any{"path": "proj/b.md"}); isErr {
+		t.Fatal("delete failed")
+	}
+	text, isErr = callTool(t, ts, "", "trash_list", nil)
+	if isErr || !strings.Contains(text, "proj/b.md") {
+		t.Fatalf("trash_list = %s (err=%v)", text, isErr)
 	}
 }
 

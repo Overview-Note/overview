@@ -49,7 +49,8 @@ func Run(args []string, env Env) int {
 	ctx := context.Background()
 
 	// Static-site generation only needs the notes directory, not the index.
-	if cmd == "build" || cmd == "site" || cmd == "static" {
+	// `export` is kept as an alias of `build`.
+	if cmd == "build" || cmd == "site" || cmd == "static" || cmd == "export" {
 		return cmdBuild(cfg, rest, env)
 	}
 

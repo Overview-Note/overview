@@ -22,7 +22,6 @@ import (
 	"github.com/Overview-Note/overview/internal/s3store"
 	"github.com/Overview-Note/overview/internal/server"
 	"github.com/Overview-Note/overview/internal/service"
-	"github.com/Overview-Note/overview/internal/sitegen"
 	"github.com/Overview-Note/overview/internal/store"
 	"github.com/Overview-Note/overview/internal/trash"
 	"github.com/Overview-Note/overview/internal/watcher"
@@ -32,44 +31,11 @@ import (
 // version is overridden at build time with -ldflags="-X main.version=...".
 var version = "0.10.2"
 
-// runExport renders the vault to a static site. Configuration via the same
-// environment variables, plus OVERVIEW_EXPORT_DIR and OVERVIEW_EXPORT_BASE.
-func runExport() {
-	cfg := config.Load()
-	lg := setupLogger(cfg)
-	defer lg.Close()
-	logger := lg.Logger
-	outDir := envOr("OVERVIEW_EXPORT_DIR", "_site")
-	base := envOr("OVERVIEW_EXPORT_BASE", "/")
-
-	n, err := sitegen.Generate(sitegen.Options{
-		NotesDir:  cfg.NotesDir,
-		OutDir:    outDir,
-		Base:      base,
-		SiteTitle: cfg.SiteTitle,
-	})
-	if err != nil {
-		logger.Error("export failed", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("site exported", "pages", n, "out", outDir)
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "serve":
 			serve()
-			return
-		case "export":
-			runExport()
 			return
 		case "version", "--version", "-v":
 			fmt.Println("overview", version)

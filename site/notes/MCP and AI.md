@@ -58,8 +58,27 @@ Tools:
 | `notes_search` | Full-text search |
 | `notes_read` | Read a note by path |
 | `notes_write` | Create or update a note |
-| `notes_delete` | Delete a note or folder |
+| `notes_delete` | Delete a note or folder (to trash) |
+| `notes_move` | Move/rename a note or folder |
+| `notes_rename` | Rename within the same folder |
 | `notes_links` | Outgoing links and backlinks |
+| `notes_resolve` | Resolve a `[[wiki]]` target to a path |
+| `folder_create` | Create a folder |
+| `notes_history` | List a note's revisions |
+| `notes_revision` | Read a revision's body |
+| `notes_restore` | Restore a revision |
+| `trash_list` | List soft-deleted items |
+| `trash_restore` | Restore a trashed item |
+| `trash_purge` | Permanently delete a trashed item (or all) |
+| `assets_upload` | Upload an attachment |
+| `assets_orphans` | List unreferenced attachments |
+| `assets_purge` | Delete unreferenced attachments |
+| `notes_reindex` | Rebuild the search index |
+| `public_notes` | List public notes |
+| `public_note` | Read a public note |
+
+The surface intentionally mirrors the CLI and REST API, so an agent can perform
+the same operations you can.
 
 ## OpenAPI
 

@@ -125,6 +125,23 @@ func TestHistoryAndRestore(t *testing.T) {
 	}
 }
 
+func TestBuildAndExportAlias(t *testing.T) {
+	dir := t.TempDir()
+	run(t, "-C", dir, "write", "pub.md", "--body", "# Public\n\nhello", "--public")
+
+	// `export` is an alias of `build` and produces a deployable site.
+	out, _, code := run(t, "-C", dir, "export", filepath.Join(dir, "site"))
+	if code != 0 || !strings.Contains(out, "exported") {
+		t.Fatalf("export alias failed: code=%d out=%q", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "site", "index.html")); err != nil {
+		t.Fatalf("site index not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "site", "search-index.json")); err != nil {
+		t.Fatalf("search index not written: %v", err)
+	}
+}
+
 func TestUnknownCommand(t *testing.T) {
 	_, errOut, code := run(t, "nope")
 	if code != 2 || !strings.Contains(errOut, "unknown command") {
