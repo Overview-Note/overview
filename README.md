@@ -23,6 +23,9 @@ Markdown files; the SQLite index is fully rebuildable.
 - **Live sync** — a file watcher reindexes external edits; incremental indexing
 - **Pluggable assets** — local filesystem or any S3-compatible object store
 - **PWA & OpenAPI** — installable app shell; typed API docs at `/api/docs`
+- **Settings center** — theme (system/light/dark), font size, language, image compression, AI config
+- **Runtime AI setup** — admins configure Base URL / key / model in the UI (no restart)
+- **Starlight-style UI** — global Ctrl+K search, grouped sidebar, unified type scale
 - **Single binary** — frontend embedded, one `docker run`
 
 ## Quick start (Docker)
@@ -117,7 +120,9 @@ OVERVIEW_AI_API_KEY=sk-...
 OVERVIEW_AI_MODEL=gpt-4o-mini
 ```
 
-The editor then shows an AI panel with **chat**, **organize** and **complete**.
+Or configure it at runtime: **Settings → AI** (admin only) lets you set the base
+URL, API key and model; changes take effect immediately. The editor then shows an
+AI panel with **chat**, **organize** and **complete**.
 
 ## Public sharing
 
