@@ -157,8 +157,8 @@ export const api = {
     return data.nodes;
   },
 
-  async note(path: string): Promise<Note> {
-    const res = await fetch(`${BASE}/note?path=${encodeURIComponent(path)}`);
+  async note(path: string, signal?: AbortSignal): Promise<Note> {
+    const res = await fetch(`${BASE}/note?path=${encodeURIComponent(path)}`, { signal });
     return json<Note>(res);
   },
 

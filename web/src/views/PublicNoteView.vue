@@ -38,17 +38,24 @@ const showTitle = computed(() => {
   return !/^\s*#\s/.test(note.value.body);
 });
 
+let loadSeq = 0;
+
 watch(
   () => props.path,
   async (path) => {
     error.value = "";
+    // Clearing first also drops the previous note's images (aborting their loads).
     note.value = null;
+    const seq = ++loadSeq;
     try {
-      note.value = await api.publicNote(path);
+      const loaded = await api.publicNote(path);
+      if (seq !== loadSeq) return;
+      note.value = loaded;
       await nextTick();
+      if (seq !== loadSeq) return;
       void renderMermaid(docEl.value);
     } catch (e) {
-      error.value = (e as Error).message;
+      if (seq === loadSeq) error.value = (e as Error).message;
     }
   },
   { immediate: true },

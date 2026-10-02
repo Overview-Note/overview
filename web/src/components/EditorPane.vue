@@ -48,6 +48,7 @@ let loading = false;
 let saveTimer: number | undefined;
 let mermaidTimer: number | undefined;
 let loadSeq = 0;
+let noteAbort: AbortController | undefined;
 let currentPath = "";
 let baseVersion = "";
 
@@ -172,8 +173,12 @@ async function load(path: string) {
   if (!editor.value) return;
   const seq = ++loadSeq;
   window.clearTimeout(mermaidTimer);
+  // Abort the previous note request so a slow load can't land after the switch.
+  noteAbort?.abort();
+  const controller = new AbortController();
+  noteAbort = controller;
   try {
-    const loaded = await store.openNote(path);
+    const loaded = await store.openNote(path, controller.signal);
     // A newer note was opened while this request was in flight — drop it.
     if (seq !== loadSeq || !editor.value) return;
     baseVersion = loaded.version;
@@ -181,6 +186,9 @@ async function load(path: string) {
     window.clearTimeout(saveTimer);
     loading = true;
     suppress = true;
+    // Drop the outgoing note's images before replacing the DOM so their
+    // in-flight fetches/decodes do not compete with the incoming note.
+    cancelPendingImages();
     editor.value.commands.setContent(mdToHtml(loaded.body), false);
     suppress = false;
     dirty.value = false;
@@ -189,9 +197,20 @@ async function load(path: string) {
     loading = false;
     if (seq === loadSeq) scheduleMermaid();
   } catch {
+    if (controller.signal.aborted) return;
     if (seq === loadSeq) loading = false;
     // store.error already set
   }
+}
+
+// Cancels image loads that are still in flight (e.g. from a note the user just
+// navigated away from) to avoid main-thread decode jank.
+function cancelPendingImages() {
+  const root = scrollEl.value;
+  if (!root) return;
+  root.querySelectorAll("img").forEach((img) => {
+    if (!img.complete) img.removeAttribute("src");
+  });
 }
 
 // Mermaid rendering is expensive; debounce it and skip diagrams for notes the
@@ -403,6 +422,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.clearTimeout(saveTimer);
   window.clearTimeout(flashTimer);
+  window.clearTimeout(mermaidTimer);
+  noteAbort?.abort();
   window.removeEventListener("beforeunload", onBeforeUnload);
 });
 </script>

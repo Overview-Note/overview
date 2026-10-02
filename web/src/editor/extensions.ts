@@ -34,7 +34,11 @@ export function baseExtensions(): Extensions {
     MermaidBlock,
     FootnoteRef,
     FootnoteDefs,
-    Image.configure({ inline: false, allowBase64: false }),
+    Image.configure({
+      inline: false,
+      allowBase64: false,
+      HTMLAttributes: { loading: "lazy", decoding: "async" },
+    }),
     WikiLink.configure({ openOnClick: false, autolink: true }),
     Placeholder.configure({ placeholder: t("editor.placeholder") }),
     Table.configure({ resizable: true, HTMLAttributes: { class: "md-table" } }),

@@ -22,16 +22,18 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     }
   }
 
-  async function openNote(path: string): Promise<Note> {
+  async function openNote(path: string, signal?: AbortSignal): Promise<Note> {
     loadingNote.value = true;
     error.value = null;
     try {
-      const loaded = await api.note(path);
+      const loaded = await api.note(path, signal);
       note.value = loaded;
       return loaded;
     } catch (e) {
-      note.value = null;
-      error.value = (e as Error).message;
+      if (!signal?.aborted) {
+        note.value = null;
+        error.value = (e as Error).message;
+      }
       throw e;
     } finally {
       loadingNote.value = false;
