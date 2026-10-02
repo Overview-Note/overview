@@ -183,31 +183,49 @@ const editor = useEditor({
     if (suppress) return;
     dirty.value = true;
     aiContent.value = editor.value?.getText() ?? "";
+    updateTableMenu();
     scheduleSave();
   },
   onSelectionUpdate: () => updateTableMenu(),
+  onTransaction: () => updateTableMenu(),
 });
+
+let tableMenuRaf = 0;
 
 // Position the floating table toolbar just above the table containing the
 // cursor, so table commands sit next to the table itself.
 function updateTableMenu() {
-  const ed = editor.value;
-  if (!ed || !ed.isActive("table")) {
-    tableMenu.value = null;
-    return;
-  }
-  const { state, view } = ed;
-  const { $from } = state.selection;
-  for (let depth = $from.depth; depth > 0; depth--) {
-    const node = $from.node(depth);
-    if (node.type.name === "table") {
-      const pos = $from.before(depth);
-      const rect = view.coordsAtPos(pos);
-      tableMenu.value = { left: rect.left, top: rect.top };
+  window.cancelAnimationFrame(tableMenuRaf);
+  tableMenuRaf = window.requestAnimationFrame(() => {
+    const ed = editor.value;
+    if (!ed || !ed.isActive("table")) {
+      tableMenu.value = null;
       return;
     }
-  }
-  tableMenu.value = null;
+    // Resolve the DOM element of the table that holds the selection.
+    const { view } = ed;
+    const { from } = view.state.selection;
+    const domAt = view.domAtPos(from);
+    let el: HTMLElement | null =
+      domAt.node.nodeType === 1
+        ? (domAt.node as HTMLElement)
+        : (domAt.node.parentElement as HTMLElement | null);
+
+    let table: HTMLElement | null = null;
+    while (el && el !== view.dom) {
+      if (el.tagName === "TABLE") {
+        table = el;
+        break;
+      }
+      el = el.parentElement;
+    }
+    if (!table) {
+      tableMenu.value = null;
+      return;
+    }
+    const rect = table.getBoundingClientRect();
+    tableMenu.value = { left: rect.left, top: rect.top };
+  });
 }
 
 function insertAI(payload: { text: string; replace: boolean }) {

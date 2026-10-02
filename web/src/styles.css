@@ -99,7 +99,7 @@
   --text-xs: calc(var(--base-size) - 3px); /* 13px @16 — captions */
   --text-sm: calc(var(--base-size) - 1px); /* 15px @16 — secondary UI */
   --text-ui: var(--base-size); /* 16px @16 — primary UI text */
-  --text-body: calc(var(--base-size) + 1px); /* 17px @16 — reading/editor */
+  --text-body: var(--base-size); /* editor matches the surrounding UI */
 }
 
 /* Font size preference */
