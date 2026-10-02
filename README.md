@@ -1,146 +1,250 @@
 # Overview
 
-A self-hosted Markdown knowledge base with **folder hierarchy**, full-text search,
-wiki-links, multi-user authentication and WebDAV access. Content is stored as plain
-Markdown files; the SQLite index is fully rebuildable.
+> A self-hosted, folder-based Markdown knowledge base — **files as the source of truth**, AI-native, and deployable as a single binary.
 
-## Features
+[![CI](https://github.com/overview-app/overview/actions/workflows/ci.yml/badge.svg)](https://github.com/overview-app/overview/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Vue](https://img.shields.io/badge/Vue-3-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
 
-- **Hierarchical folders** — physical directories map to the document tree
-- **Markdown as source of truth** — Git-friendly, portable, no lock-in
-- **Rich editor** — Vue 3 + Tiptap: images (paste/drop), tables, slash commands
-- **Wiki-links & backlinks** — `[[Note]]` with a backlinks panel
-- **Full-text search** — SQLite FTS5 with CJK unigram+bigram segmentation (substring search)
-- **Multi-user auth** — bcrypt, sessions, admin/member roles, first-run setup
-- **WebDAV** — mount the vault in Obsidian, mobile apps, etc. (`/dav`)
-- **Portable attachments** — stored as `assets/...` relative paths
-- **i18n** — Chinese and English UI
-- **Table of contents** — outline panel with scroll-linked highlighting
-- **Public sharing** — mark a note public and share an anonymous read-only link
-- **MCP server** — AI agents can list/search/read/write notes via `POST /mcp`
-- **AI assistant** — chat, organize and complete notes (any OpenAI-compatible API)
-- **Version history & trash** — revision snapshots and soft delete with restore
-- **Live sync** — a file watcher reindexes external edits; incremental indexing
-- **Pluggable assets** — local filesystem or any S3-compatible object store
-- **PWA & OpenAPI** — installable app shell; typed API docs at `/api/docs`
-- **Settings center** — theme (system/light/dark), font size, language, image compression, AI config
-- **Runtime AI setup** — admins configure Base URL / key / model in the UI (no restart)
-- **Starlight-style UI** — global Ctrl+K search, grouped sidebar, unified type scale
-- **Single binary** — frontend embedded, one `docker run`
+Overview is what you get when you take the simplicity of [memos](https://github.com/usememos/memos),
+add the **hierarchy memos lacks**, and keep your content as **plain Markdown files** you
+fully own. It ships as one Go binary with the frontend embedded, indexes content with
+SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Context Protocol (MCP)**.
 
-## Quick start (Docker)
+---
+
+## Why Overview?
+
+| | memos | Obsidian | Overview |
+|---|:---:|:---:|:---:|
+| Self-hosted web app | ✅ | ❌ | ✅ |
+| Folder hierarchy / nested tree | ❌ | ✅ | ✅ |
+| Plain-Markdown files on disk | ❌ (DB) | ✅ | ✅ |
+| Built-in full-text search (CJK-aware) | ⚠️ | ✅ | ✅ |
+| REST API + WebDAV | partial | ❌ | ✅ |
+| MCP server for AI agents | ❌ | ❌ | ✅ |
+| Built-in AI assistant | ❌ | plugin | ✅ |
+| Single binary / one `docker run` | ✅ | ❌ | ✅ |
+
+**Design goals**
+
+1. **Files are the truth.** Every note is a Markdown file with YAML frontmatter; the
+   SQLite index is disposable and fully rebuildable. Point any editor, Git, or another
+   tool at the same `data/` directory.
+2. **Hierarchy without lock-in.** Folders on disk are the document tree.
+3. **Boring to operate.** One process, no external services required (SQLite + files).
+4. **Open by design.** Everything is reachable through well-defined ports: REST, WebDAV, MCP.
+
+---
+
+## Feature Highlights
+
+### 📚 Content & organization
+- **Hierarchical folders** — physical directories map directly to the navigation tree
+- **Markdown as the source of truth** — Git-friendly, portable, no vendor lock-in
+- **Wiki-links & backlinks** — `[[Note]]` / `[[Note|alias]]`, with a backlinks panel;
+  targets resolve by full path, title, or file name
+- **Per-note visibility** — Private or Public (share a read-only **globe page** at `/public/<path>`)
+
+### ✍️ Editing
+- **Rich editor** — Vue 3 + Tiptap: headings, lists, quotes, code, images, tables
+- **Images** — paste / drag-and-drop, with optional **client-side compression** (WebP/JPEG)
+- **Slash commands** — type `/` for headings, lists, tables, dividers, code blocks
+- **Outline (TOC)** — scroll-linked table of contents
+- **Table bubble menu** — row/column controls appear right above the active table
+
+### 🔎 Search & navigation
+- **Full-text search** with SQLite FTS5 and a custom **CJK unigram + bigram tokenizer**
+  for real substring matching (e.g. `发模` matches `并发模型`)
+- **Global search** with `Ctrl`/`Cmd` + `K`
+
+### 🤖 AI-native
+- **AI assistant** — chat, *organize* and *complete* notes, using any OpenAI-compatible
+  endpoint (OpenAI, DeepSeek, Ollama, vLLM, …)
+- **MCP server** — expose notes as tools so AI agents can list/search/read/write
+  (`notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`, `notes_links`)
+
+### 🔐 Access & integration
+- **Multi-user auth** — bcrypt, sessions, admin/member roles, first-run setup wizard
+- **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
+- **REST API** — versioned under `/api/v1`, documented via OpenAPI at `/api/docs`
+- **PWA** — installable app shell
+
+### 🛠 Operations
+- **Single binary** with the frontend embedded (`docker run` or `go run`)
+- **SQLite migrations**, atomic writes, optimistic concurrency (ETag / 409)
+- **Version history** (revision snapshots) and **trash** (soft delete + restore)
+- **Live sync** — a file watcher reindexes external edits
+- **Pluggable storage** — local filesystem or any S3-compatible object store
+- **Settings center** — theme (system/light/dark), font size, language, compression, AI config
+
+---
+
+## Quick Start
+
+### Docker (recommended)
 
 ```bash
+git clone https://github.com/overview-app/overview.git
+cd overview
 docker compose up -d --build
-# open http://localhost:5230 and complete first-run admin setup
+# open http://localhost:5230 and complete the first-run admin setup
 ```
 
-## Local development
+### Prebuilt binary
 
 ```bash
-# backend (embedded frontend) on :5230
+go install github.com/overview-app/overview/cmd/overview@latest
+OVERVIEW_DATA_DIR=./data overview
+```
+
+### Local development
+
+```bash
+# backend (serves the embedded frontend) on :5230
 go run ./cmd/overview
 
 # frontend with hot reload on :5173 (proxies /api to :5230)
 cd web && npm install && npm run dev
 ```
 
-Build the single binary:
+Build a single binary with the frontend embedded:
 
 ```bash
-cd web && npm run build && cd ..
-go build -ldflags="-X main.version=0.5.0" -o bin/overview ./cmd/overview
+make build        # == cd web && npm run build && go build -o bin/overview ./cmd/overview
 ```
 
+---
+
 ## Configuration
+
+Overview is configured entirely through environment variables.
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `OVERVIEW_ADDR` | `:5230` | Listen address |
-| `OVERVIEW_DATA_DIR` | `./data` | Data root (`notes/`, `assets/`, DB) |
+| `OVERVIEW_DATA_DIR` | `./data` | Data root (`notes/`, `assets/`, DB, …) |
 | `OVERVIEW_DB` | `<data>/overview.db` | SQLite index path |
-| `OVERVIEW_MAX_UPLOAD_MB` | `32` | Upload limit |
-| `OVERVIEW_LOG_LEVEL` | `info` | Log level |
-| `OVERVIEW_AUTH` | `multi` | `multi` or `none` |
+| `OVERVIEW_MAX_UPLOAD_MB` | `32` | Upload size limit |
+| `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `OVERVIEW_AUTH` | `multi` | `multi` (users + login) or `none` |
 | `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP; falls back to session tokens |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI when set) |
-| `OVERVIEW_AI_API_KEY` | — | API key for the AI provider |
+| `OVERVIEW_AI_API_KEY` | — | AI provider API key |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | AI model name |
 | `OVERVIEW_S3_BUCKET` | — | Enables S3-compatible asset storage when set |
 | `OVERVIEW_S3_ENDPOINT` | — | S3 endpoint (e.g. `s3.amazonaws.com`) |
 | `OVERVIEW_S3_REGION` | `us-east-1` | S3 region |
 | `OVERVIEW_S3_ACCESS_KEY` / `OVERVIEW_S3_SECRET_KEY` | — | S3 credentials |
 | `OVERVIEW_S3_USE_SSL` | `true` | Use HTTPS for S3 |
-| `OVERVIEW_S3_PUBLIC_URL` | — | Optional CDN/public URL prefix |
+| `OVERVIEW_S3_PUBLIC_URL` | — | Optional CDN / public URL prefix |
 
-## API documentation
+> AI can also be configured at runtime in **Settings → AI** (admin only) — no restart needed.
 
-- Interactive list: `/api/docs`
-- OpenAPI spec: `/api/v1/openapi.json`
+---
 
-## Data layout
+## Integrations
 
-```
-data/
-├── notes/        # Markdown files (the source of truth)
-├── assets/       # uploaded attachments (or S3 when configured)
-├── .history/     # note revision snapshots
-├── .trash/       # soft-deleted notes
-└── overview.db   # rebuildable SQLite index
-```
-
-## REST API (v1)
-
-See [`docs/DESIGN.md`](docs/DESIGN.md) for the full API. Base path: `/api/v1`.
-
-## WebDAV
+**WebDAV**
 
 ```
 http://<host>:5230/dav/
 ```
-
-Use your Overview username and password (HTTP Basic). Any edits saved over WebDAV
+Sign in with your Overview username and password (HTTP Basic). Edits saved over WebDAV
 are re-indexed automatically.
 
-## MCP (Model Context Protocol)
+**MCP (Model Context Protocol)**
 
-Point an MCP client at `http://<host>:5230/mcp` and authenticate with
-`Authorization: Bearer <OVERVIEW_MCP_TOKEN>`. Available tools:
+Point an MCP client at `http://<host>:5230/mcp` with `Authorization: Bearer <OVERVIEW_MCP_TOKEN>`.
+Tools: `notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`, `notes_links`.
 
-`notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`, `notes_links`.
+**OpenAPI**
 
-## AI assistant
+- Interactive docs: `/api/docs`
+- Machine-readable spec: `/api/v1/openapi.json`
 
-Set `OVERVIEW_AI_BASE_URL` (and `OVERVIEW_AI_API_KEY`) to any OpenAI-compatible
-endpoint, e.g.:
+---
 
-```bash
-OVERVIEW_AI_BASE_URL=https://api.openai.com/v1
-OVERVIEW_AI_API_KEY=sk-...
-OVERVIEW_AI_MODEL=gpt-4o-mini
+## Data Layout
+
+```
+data/
+├── notes/        # Markdown files — the source of truth (folders = hierarchy)
+├── assets/       # uploaded attachments (or S3 when configured)
+├── .history/     # note revision snapshots
+├── .trash/       # soft-deleted notes
+└── overview.db   # SQLite index (safe to delete; rebuilt on startup)
 ```
 
-Or configure it at runtime: **Settings → AI** (admin only) lets you set the base
-URL, API key and model; changes take effect immediately. The editor then shows an
-AI panel with **chat**, **organize** and **complete**.
+---
 
-## Public sharing
+## Architecture
 
-Toggle **Share** in the editor toolbar to publish a note. Anonymous readers get a
-read-only view at `/public/<path>` and a listing at `/public`. Private notes are
-never exposed.
+```
+┌──────────────────────────────────────────────────────────┐
+│  Browser (Vue 3 SPA)   │  Mobile / third-party (REST)     │
+└──────────────┬───────────────────────────────────────────┘
+               │ HTTP
+┌──────────────▼───────────────────────────────────────────┐
+│  server   HTTP adapter · /api/v1 · middleware · ETag      │
+├───────────────────────────────────────────────────────────┤
+│  service  use cases · transaction boundaries · tree build │
+├───────────────────────────────────────────────────────────┤
+│  core     domain models · ports (interfaces) · errors     │
+├────────────┬───────────────┬──────────────────────────────┤
+│  store     │  index        │  textproc                    │
+│ filesystem │ SQLite + FTS5 │ CJK tokenizer / snippets     │
+└────────────┴───────────────┴──────────────────────────────┘
+```
+
+- **Layered & dependency-inverted:** `service` depends only on interfaces in `core`,
+  so backends can be swapped (e.g. S3 assets) without touching business logic.
+- **Adapters stay thin:** the same `service` powers REST, WebDAV, and MCP.
+- **Full details:** see [`docs/DESIGN.md`](docs/DESIGN.md) (architecture decision records included).
+
+---
 
 ## Development
 
 ```bash
-make test        # go test ./...
-make lint        # golangci-lint + vue-tsc
-make fmt         # gofmt + prettier
-make build       # frontend + single binary
+make dev        # run backend with embedded frontend
+make test       # go test ./...
+make test-web   # frontend type-check (vue-tsc)
+make lint       # golangci-lint + vue-tsc
+make fmt        # gofmt + prettier
+make build      # build the single binary
+make docker     # build the Docker image
 ```
 
-## Architecture
+Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 
-Layered: `core` (domain + ports) → `service` (use cases) → `store`/`index`
-(adapters) → `server` (HTTP). See [`docs/DESIGN.md`](docs/DESIGN.md) for details
-and the architecture decision records.
+---
+
+## Roadmap
+
+- [x] Folder hierarchy, Markdown storage, FTS5 search
+- [x] Rich editor (images, tables, slash commands, TOC)
+- [x] Wiki-links & backlinks
+- [x] Multi-user auth, WebDAV, public sharing
+- [x] MCP server, AI assistant (chat / organize / complete)
+- [x] Version history, trash, incremental indexing + file watcher
+- [x] S3 assets, PWA, OpenAPI docs, settings center
+- [ ] Mobile-native app
+- [ ] Collaboration / real-time editing
+- [ ] Graph view & tags management UI
+
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the full roadmap.
+
+---
+
+## Contributing
+
+Contributions of all kinds are welcome — bug reports, feature ideas, docs, and code.
+Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) and open an issue or pull request.
+Good first issues are labeled `good first issue`.
+
+## License
+
+[MIT](LICENSE) © Overview contributors
