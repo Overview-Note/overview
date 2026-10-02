@@ -7,7 +7,7 @@ import { marked } from "marked";
 import { resolveAssetSrc } from "./assets";
 import { mermaidToDivs } from "./diagrams";
 import { footnotesToHtml } from "./footnotes";
-import { katexToHtml } from "./math";
+import { renderMathInMarkdown } from "./math";
 
 export interface DocHeading {
   level: number;
@@ -45,8 +45,9 @@ export function renderPublicDoc(markdown: string): RenderedDoc {
     const [target, display] = inner.split("|");
     return (display ?? target).trim() || target;
   });
-  const parsed = marked.parse(footnotesToHtml(md), { async: false }) as string;
-  const html = mermaidToDivs(katexToHtml(resolveAssetSrc(parsed)));
+  const prepared = renderMathInMarkdown(footnotesToHtml(md));
+  const parsed = marked.parse(prepared, { async: false }) as string;
+  const html = mermaidToDivs(resolveAssetSrc(parsed));
 
   const headings: DocHeading[] = [];
   const counts = new Map<string, number>();

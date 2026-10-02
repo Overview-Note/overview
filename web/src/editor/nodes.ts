@@ -168,7 +168,7 @@ export const FootnoteDefs = Node.create({
           });
           return items;
         },
-        renderHTML: (attrs) => ({ "data-items": JSON.stringify(attrs.items) }),
+        renderHTML: () => ({}),
       },
     };
   },
@@ -178,13 +178,15 @@ export const FootnoteDefs = Node.create({
   },
 
   renderHTML({ node, HTMLAttributes }) {
-    return [
+    // Render the definitions as real child elements so the Turndown rule can
+    // read them back directly (attributes are not reliably entity-decoded).
+    const items = (node.attrs.items ?? []) as Array<{ id: string; text: string }>;
+    const children = items.map((item) => [
       "div",
-      mergeAttributes(HTMLAttributes, {
-        class: "fn-defs",
-        "data-items": JSON.stringify(node.attrs.items ?? []),
-      }),
-    ];
+      { class: "fn-def", "data-id": item.id },
+      item.text,
+    ]);
+    return ["div", mergeAttributes(HTMLAttributes, { class: "fn-defs" }), ...children];
   },
 });
 

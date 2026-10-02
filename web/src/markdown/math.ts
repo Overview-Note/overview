@@ -29,14 +29,15 @@ function escapeAttr(s: string): string {
 }
 
 /**
- * Replaces `$$...$$` and `$...$` spans in rendered HTML with KaTeX markup.
- * Only text outside of `<code>`/`<pre>` blocks is considered.
+ * Replaces `$$...$$` and `$...$` in *Markdown* with KaTeX markup, leaving code
+ * fences and inline code untouched. This must run before Markdown parsing:
+ * marked would otherwise consume escape sequences like `\,` inside LaTeX.
  */
-export function katexToHtml(html: string): string {
-  const segments = html.split(/(<pre[\s\S]*?<\/pre>|<code[\s\S]*?<\/code>)/g);
+export function renderMathInMarkdown(markdown: string): string {
+  const segments = markdown.split(/(```[\s\S]*?```|`[^`\n]*`)/g);
   return segments
-    .map((seg) => {
-      if (seg.startsWith("<pre") || seg.startsWith("<code")) return seg;
+    .map((seg, index) => {
+      if (index % 2 === 1) return seg; // a captured code segment
       let out = seg.replace(/\$\$([\s\S]+?)\$\$/g, (_m, tex: string) => {
         const t = tex.trim();
         return `<div class="math-block" data-tex="${escapeAttr(t)}">${renderMath(

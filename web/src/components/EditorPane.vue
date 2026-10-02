@@ -2,46 +2,16 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { BubbleMenu, EditorContent, useEditor } from "@tiptap/vue-3";
-import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
-import { WikiLink } from "../editor/link";
-import Placeholder from "@tiptap/extension-placeholder";
-import Table from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableHeader from "@tiptap/extension-table-header";
-import TableCell from "@tiptap/extension-table-cell";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { TableOfContents } from "@tiptap/extension-table-of-contents";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
-import { marked } from "marked";
-import TurndownService from "turndown";
-import { gfm } from "turndown-plugin-gfm";
 import { api, ApiError } from "../api";
-import { lowlight } from "../editor/lowlight";
-import {
-  BlockMath,
-  FootnoteDefs,
-  FootnoteRef,
-  InlineMath,
-  MermaidBlock,
-} from "../editor/nodes";
+import { baseExtensions } from "../editor/extensions";
 import { SlashCommand, slashItems, type SlashItem } from "../editor/slash";
 import { compressImage } from "../media/compress";
 import type { TocItem } from "../editor/toc";
 import { t } from "../i18n";
-import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
-import { mermaidToDivs, renderMermaid } from "../markdown/diagrams";
-import { footnotesToHtml } from "../markdown/footnotes";
-import { sanitizeEditorHtml } from "../markdown/html";
-import { katexToHtml } from "../markdown/math";
-import {
-  registerFootnoteRules,
-  registerMathRules,
-  registerMermaidRules,
-} from "../markdown/rules";
-import { registerWikiRule, wikiToHtml } from "../markdown/wiki";
+import { renderMermaid } from "../markdown/diagrams";
+import { createTurndown, htmlToMarkdown, mdToHtml } from "../markdown/pipeline";
 import { useDialogStore } from "../stores/dialog";
 import { useSettingsStore } from "../stores/settings";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -79,25 +49,7 @@ let saveTimer: number | undefined;
 let currentPath = "";
 let baseVersion = "";
 
-marked.setOptions({ gfm: true, breaks: false });
-
-const turndown = new TurndownService({
-  headingStyle: "atx",
-  codeBlockStyle: "fenced",
-  bulletListMarker: "-",
-  emDelimiter: "*",
-  hr: "---",
-});
-turndown.use(gfm);
-registerWikiRule(turndown);
-registerMathRules(turndown);
-registerMermaidRules(turndown);
-registerFootnoteRules(turndown);
-
-function mdToHtml(md: string): string {
-  const html = marked.parse(wikiToHtml(footnotesToHtml(md)), { async: false }) as string;
-  return mermaidToDivs(katexToHtml(resolveAssetSrc(html)));
-}
+const turndown = createTurndown();
 
 async function uploadAndInsert(original: File) {
   try {
@@ -156,28 +108,7 @@ async function openWiki(target: string) {
 const editor = useEditor({
   content: "",
   extensions: [
-    StarterKit.configure({
-      heading: { levels: [1, 2, 3, 4] },
-      codeBlock: false,
-    }),
-    CodeBlockLowlight.configure({
-      lowlight,
-      HTMLAttributes: { class: "code-block" },
-    }),
-    TaskList,
-    TaskItem.configure({ nested: true }),
-    InlineMath,
-    BlockMath,
-    MermaidBlock,
-    FootnoteRef,
-    FootnoteDefs,
-    Image.configure({ inline: false, allowBase64: false }),
-    WikiLink.configure({ openOnClick: false, autolink: true }),
-    Placeholder.configure({ placeholder: t("editor.placeholder") }),
-    Table.configure({ resizable: true, HTMLAttributes: { class: "md-table" } }),
-    TableRow,
-    TableHeader,
-    TableCell,
+    ...baseExtensions(),
     TableOfContents.configure({
       scrollParent: () => scrollEl.value ?? window,
       onUpdate: (items) => {
@@ -280,9 +211,7 @@ async function flush() {
   window.clearTimeout(saveTimer);
   const path = currentPath;
   const version = baseVersion;
-  const md = toVaultMarkdown(
-    turndown.turndown(sanitizeEditorHtml(editor.value.getHTML())),
-  );
+  const md = htmlToMarkdown(turndown, editor.value.getHTML());
   const previousTitle = store.note?.title;
   dirty.value = false;
   status.value = "saving";
