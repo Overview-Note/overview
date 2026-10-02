@@ -45,6 +45,7 @@ type Options struct {
 	OutDir    string
 	Base      string // URL base path, e.g. "/overview/" for GitHub Pages
 	SiteTitle string
+	All       bool // when true, export every note (not just public ones)
 }
 
 var wikiRe = regexp.MustCompile(`\[\[([^[\]]+?)\]\]`)
@@ -62,7 +63,7 @@ func Generate(opts Options) (int, error) {
 		opts.SiteTitle = "Overview"
 	}
 
-	docs, err := loadNotes(opts.NotesDir)
+	docs, err := loadNotes(opts.NotesDir, opts.All)
 	if err != nil {
 		return 0, err
 	}
@@ -172,7 +173,7 @@ type doc struct {
 	Meta markdown.Frontmatter
 }
 
-func loadNotes(notesDir string) ([]doc, error) {
+func loadNotes(notesDir string, all bool) ([]doc, error) {
 	var docs []doc
 	err := filepath.WalkDir(notesDir, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -186,7 +187,7 @@ func loadNotes(notesDir string) ([]doc, error) {
 			return nil
 		}
 		parsed := markdown.Parse(string(raw))
-		if !parsed.Meta.Public {
+		if !all && !parsed.Meta.Public {
 			return nil
 		}
 		rel, _ := filepath.Rel(notesDir, p)

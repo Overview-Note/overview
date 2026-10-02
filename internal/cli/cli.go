@@ -20,6 +20,7 @@ import (
 	"github.com/Overview-Note/overview/internal/history"
 	"github.com/Overview-Note/overview/internal/index"
 	"github.com/Overview-Note/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/sitegen"
 	"github.com/Overview-Note/overview/internal/store"
 	"github.com/Overview-Note/overview/internal/trash"
 )
@@ -46,6 +47,11 @@ func Run(args []string, env Env) int {
 
 	cmd, rest := args[0], args[1:]
 	ctx := context.Background()
+
+	// Static-site generation only needs the notes directory, not the index.
+	if cmd == "build" || cmd == "site" || cmd == "static" {
+		return cmdBuild(cfg, rest, env)
+	}
 
 	svc, closer, err := openService(cfg)
 	if err != nil {
@@ -701,6 +707,59 @@ func cmdPurgeAssets(ctx context.Context, svc *service.Service, env Env) int {
 	return 0
 }
 
+// cmdBuild renders the vault to a deployable static site (HTML + CSS + client
+// search). By default only notes marked public are exported; pass --all to
+// publish the whole vault.
+func cmdBuild(cfg config.Config, args []string, env Env) int {
+	fs := flagSet("build", env)
+	out := fs.String("out", "", "output directory (default $OVERVIEW_EXPORT_DIR or _site)")
+	base := fs.String("base", "", "URL base path (default $OVERVIEW_EXPORT_BASE or /)")
+	title := fs.String("title", "", "site title (default $OVERVIEW_SITE_TITLE)")
+	notes := fs.String("notes", "", "notes directory (default the vault's notes/)")
+	all := fs.Bool("all", false, "include notes that are not marked public")
+	if err := parseArgs(fs, args); err != nil {
+		return 2
+	}
+	// A positional argument is an output directory: `overview build ./public`.
+	if fs.NArg() > 0 && *out == "" {
+		*out = fs.Arg(0)
+	}
+
+	outDir := envOr(*out, "OVERVIEW_EXPORT_DIR", "_site")
+	basePath := envOr(*base, "OVERVIEW_EXPORT_BASE", "/")
+	siteTitle := *title
+	if siteTitle == "" {
+		siteTitle = cfg.SiteTitle
+	}
+	notesDir := *notes
+	if notesDir == "" {
+		notesDir = cfg.NotesDir
+	}
+
+	n, err := sitegen.Generate(sitegen.Options{
+		NotesDir:  notesDir,
+		OutDir:    outDir,
+		Base:      basePath,
+		SiteTitle: siteTitle,
+		All:       *all,
+	})
+	if err != nil {
+		return fail(env, err)
+	}
+	fmt.Fprintf(env.Stdout, "exported %d page(s) to %s\n", n, outDir)
+	return 0
+}
+
+func envOr(value, key, def string) string {
+	if value != "" {
+		return value
+	}
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 func cmdImport(ctx context.Context, svc *service.Service, args []string, env Env) int {
 	fs := flagSet("import", env)
 	if err := parseArgs(fs, args); err != nil {
@@ -763,6 +822,12 @@ Server:
   export                             export public notes to a static site
   version                            print the version
   help                               show this help
+
+Static site:
+  build [DIR] [--all] [--base URL] [--title T]
+                                     render a deployable static site (HTML,
+                                     CSS and client-side search); --all exports
+                                     every note, not just public ones
 
 Notes:
   list | tree | ls                   list the note tree (--json)

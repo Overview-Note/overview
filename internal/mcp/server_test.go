@@ -96,6 +96,69 @@ func TestMCPInitializeAndList(t *testing.T) {
 	}
 }
 
+func TestMCPDiscover(t *testing.T) {
+	ts := newMCPServer(t, nil)
+
+	out := rpc(t, ts, "", "server/discover", map[string]any{
+		"_meta": map[string]any{
+			"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+		},
+	})
+	result, ok := out["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("discover failed: %v", out)
+	}
+	if result["resultType"] != "complete" {
+		t.Errorf("resultType = %v", result["resultType"])
+	}
+	versions, _ := result["supportedVersions"].([]any)
+	found := false
+	for _, v := range versions {
+		if v == "2026-07-28" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("supportedVersions = %v", versions)
+	}
+	caps, _ := result["capabilities"].(map[string]any)
+	if _, ok := caps["tools"]; !ok {
+		t.Errorf("missing tools capability: %v", caps)
+	}
+}
+
+func TestMCPModernRequestAndVersionNegotiation(t *testing.T) {
+	ts := newMCPServer(t, nil)
+
+	// A modern request carrying a supported version succeeds and is stateless.
+	out := rpc(t, ts, "", "tools/list", map[string]any{
+		"_meta": map[string]any{"io.modelcontextprotocol/protocolVersion": "2026-07-28"},
+	})
+	result, ok := out["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("tools/list failed: %v", out)
+	}
+	if result["resultType"] != "complete" {
+		t.Errorf("resultType = %v", result["resultType"])
+	}
+
+	// An unsupported version yields UnsupportedProtocolVersionError (-32022).
+	out = rpc(t, ts, "", "tools/list", map[string]any{
+		"_meta": map[string]any{"io.modelcontextprotocol/protocolVersion": "1900-01-01"},
+	})
+	rpcErr, ok := out["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected error, got %v", out)
+	}
+	if code, _ := rpcErr["code"].(float64); int(code) != -32022 {
+		t.Errorf("error code = %v", rpcErr["code"])
+	}
+	data, _ := rpcErr["data"].(map[string]any)
+	if data["requested"] != "1900-01-01" {
+		t.Errorf("error data = %v", data)
+	}
+}
+
 func TestMCPTools(t *testing.T) {
 	ts := newMCPServer(t, nil)
 

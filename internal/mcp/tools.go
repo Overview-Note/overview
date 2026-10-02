@@ -47,12 +47,14 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, *rp
 	if err != nil {
 		// MCP reports tool execution failures in-band.
 		return map[string]any{
-			"content": []map[string]any{{"type": "text", "text": err.Error()}},
-			"isError": true,
+			"resultType": "complete",
+			"content":    []map[string]any{{"type": "text", "text": err.Error()}},
+			"isError":    true,
 		}, nil
 	}
 	return map[string]any{
-		"content": []map[string]any{{"type": "text", "text": result}},
+		"resultType": "complete",
+		"content":    []map[string]any{{"type": "text", "text": result}},
 	}, nil
 }
 

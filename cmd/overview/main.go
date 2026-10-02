@@ -156,6 +156,7 @@ func serve() {
 		}
 		mcpHandler = mcp.New(svc, verify)
 	}
+	mcp.ServerVersion = version
 
 	dav := server.NewDAV(st.NotesDir(), auth, func(paths []string) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

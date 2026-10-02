@@ -73,6 +73,23 @@ printf '# Deploy\n\nrun `make docker`\n' | overview -C ./data write "Ops/Deploy.
 overview -C ./data search Deploy --json | jq -r '.[].path'
 ```
 
+## Static site
+
+Render the vault to a **deployable static site** — plain HTML, CSS and a
+dependency-free client-side search index — ready for GitHub Pages, Netlify, S3,
+or any static host:
+
+```bash
+overview build ./public                 # public notes only (default _site)
+overview build ./public --base /docs/   # URL prefix for sub-path hosting
+overview build ./public --all           # include notes not marked public
+overview build ./public --title "My Docs"
+```
+
+Output contains one `.html` per note, `index.html`, `style.css`, `search.js` and
+`search-index.json`. This mirrors `overview export`, but is a normal CLI command
+that reads the current on-disk state directly.
+
 ## Relationship to the server
 
 The CLI and the HTTP server share the same `service` layer (see

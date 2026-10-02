@@ -33,8 +33,22 @@ POST http://<host>:5230/mcp
 Authorization: Bearer <OVERVIEW_MCP_TOKEN>
 ```
 
-Methods: `initialize`, `tools/list`, `tools/call`. The tool list is generated from the
-OpenAPI document so it stays in sync with the REST API.
+The server implements the current spec (`2026-07-28`) and stays compatible with
+older clients (a **dual-era** server):
+
+- **Modern (2026-07-28)** — stateless requests that carry their protocol version
+  in per-request `_meta` (`io.modelcontextprotocol/protocolVersion`).
+  `server/discover` reports the supported versions, capabilities and identity.
+  Every result includes `resultType: "complete"`.
+- **Legacy (2025-11-25 and earlier)** — the `initialize` handshake is still
+  answered for existing clients.
+
+If a request declares a version the server does not support it replies with
+`UnsupportedProtocolVersionError` (`-32022`) listing the supported versions.
+
+Methods: `server/discover`, `initialize`, `tools/list`, `tools/call`, `ping`
+(legacy). The tool list is generated from the OpenAPI document so it stays in
+sync with the REST API.
 
 Tools:
 

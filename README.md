@@ -195,6 +195,8 @@ are re-indexed automatically.
 **MCP (Model Context Protocol)**
 
 Point an MCP client at `http://<host>:5230/mcp` with `Authorization: Bearer <OVERVIEW_MCP_TOKEN>`.
+Implements the current spec (`2026-07-28`: stateless `_meta`, `server/discover`,
+`resultType`) while remaining compatible with older `initialize`-handshake clients.
 Tools: `notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`, `notes_links`.
 
 **OpenAPI**
@@ -220,6 +222,7 @@ overview move "Guide/Intro.md" "Archived/Intro.md"
 overview history "Guide/Intro.md"               # revisions
 overview restore "Guide/Intro.md" <id>
 overview export-zip vault.zip && overview import vault.zip
+overview build ./public --all                   # deployable static site
 ```
 
 Global flags: `-C, --data-dir DIR` (target a vault) and `--json` (machine-readable
