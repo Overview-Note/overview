@@ -66,7 +66,7 @@ services:
 | `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset) |
 | `OVERVIEW_LOG_MAX_MB` | `10` | Max log file size before rotation |
 | `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep (`0` truncates) |
-| `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP |
+| `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP (protocol `2026-07-28`) |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI) |
 | `OVERVIEW_AI_API_KEY` | — | AI provider key |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | AI model |
@@ -75,8 +75,17 @@ services:
 | `OVERVIEW_S3_REGION` | `us-east-1` | S3 region |
 | `OVERVIEW_S3_ACCESS_KEY` / `_SECRET_KEY` | — | S3 credentials |
 
-`overview export` also reads `OVERVIEW_EXPORT_DIR` (default `_site`) and
-`OVERVIEW_EXPORT_BASE` (URL prefix, default `/`).
+`overview build` (alias `overview export`) also reads `OVERVIEW_EXPORT_DIR` (default `_site`)
+and `OVERVIEW_EXPORT_BASE` (URL prefix, default `/`). Pass `--all` to include non-public notes.
+
+## Static site from the CLI
+
+Render the vault to a deployable static site without running the server:
+
+```bash
+overview -C ./data build ./public --base /docs/   # public notes
+overview -C ./data build ./public --all           # include private notes
+```
 
 ## Logging
 

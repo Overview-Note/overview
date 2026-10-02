@@ -206,9 +206,9 @@ func parseArgs(fs *flag.FlagSet, args []string) error {
 		if strings.HasPrefix(a, "-") && a != "-" {
 			flags = append(flags, a)
 			name := strings.TrimLeft(a, "-")
-			if eq := strings.IndexByte(name, '='); eq >= 0 {
-				name = name[:eq]
-			} else if !isBoolFlag(fs, name) && i+1 < len(args) {
+			// A separate value token follows unless the value is attached
+			// (--flag=value) or the flag is a boolean.
+			if !strings.Contains(name, "=") && !isBoolFlag(fs, name) && i+1 < len(args) {
 				flags = append(flags, args[i+1])
 				i++
 			}

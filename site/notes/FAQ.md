@@ -27,7 +27,14 @@ Yes, via WebDAV at `http://<host>:5230/dav/`. External edits are re-indexed auto
 
 ## Can AI agents use it?
 
-Yes — the built-in MCP server exposes list/search/read/write/delete tools.
+Yes — the built-in MCP server (protocol `2026-07-28`) exposes 22 tools covering notes,
+folders, history, trash, assets and reindex, mirroring the CLI and REST API.
+
+## Is there a command-line tool?
+
+Yes. `overview <command>` runs against a data directory with no server:
+`list/search/read/write/move`, `history/restore`, `trash`, `asset-upload`, `import/export-zip`,
+and `build` to render a deployable static site. See [[CLI]].
 
 ## Is there a mobile app?
 

@@ -33,6 +33,18 @@ make fmt      # gofmt + prettier
 
 - **Go:** `go test ./...` — per-package unit tests plus `httptest` integration tests.
 - **Frontend:** `npm test` (Vitest) for pure logic; `npm run lint` for type-checking.
+- **Lint:** `golangci-lint run` (v2.14) and `vue-tsc`.
+
+## CLI
+
+`cmd/overview` dispatches to `internal/cli`, which reuses the `service` layer offline:
+
+```bash
+go run ./cmd/overview list
+go run ./cmd/overview build ./_site --all
+```
+
+See [[CLI]] for the full command list and [[MCP and AI]] for the agent interface.
 
 ## Logging
 

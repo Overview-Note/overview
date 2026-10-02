@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.10.2（已知问题修复）
+> 版本：v0.11.0（CLI 化 · MCP 2026-07-28 · 性能与品牌）
 > 更新日期：2026-10-02
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -21,6 +21,7 @@
 | v0.9.0 | 可见性与开源 | 每篇私有/公开可见性选择器、独立公开页（globe）、开源文档与协作基建 |
 | v0.10.0 | 对标 memos 补齐 | 代码高亮 / 任务列表 / KaTeX / Mermaid / 脚注、拖拽移动、ZIP 导入导出、浏览器快速捕获、专注模式与快捷键面板、MCP 工具由 OpenAPI 生成、sitemap/robots、i18n 增繁中/日/德 |
 | v0.10.2 | 已知问题修复 | render 模式白名单、历史保留策略、导出站搜索、WebDAV 增量重建、OpenAPI 补全、表格/wiki 往返修复 |
+| v0.11.0 | CLI 化 · MCP 升级 · 性能与品牌 | 离线 CLI（笔记/检索/历史/回收站/附件/归档）、`build` 静态站生成、MCP 升级到 `2026-07-28`（无状态 `_meta` + `server/discover` + `resultType`）并补齐到 22 个工具、前端路由切分 + 静态资源 gzip/immutable 缓存（Lighthouse 99）、可拖拽侧栏与对比度回归、笔记风格新 Logo 与暖色柔和主题、GHCR 多架构镜像 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -111,6 +112,13 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 | ADR-025 | AI 配置支持运行时覆盖（settings 表 + 环境变量默认） | 管理员可在界面改 BaseURL/Key/Model 并即时生效 | 密钥仅在服务端保存，接口永不回传 |
 | ADR-026 | UI 采用派生自 `--base-size` 的字号阶梯 | 编辑器与周边 UI 字号统一，随字号设置整体缩放 | 新增 `--text-xs/sm/ui/body` 令牌 |
 | ADR-027 | 编辑操作与非编辑操作分离（格式化工具栏 vs 笔记栏） | 语义清晰：工具栏只做排版，页面级动作独立 | 笔记栏承载大纲/历史/AI/分享 |
+| ADR-028 | 新增离线 CLI（`internal/cli`），复用 `service` 层 | 让 Overview 可被脚本/编辑器/工具调用，无需启动服务 | CLI 与 REST/WebDAV/MCP 共享同一业务层 |
+| ADR-029 | `overview export` 合并为 `overview build` 的别名 | 消除两套静态站导出实现 | 旧命令与 Makefile 目标保持可用 |
+| ADR-030 | MCP 升级到 `2026-07-28`，实现为 dual-era 服务端 | 兼容最新无状态协议，同时不破坏旧握手客户端 | 每请求 `_meta` 版本协商、`server/discover`、`resultType` |
+| ADR-031 | MCP 工具面拉平到 CLI/REST（22 个工具） | 让 AI 能执行与人类同等的操作 | 工具 schema 由 OpenAPI 生成，个别手写覆盖 |
+| ADR-032 | 前端路由全部懒加载并按需注入编辑器重依赖 | 首屏不再加载 TipTap/KaTeX/lowlight/mermaid | 初始 JS 从 ~1.1MB 降至 ~154KB |
+| ADR-033 | 静态资源在 Go 侧 gzip 压缩 + 哈希资源 immutable 缓存 | Lighthouse 从 80+ 提升到 99 | 前端资源不再走 `http.FileServer` 裸服务 |
+| ADR-034 | 品牌改为笔记/文档图形 + 暖色柔和调色板 | 定位是笔记软件；降低刺眼对比但保留层级 | 设计令牌整体调整，符号色改为变量 |
 
 ---
 
@@ -256,9 +264,18 @@ Base：`/api/v1`
 
 | 路径 | 说明 |
 | --- | --- |
-| `/assets/{path...}` | 附件访问（需认证；内嵌前端资源优先） |
+| `/assets/{path...}` | 附件访问（需认证；内嵌前端资源优先，经静态处理器压缩/缓存） |
 | `/dav/` | WebDAV 挂载（Basic 认证，需 auth=multi） |
-| `/mcp` | MCP 服务端（JSON-RPC 2.0，Bearer 令牌） |
+| `/mcp` | MCP 服务端（JSON-RPC 2.0，Bearer 令牌，协议 `2026-07-28`） |
+| `/api/docs` | 自包含的 OpenAPI 交互文档 |
+
+**CLI（离线，复用同一 `service` 层）**
+
+`overview [全局参数] <命令>`，全局参数 `-C/--data-dir DIR`、`--json`。命令覆盖：
+`list/search/read/get/write/delete/move/rename/mkdir/links/resolve`、
+`history/revision/restore`、`trash/trash-restore/trash-purge`、
+`asset-upload/assets-orphans/assets-purge`、`import/export-zip`、
+`build`（静态站，`export` 为其别名）。CLI 直接读写数据目录，**无需启动服务**，便于脚本与工具调用。
 
 **错误响应**
 ```json
@@ -289,20 +306,28 @@ Base：`/api/v1`
 
 ```
 main.ts → Pinia + Router
-router.ts        /  → EmptyState ； /note/:path(.*) → EditorPane
+router.ts        全部路由懒加载（import()）：/ → EmptyState ； /note/:path(.*) → EditorPane
+                 /public[/:path] → PublicHomeView / PublicNoteView ； /login /setup /trash /capture
 stores/
   workspace.ts   目录树、当前笔记、增删改查、搜索
-  dialog.ts      Promise 化的 ask/askConfirm（替代 window.prompt）
+  settings.ts    主题/字号/语言/压缩/专注/侧栏宽度（localStorage）
+  auth.ts site.ts dialog.ts
 components/
   App.vue        布局 + RouterView + DialogHost
-  Sidebar.vue    操作 + 搜索 + 目录树
-  TreeNodeItem.vue 递归节点
-  EditorPane.vue Tiptap 编辑器 + 工具栏
-  DialogHost.vue 弹窗渲染
-  EmptyState.vue 空态
+  BrandMark.vue  品牌图形（笔记/文档 SVG）
+  Sidebar.vue    操作 + 搜索 + 目录树 + 可拖拽宽度
+  TreeNodeItem.vue 递归节点（行内操作浮层，不改变行高）
+  EditorPane.vue Tiptap 编辑器 + 工具栏 + 笔记栏
+  PublicShell.vue 公开页外壳（文档站风格）
+  DialogHost.vue EmptyState.vue SlashMenu.vue TocPanel.vue HistoryPanel.vue LinksPanel.vue AiPanel.vue
+editor/          extensions.ts / nodes.ts / lowlight.ts / slash.ts
+markdown/        pipeline.ts / tasks.ts / math.ts / diagrams.ts / doc.ts / rules.ts / footnotes.ts
 api.ts           类型化客户端（/api/v1，ApiError）
-styles.css       gridea 文档风 + 深色模式
+styles.css       暖色柔和设计令牌（明/暗）+ 组件样式
 ```
+
+**构建分包**：路由懒加载使编辑器重依赖（TipTap / KaTeX / lowlight / Mermaid）不进首屏；
+Vite 自动按需拆分（不使用 `manualChunks`，避免把预加载 helper 分进巨块）。
 
 ### 8.2 编辑与自动保存
 
@@ -352,13 +377,22 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | `store` | 路径安全、写读、版本契约、List/Walk、Move/Delete、附件 |
 | `index` | 迁移、Sync/Tree、中文中缀检索、快照转义、Upsert/Delete |
 | `service` | 树组装、保存+检索、删除笔记/文件夹、冲突传播 |
-| `server` | 完整生命周期、409、路径校验、附件上传/服务头 |
+| `server` | 完整生命周期、409、路径校验、附件上传/服务头、静态资源 gzip/304/SPA 回退、render 白名单 |
+| `history`/`trash` | 版本快照与裁剪、回收站恢复/清理 |
+| `archivex`/`sitegen` | ZIP 往返、静态站生成与搜索索引 |
+| `config`/`logging`/`ai`/`openapi` | 配置解析、日志轮转、AI 客户端、OpenAPI 规范 |
+| `mcp` | 初始化/发现、工具调用、认证、**协议版本协商**、`resultType`、工具面平铺（≥20 工具） |
+| `cli` | 读写/检索、参数位置无关解析、list/move、归档往返、history/restore、`build`/`export` 别名、用法错误 |
 
-集成测试用 `httptest` 真实走 HTTP 栈；`store`/`service` 用 `t.TempDir()`。
+前端：`vue-tsc` 类型检查、**Vitest** 单元测试（`npm test`，覆盖 `markdown/html`、`markdown/doc`、`markdown/roundtrip`）、`vite build`。
 
-### 9.3 CI
+集成测试用 `httptest` 真实走 HTTP 栈；`store`/`service`/`cli` 用 `t.TempDir()`。
 
-`.github/workflows/ci.yml`：后端 `go vet` + `go test -race -cover`；前端 `npm ci` + 类型检查 + 构建；`golangci-lint`。
+### 9.3 CI 与发布
+
+- `.github/workflows/ci.yml`：后端 `go vet` + `go test -race -cover`；前端 `npm ci` + `vue-tsc` + `npm test` + `vite build`；`golangci-lint`。
+- `.github/workflows/docker.yml`：推送 `v*` 标签时构建 **多架构（amd64/arm64）** 镜像并发布到 **GHCR**（`ghcr.io/<owner>/<repo>`），使用内置 `GITHUB_TOKEN`，无需额外密钥。
+- `.github/workflows/pages.yml`：导出文档站（`overview export`）并部署到 GitHub Pages。
 
 ---
 
@@ -391,6 +425,10 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 
 > 已修复（原「已知问题」）：render 模式只读端点越权、版本历史无清理、静态导出站无搜索、
 > WebDAV 写入全量重建、OpenAPI spec 端点缺失、表格/wiki 链接往返损坏。
+>
+> v0.11.0 补充：侧栏悬浮抖动（行内操作改为绝对定位浮层）、长文件名不可见（新增可拖拽宽度 +
+> 悬浮提示）、柔和配色导致层级不清（加深文字令牌、强化激活态）、连续切换卡顿（取消过期加载、
+> 后台保存、Mermaid 渲染防抖）、首屏体积偏大（路由懒加载 + 静态资源 gzip/immutable）。
 
 ---
 
@@ -487,6 +525,26 @@ P2 — 打磨与生态
 - [x] OpenAPI spec 补齐 `/settings/ai`、`/assets/{path}`、`/export`、`/import`，并说明 `/dav`、`/mcp`
 - [x] 编辑器表格 / wiki 链接 Markdown 往返修复（`sanitizeEditorHtml`、保留 `data-wiki`）
 
+**Phase 8 — CLI 化、MCP 升级与性能（v0.11.0）**
+
+可编程与集成
+- [x] 离线 CLI：`list/search/read/get/write/delete/move/rename/mkdir/links/resolve`
+- [x] CLI：`history/revision/restore`、`trash/trash-restore/trash-purge`
+- [x] CLI：`asset-upload/assets-orphans/assets-purge`、`import/export-zip`
+- [x] CLI：`build` 静态站生成（`--all` 可导出全部笔记），`export` 保留为别名
+- [x] MCP 升级到 `2026-07-28`：无状态 `_meta`、`server/discover`、`resultType`、版本协商（dual-era）
+- [x] MCP 工具面拉平到 CLI/REST（22 个工具）
+
+体验与性能
+- [x] 前端路由懒加载 + 重依赖按需加载（首屏 JS ~154KB）
+- [x] 静态资源 gzip + 哈希资源 immutable 缓存 + ETag 协商（Lighthouse 99）
+- [x] 侧栏可拖拽宽度、行内操作浮层消除悬浮抖动、长文件名提示
+- [x] 连续切换笔记性能：过期加载取消、后台保存、Mermaid 渲染防抖
+- [x] 笔记/文档风格新 Logo；暖色柔和调色板（保留层级对比）
+
+交付
+- [x] GHCR 多架构（amd64/arm64）镜像自动发布（`.github/workflows/docker.yml`）
+
 ---
 
 ## 13. 附录
@@ -510,7 +568,7 @@ P2 — 打磨与生态
 | `OVERVIEW_RENDER` | `false` | 设为 `true` 变为公开只读文档站 |
 | `OVERVIEW_EXPORT_DIR` | `_site` | `overview export` 输出目录 |
 | `OVERVIEW_EXPORT_BASE` | `/` | `overview export` URL 前缀 |
-| `OVERVIEW_MCP_TOKEN` | 空 | MCP Bearer 令牌；空且 auth=multi 时用会话令牌 |
+| `OVERVIEW_MCP_TOKEN` | 空 | MCP Bearer 令牌；空且 auth=multi 时用会话令牌（协议 `2026-07-28`） |
 | `OVERVIEW_AI_BASE_URL` | 空 | OpenAI 兼容基址（如 `https://api.openai.com/v1`）；空则禁用 AI |
 | `OVERVIEW_AI_API_KEY` | 空 | AI 密钥 |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | 模型名 |
@@ -610,3 +668,55 @@ P2 — 打磨与生态
 - v0.6：公开笔记匿名可读、私有笔记 404；MCP `initialize`/`tools/list` 正常、无令牌 401；AI 未配置返回 503、配置 mock 后 `organize` 返回重写内容
 - v0.7：磁盘新建文件 2s 内可被搜索（文件监视器）；软删除进入回收站并可恢复；`/api/v1/openapi.json`、`/api/docs`、`/manifest.webmanifest`、`/sw.js`、`/icon.svg` 均 200
 - v0.8：管理员保存 AI 配置后 `ai/status` 由 `enabled:false` 变为 `enabled:true`，`settings/ai` 回传 `hasKey:true` 且不含密钥；主题/字号切换即时生效；`vue-tsc` 与 `go test ./...` 全绿
+
+### 13.10 离线 CLI（v0.11.0，ADR-028/029）
+
+`internal/cli` 把 `service` 用例映射为命令行，直接操作数据目录，**不启动 HTTP 服务**。
+它让 Overview 能作为「纯 Markdown 编辑器/索引」被脚本与工具调用，也方便在无服务器场景批量处理。
+
+- **全局参数**：`-C/--data-dir DIR`（`config.WithDataDir` 重算派生路径）、`--json`（机器可读）。
+- **参数顺序无关**：自实现 `parseArgs`，允许 `write <path> --body …`（Go `flag` 默认遇到位置参数即停止）。
+- **命令**：`list/search/read/get/write/delete/move/rename/mkdir/links/resolve`、
+  `history/revision/restore`、`trash/trash-restore/trash-purge`、
+  `asset-upload/assets-orphans/assets-purge`、`import/export-zip`、`build`（`export` 别名）。
+- **`write`**：`--file/--stdin/--body` 三选一，`--public`、`--create`、`--if-version`（乐观并发）。
+- **`build`**（ADR-029）：调用 `sitegen.Generate` 生成可部署静态站（HTML/CSS/`search.js`/`search-index.json`）；
+  `--all` 导出全部笔记（默认仅 `public`），`--base`/`--title`/`--out` 可配。
+
+### 13.11 MCP 协议升级与工具拉平（v0.11.0，ADR-030/031）
+
+MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支持新协议与旧握手）：
+
+- **Modern（2026-07-28）**：请求在 `_meta` 中携带 `io.modelcontextprotocol/protocolVersion`；
+  服务端无状态处理；`server/discover` 返回 `supportedVersions`、`capabilities`、`serverInfo`
+  （`resultType: "complete"`）；所有结果带 `resultType`。
+- **版本协商**：不支持的版本返回 `UnsupportedProtocolVersionError`（`-32022`），`data` 列出支持版本；
+  同时接受 `MCP-Protocol-Version` 头。
+- **Legacy 兼容**：保留 `initialize` 握手与 `ping`，旧客户端无缝可用。
+- **工具面（22 个，ADR-031）**：`notes_list/search/read/write/delete/move/rename/links/resolve`、
+  `folder_create`、`notes_history/revision/restore`、`trash_list/restore/purge`、
+  `assets_upload/orphans/purge`、`notes_reindex`、`public_notes/public_note`。
+  Schema 由 OpenAPI 生成，`notes_rename`/`assets_upload` 等用手写覆盖。
+
+### 13.12 性能与品牌（v0.11.0，ADR-032/033/034）
+
+- **首屏性能**（ADR-032）：所有路由 `import()` 懒加载，编辑器重依赖不再进首屏；初始 JS 由 ~1.1MB
+  降至 ~154KB（gzip ~57KB），页面总重 ~67KiB。
+- **传输优化**（ADR-033）：`internal/server/static.go` 对静态资源 **gzip**（压缩结果内存缓存）、
+  哈希资源 `Cache-Control: immutable`、壳文件 `no-cache` + ETag 304、SPA 回退；前端 `/assets/*`
+  统一经该处理器（此前被上传路由绕过）。Lighthouse（移动端）由 80+ 提升到 **99**。
+- **交互修复**：侧栏行内操作改为绝对定位浮层（消除悬浮引起的行高/截断抖动）；新增可拖拽宽度
+  （持久化，双击复位）与文件名提示；加深文字令牌、强化激活态以恢复层级。
+- **品牌**（ADR-034）：Logo 改为「页面 + 折角 + 文字行」的笔记/文档图形；调色板改为暖色柔和
+  纸感灰 + 长春花靛蓝主色，成功/危险与代码高亮去饱和（`--hl-*` 变量）。
+
+### 13.13 v0.11.0 验证记录
+
+- `go build ./...`、`go vet ./...`、`golangci-lint run`（0 issues）、`go test ./...` 全绿
+- 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿
+- CLI 端到端：`write/read/search/links/history/revision/restore/move/delete/trash-*`、
+  `asset-upload/assets-orphans/assets-purge`、`export-zip`+`import` 往返、`build`（9 页）均通过
+- MCP：`server/discover` 返回支持版本；现代请求带 `resultType`；不支持版本返回 `-32022`；
+  `tools/list` ≥20 工具；`folder_create`/`move`/`history`/`trash_list` 实测通过
+- Lighthouse（移动端模拟，登录页）：Performance **99**，FCP 1.3s / LCP 1.9s / TBT 30ms / CLS 0
+- Docker：推送 `v*` 触发 GHCR 多架构镜像构建成功

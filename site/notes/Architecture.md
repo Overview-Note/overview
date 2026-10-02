@@ -29,7 +29,7 @@ public: true
    disposable, rebuildable index.
 2. **Dependency inversion.** `service` depends only on interfaces declared in `core`,
    so backends (e.g. S3 assets) can be swapped without touching business logic.
-3. **Thin adapters.** The same `service` powers REST, WebDAV and MCP.
+3. **Thin adapters.** The same `service` powers REST, WebDAV, MCP **and the offline CLI**.
 4. **Safe writes.** Atomic writes (temp → fsync → rename) and optimistic concurrency
    (content hash / ETag → 409).
 
@@ -47,15 +47,18 @@ public: true
 | `watcher` | fsnotify-based live reindex |
 | `archivex` | Portable ZIP export/import |
 | `s3store` | S3-compatible asset backend |
-| `mcp`, `openapi` | MCP server, OpenAPI spec |
-| `sitegen` | Static documentation-site export |
+| `mcp` | MCP server (protocol `2026-07-28`, dual-era, 22 tools) |
+| `cli` | Offline command-line adapter (notes, history, trash, assets, static site) |
+| `openapi` | OpenAPI spec (also drives MCP tool schemas) |
+| `sitegen` | Static documentation-site export (HTML + client-side search) |
 | `ai` | OpenAI-compatible chat client |
 | `config`, `logging` | Environment config, structured logging |
-| `server`, `webui` | HTTP routing/middleware, embedded frontend |
+| `server`, `webui` | HTTP routing/middleware, static handler (gzip + caching), embedded frontend |
 
 ## Testing
 
 - **Go:** `go test ./...` — unit tests per package plus `httptest` integration tests.
 - **Frontend:** `npm test` (Vitest) for pure logic, `vue-tsc` type-check, `vite build`.
 - **CI:** `.github/workflows/ci.yml` runs the backend race tests, frontend checks and
-  `golangci-lint` on every push/PR.
+  `golangci-lint` on every push/PR. Pushing a `v*` tag builds a multi-arch image to GHCR
+  (`.github/workflows/docker.yml`).

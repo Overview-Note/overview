@@ -321,6 +321,11 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] Sitemap/robots, public pages styled as a docs site
 - [x] Render-mode API whitelist, history retention, static-site search, incremental WebDAV,
   full OpenAPI spec, lossless table/wiki-link round-trip
+- [x] Offline CLI (notes/search/history/trash/assets/archives) and `build` static-site command
+- [x] MCP upgraded to `2026-07-28` (stateless `_meta`, `server/discover`, `resultType`) with
+  22 tools matching the CLI/REST surface
+- [x] Performance: route code-splitting + gzip/immutable static caching (Lighthouse 99)
+- [x] Note/document logo, soft warm theme, resizable stable sidebar, GHCR multi-arch images
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

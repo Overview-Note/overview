@@ -47,16 +47,19 @@ internal/
   history, trash    revision snapshots, soft delete
   watcher           fsnotify-based live reindex
   s3store           S3-compatible asset backend
-  mcp, openapi      MCP server, OpenAPI spec
-  server            HTTP adapter (routing, middleware, handlers)
+  mcp               MCP server (protocol 2026-07-28, dual-era, 22 tools)
+  cli               offline command-line adapter (notes/history/trash/assets/static site)
+  openapi           OpenAPI spec (also drives MCP tool schemas)
+  sitegen           static documentation-site export
+  server            HTTP adapter (routing, middleware, handlers, static handler)
   webui             embedded frontend (built output)
 web/                Vue 3 + Tiptap frontend source
 docs/               design document, project overview
 ```
 
 **Architecture rule:** business logic lives in `service` and depends only on the
-interfaces declared in `core`. Adapters (`store`, `index`, `s3store`, `server`, `mcp`)
-implement or consume those interfaces. Keep HTTP handlers thin.
+interfaces declared in `core`. Adapters (`store`, `index`, `s3store`, `server`, `mcp`,
+`cli`) implement or consume those interfaces. Keep HTTP handlers thin.
 
 ## Before you open a PR
 

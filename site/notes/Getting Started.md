@@ -41,6 +41,17 @@ cd overview
 make demo            # serves demo/ on :5230 (first visit creates an admin)
 ```
 
+## Command line
+
+Every vault operation is also available without a server via the [[CLI]]:
+
+```bash
+overview -C ./data list                 # note tree
+overview -C ./data write "Notes/First.md" --stdin < draft.md
+overview -C ./data search "keyword" --json
+overview -C ./data build ./public --all # deployable static site
+```
+
 ## Local development
 
 ```bash
@@ -64,6 +75,7 @@ Requirements: **Go 1.26+**, **Node 22+**, Docker (optional). See [[Development]]
 
 ## Next
 
+- [[CLI]]
 - [[Features]]
 - [[Deployment]]
 - [[Development]]

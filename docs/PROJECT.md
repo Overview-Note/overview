@@ -56,11 +56,14 @@ store · index · s3store · watcher · mcp · server
 - 增量索引（`ReplacePrefix`）+ fsnotify 文件监视器，外部编辑即时可搜
 
 ### 6. AI 原生
-- **MCP 服务端**：`POST /mcp`（JSON-RPC 2.0），暴露 `notes_list/search/read/write/delete/links`
+- **MCP 服务端**：`POST /mcp`（JSON-RPC 2.0，协议 `2026-07-28`，向下兼容旧握手），暴露 22 个工具
+  （笔记/目录/历史/回收站/附件/索引/公开笔记），与 CLI、REST 能力拉平
 - **AI 助手**：对话 / 整理（替换）/ 补全（追加），支持 OpenAI、DeepSeek、Ollama、vLLM 等
 - 管理员可在**设置**中运行时配置，无需重启
 
-### 7. 多端接入
+### 7. 多端接入与自动化
+- **离线 CLI**：`overview <命令>` 直接操作数据目录，无需服务；覆盖读写/检索/历史/回收站/附件/归档，
+  并提供 `build` 一键生成可部署静态站
 - **WebDAV**：在 Obsidian / Finder / 移动端直接挂载读写
 - **REST API**：`/api/v1`，OpenAPI 规范 + `/api/docs`
 - **PWA**：可安装的应用壳
@@ -99,16 +102,17 @@ store · index · s3store · watcher · mcp · server
 
 ## 项目状态
 
-- **版本**：v0.10.2（架构稳定，功能覆盖路线图 Phase 2–6 并修复已知问题；Phase 7 待排期）
-- **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi 等
+- **版本**：v0.11.0（在 v0.10.2 基础上新增离线 CLI、MCP 升级到 2026-07-28 并补齐工具面、
+  前端性能优化与品牌改版；Phase 7 部分待排期）
+- **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli
   以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试）；前端 `vue-tsc` 类型检查、
   **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
-- **CI**：GitHub Actions（后端 race 测试、前端类型检查构建、golangci-lint）
-- **交付**：Docker / 单二进制（内嵌前端），浏览器访问
-- **规模**：后端 ~7k 行 Go / 18 个 internal 包；前端 ~4k 行 TS/Vue
-- **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.10.2 已修复 render 模式越权、历史无清理、
-  导出站无搜索、WebDAV 全量重建、OpenAPI 缺项与表格/wiki 往返；仍待办的是标签/置顶/实时协作/评论
-  等功能（Phase 7）与 i18n 语言扩充（暂缓）
+- **CI**：GitHub Actions（后端 race 测试、前端类型检查+测试+构建、golangci-lint）；
+  推送 `v*` 标签自动构建 **多架构镜像** 发布到 GHCR
+- **交付**：Docker / 单二进制（内嵌前端）/ GHCR 镜像，浏览器访问
+- **规模**：后端 ~8k 行 Go / 19 个 internal 包；前端 ~4k 行 TS/Vue
+- **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.11.0 已修复侧栏悬浮抖动/长文件名/性能/首屏体积
+  等问题；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
 
 ---
 
