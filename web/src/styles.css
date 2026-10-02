@@ -2043,8 +2043,30 @@ mark {
   justify-content: center;
 }
 
-.public-home-link {
+.public-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.public-action-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.public-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.public-home-link {
   font-size: 14px;
   color: var(--text-muted);
   text-decoration: none;

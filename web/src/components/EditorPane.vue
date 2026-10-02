@@ -325,6 +325,21 @@ function openPublicPage() {
   }
 }
 
+async function gotoPublicPage() {
+  if (!currentPath) return;
+  if (!isPublic.value) {
+    const ok = await dialogs.askConfirm(
+      t("editor.publishTitle"),
+      t("editor.publishMessage"),
+      false,
+    );
+    if (!ok) return;
+    setVisibility(true);
+  }
+  if (dirty.value) await flush();
+  openPublicPage();
+}
+
 function toggleAI() {
   showAI.value = !showAI.value;
   if (showAI.value && !aiEnabled.value) {
@@ -434,6 +449,13 @@ onBeforeUnmount(() => {
     <div class="note-bar">
       <div class="note-bar-title">{{ store.note?.title || store.note?.path }}</div>
       <div class="note-bar-actions">
+        <button
+          class="note-bar-public"
+          :title="t('editor.publicPage')"
+          @click="gotoPublicPage"
+        >
+          {{ t("editor.publicPage") }}
+        </button>
         <button
           :class="{ on: showToc }"
           :title="t('editor.toc')"

@@ -11,10 +11,11 @@ documentation site.
 make demo
 ```
 
-Then open <http://localhost:5230>. Auth is disabled in demo mode, so there is no
-login step.
+Then open <http://localhost:5230>. Authentication is enabled, so the first visit
+shows the setup screen where you create an admin account (or sign in if one
+already exists). Database and sessions live in `demo/overview.db`.
 
-Or run it directly:
+To browse without logging in (single-user mode, no user management):
 
 ```bash
 OVERVIEW_AUTH=none OVERVIEW_DATA_DIR=./demo go run ./cmd/overview

@@ -40,7 +40,10 @@ function headingClass(level: number): string {
         <span class="public-mark">O</span>
         <span>{{ site.siteTitle || "Overview" }}</span>
       </a>
-      <a class="public-home-link" href="/public">{{ t("public.allNotes") }}</a>
+      <div class="public-actions">
+        <slot name="actions" />
+        <a class="public-home-link" href="/public">{{ t("public.allNotes") }}</a>
+      </div>
     </header>
 
     <div class="public-layout">
