@@ -48,7 +48,7 @@ func newServiceWithLifecycle(t *testing.T) *service.Service {
 	}
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
-	hist := history.New(filepath.Join(root, ".history"))
+	hist := history.New(filepath.Join(root, ".history"), 0)
 	tr := trash.New(filepath.Join(root, ".trash"))
 	return service.New(st, ix, st, hist, tr)
 }

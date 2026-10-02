@@ -15,6 +15,10 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
   <a class="brand" href="{{.Base}}index.html">
     <span class="mark">O</span><span>{{.SiteTitle}}</span>
   </a>
+  <div class="search-box">
+    <input id="search" type="search" placeholder="Search" autocomplete="off" aria-label="Search" />
+    <div id="search-results" class="search-results"></div>
+  </div>
   <a class="home-link" href="{{.Base}}index.html">All notes</a>
 </header>
 <div class="layout">
@@ -34,6 +38,7 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
   </aside>
   {{end}}
 </div>
+<script src="{{.Base}}search.js" defer></script>
 </body>
 </html>
 `))
@@ -51,6 +56,10 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!doctype html>
   <a class="brand" href="{{.Base}}index.html">
     <span class="mark">O</span><span>{{.SiteTitle}}</span>
   </a>
+  <div class="search-box">
+    <input id="search" type="search" placeholder="Search" autocomplete="off" aria-label="Search" />
+    <div id="search-results" class="search-results"></div>
+  </div>
 </header>
 <div class="layout">
   <nav class="sidebar">
@@ -65,6 +74,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!doctype html>
     </ul>
   </main>
 </div>
+<script src="{{.Base}}search.js" defer></script>
 </body>
 </html>
 `))
@@ -87,6 +97,18 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .brand{display:flex;align-items:center;gap:10px;color:var(--text);font-weight:750;font-size:18px;letter-spacing:-.02em}
 .mark{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;font-weight:800;font-size:18px;display:inline-flex;align-items:center;justify-content:center}
 .home-link{margin-left:auto;font-size:14px;color:var(--muted)}
+.search-box{margin-left:auto;position:relative;width:min(360px,40vw)}
+.search-box input{width:100%;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);font:inherit;font-size:14px;outline:none}
+.search-box input:focus{border-color:var(--accent);background:var(--bg)}
+.search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--bg);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.14);max-height:60vh;overflow:auto;display:none;z-index:20}
+.search-results.open{display:block}
+.search-results a{display:block;padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);text-decoration:none}
+.search-results a:last-child{border-bottom:none}
+.search-results a:hover{background:var(--hover)}
+.search-results .sr-title{font-weight:600;font-size:14px}
+.search-results .sr-snippet{display:block;color:var(--soft-text);font-size:12.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.search-results .sr-empty{padding:10px 12px;color:var(--soft-text);font-size:13px}
+@media(max-width:860px){.search-box{width:auto;flex:1}}
 .layout{display:flex;align-items:flex-start;max-width:1240px;margin:0 auto}
 .sidebar{position:sticky;top:52px;width:240px;flex-shrink:0;padding:24px 12px;max-height:calc(100vh - 52px);overflow:auto}
 .nav-item{display:block;padding:5px 10px;border-left:2px solid transparent;border-radius:0 6px 6px 0;color:var(--muted);font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -117,4 +139,81 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .toc-item.lvl-4{padding-left:34px}
 @media(max-width:1100px){.toc{display:none}}
 @media(max-width:860px){.sidebar{display:none}.content{padding:28px 20px 100px}}
+`
+
+// siteJS is a small dependency-free client-side search over search-index.json.
+const siteJS = `(function () {
+  var input = document.getElementById('search');
+  var box = document.getElementById('search-results');
+  if (!input || !box) return;
+
+  var index = [];
+  fetch('search-index.json')
+    .then(function (r) { return r.json(); })
+    .then(function (data) { index = data; })
+    .catch(function () { index = []; });
+
+  var base = document.body.getAttribute('data-base') || '';
+  var active = -1;
+
+  function render(query) {
+    var q = query.trim().toLowerCase();
+    box.innerHTML = '';
+    active = -1;
+    if (!q) { box.classList.remove('open'); return; }
+    var matches = [];
+    for (var i = 0; i < index.length && matches.length < 12; i++) {
+      var e = index[i];
+      var title = e.title || '';
+      var text = e.text || '';
+      var ti = title.toLowerCase().indexOf(q);
+      var xi = text.toLowerCase().indexOf(q);
+      if (ti === -1 && xi === -1) continue;
+      var snippet = '';
+      if (xi !== -1) {
+        var start = Math.max(0, xi - 40);
+        snippet = (start > 0 ? '…' : '') + text.slice(start, start + 120);
+        if (start + 120 < text.length) snippet += '…';
+      }
+      matches.push({ url: e.url, title: title, snippet: snippet });
+    }
+    if (matches.length === 0) {
+      box.innerHTML = '<div class="sr-empty">No results</div>';
+      box.classList.add('open');
+      return;
+    }
+    matches.forEach(function (m) {
+      var a = document.createElement('a');
+      a.href = m.url;
+      var t = document.createElement('span');
+      t.className = 'sr-title';
+      t.textContent = m.title;
+      a.appendChild(t);
+      if (m.snippet) {
+        var s = document.createElement('span');
+        s.className = 'sr-snippet';
+        s.textContent = m.snippet;
+        a.appendChild(s);
+      }
+      box.appendChild(a);
+    });
+    box.classList.add('open');
+  }
+
+  input.addEventListener('input', function () { render(input.value); });
+  input.addEventListener('focus', function () { if (input.value) render(input.value); });
+  input.addEventListener('keydown', function (ev) {
+    var links = box.querySelectorAll('a');
+    if (ev.key === 'Down') { active = Math.min(active + 1, links.length - 1); }
+    else if (ev.key === 'Up') { active = Math.max(active - 1, 0); }
+    else if (ev.key === 'Enter') { if (links[active]) window.location.href = links[active].href; return; }
+    else if (ev.key === 'Escape') { box.classList.remove('open'); return; }
+    else { return; }
+    ev.preventDefault();
+    links.forEach(function (l, i) { l.style.background = i === active ? 'var(--hover)' : ''; });
+  });
+  document.addEventListener('click', function (ev) {
+    if (!box.contains(ev.target) && ev.target !== input) box.classList.remove('open');
+  });
+})();
 `

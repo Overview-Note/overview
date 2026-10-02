@@ -2,7 +2,7 @@
 # Requires: Go 1.26+, Node 22+, Docker (optional)
 
 BINARY := bin/overview
-VERSION ?= 0.2.0-dev
+VERSION ?= 0.10.2
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .PHONY: help dev demo build build-web build-go test test-go test-web lint fmt vet clean docker site site-export
@@ -54,3 +54,4 @@ site: ## Run the documentation site (site/) in read-only render mode on :5230
 
 site-export: ## Export the documentation site to a static site in _site/
 	OVERVIEW_DATA_DIR=./site OVERVIEW_SITE_TITLE="Overview Docs" OVERVIEW_EXPORT_DIR=./_site OVERVIEW_EXPORT_BASE=/ go run ./cmd/overview export
+

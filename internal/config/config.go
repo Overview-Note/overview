@@ -16,6 +16,7 @@ type Config struct {
 	HistoryDir  string
 	TrashDir    string
 	MaxUploadMB int64
+	HistoryKeep int
 	LogLevel    string
 	AuthMode    string
 	MCPToken    string
@@ -50,6 +51,10 @@ func Load() Config {
 	if err != nil || maxUpload <= 0 {
 		maxUpload = 32
 	}
+	historyKeep, err := strconv.Atoi(env("OVERVIEW_HISTORY_KEEP", "50"))
+	if err != nil || historyKeep < 0 {
+		historyKeep = 50
+	}
 	return Config{
 		Addr:        env("OVERVIEW_ADDR", ":5230"),
 		DataDir:     dataDir,
@@ -59,6 +64,7 @@ func Load() Config {
 		HistoryDir:  filepath.Join(dataDir, ".history"),
 		TrashDir:    filepath.Join(dataDir, ".trash"),
 		MaxUploadMB: maxUpload,
+		HistoryKeep: historyKeep,
 		LogLevel:    env("OVERVIEW_LOG_LEVEL", "info"),
 		AuthMode:    env("OVERVIEW_AUTH", "multi"),
 		MCPToken:    env("OVERVIEW_MCP_TOKEN", ""),

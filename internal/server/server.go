@@ -69,6 +69,10 @@ func (s *Server) renderGuard(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") && !renderAllowed(r.URL.Path) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 			next.ServeHTTP(w, r)
@@ -80,6 +84,32 @@ func (s *Server) renderGuard(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		}
 	})
+}
+
+// renderAllowed whitelists the API paths reachable in render mode. Everything
+// else under /api/ is hidden so private endpoints (history, trash, orphan
+// assets, search, settings) cannot leak notes on a public docs site.
+func renderAllowed(p string) bool {
+	switch p {
+	case "/api/v1/health",
+		"/api/v1/auth/state",
+		"/api/v1/tree",
+		"/api/v1/note",
+		"/api/v1/public/notes",
+		"/api/v1/public/note",
+		"/api/v1/openapi.json",
+		"/api/docs":
+		return true
+	}
+	// Attachment maintenance endpoints are never exposed.
+	if strings.HasPrefix(p, "/api/v1/assets/orphans") {
+		return false
+	}
+	// Attachments are needed so images in public notes render.
+	if strings.HasPrefix(p, "/assets/") || strings.HasPrefix(p, "/api/v1/assets/") {
+		return true
+	}
+	return false
 }
 
 func (s *Server) routes() {

@@ -4,7 +4,7 @@ import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { BubbleMenu, EditorContent, useEditor } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
+import { WikiLink } from "../editor/link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -34,6 +34,7 @@ import { t } from "../i18n";
 import { resolveAssetSrc, toVaultMarkdown } from "../markdown/assets";
 import { mermaidToDivs, renderMermaid } from "../markdown/diagrams";
 import { footnotesToHtml } from "../markdown/footnotes";
+import { sanitizeEditorHtml } from "../markdown/html";
 import { katexToHtml } from "../markdown/math";
 import {
   registerFootnoteRules,
@@ -73,6 +74,7 @@ const aiContent = ref("");
 const flashMessage = ref("");
 let flashTimer: number | undefined;
 let suppress = false;
+let loading = false;
 let saveTimer: number | undefined;
 let currentPath = "";
 let baseVersion = "";
@@ -170,7 +172,7 @@ const editor = useEditor({
     FootnoteRef,
     FootnoteDefs,
     Image.configure({ inline: false, allowBase64: false }),
-    Link.configure({ openOnClick: false, autolink: true }),
+    WikiLink.configure({ openOnClick: false, autolink: true }),
     Placeholder.configure({ placeholder: t("editor.placeholder") }),
     Table.configure({ resizable: true, HTMLAttributes: { class: "md-table" } }),
     TableRow,
@@ -213,7 +215,9 @@ const editor = useEditor({
     },
   },
   onUpdate: () => {
-    if (suppress) return;
+    // Ignore programmatic content changes while a note is loading so opening a
+    // note never marks it dirty or triggers a save.
+    if (suppress || loading) return;
     dirty.value = true;
     aiContent.value = editor.value?.getText() ?? "";
     scheduleSave();
@@ -237,12 +241,16 @@ async function load(path: string) {
     const loaded = await store.openNote(path);
     baseVersion = loaded.version;
     isPublic.value = loaded.public;
+    window.clearTimeout(saveTimer);
+    loading = true;
     suppress = true;
     editor.value.commands.setContent(mdToHtml(loaded.body), false);
     suppress = false;
     dirty.value = false;
     status.value = "idle";
-    void nextTick(() => renderMermaid(scrollEl.value));
+    await nextTick();
+    loading = false;
+    void renderMermaid(scrollEl.value);
   } catch {
     // store.error already set
   }
@@ -272,7 +280,9 @@ async function flush() {
   window.clearTimeout(saveTimer);
   const path = currentPath;
   const version = baseVersion;
-  const md = toVaultMarkdown(turndown.turndown(editor.value.getHTML()));
+  const md = toVaultMarkdown(
+    turndown.turndown(sanitizeEditorHtml(editor.value.getHTML())),
+  );
   const previousTitle = store.note?.title;
   dirty.value = false;
   status.value = "saving";

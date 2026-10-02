@@ -26,11 +26,13 @@ type Revision struct {
 
 // Store persists note revisions on the filesystem.
 type Store struct {
-	dir string
+	dir  string
+	keep int // max revisions per note; <=0 keeps everything
 }
 
-// New creates a history store rooted at dir (e.g. <data>/.history).
-func New(dir string) *Store { return &Store{dir: dir} }
+// New creates a history store rooted at dir (e.g. <data>/.history). keep is the
+// maximum number of revisions retained per note (0 disables pruning).
+func New(dir string, keep int) *Store { return &Store{dir: dir, keep: keep} }
 
 // Snapshot saves raw content of rel as a revision and returns it.
 func (s *Store) Snapshot(rel, version string, raw []byte) (Revision, error) {
@@ -46,6 +48,7 @@ func (s *Store) Snapshot(rel, version string, raw []byte) (Revision, error) {
 	if err := os.WriteFile(filepath.Join(dir, name), raw, 0o644); err != nil {
 		return Revision{}, err
 	}
+	s.prune(dir)
 	return Revision{
 		ID:      id,
 		Path:    filepath.ToSlash(rel),
@@ -53,6 +56,39 @@ func (s *Store) Snapshot(rel, version string, raw []byte) (Revision, error) {
 		Size:    int64(len(raw)),
 		Version: version,
 	}, nil
+}
+
+// prune keeps only the newest s.keep snapshots in dir, deleting the rest.
+func (s *Store) prune(dir string) {
+	if s.keep <= 0 {
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) <= s.keep {
+		return
+	}
+	type snap struct {
+		name string
+		mod  time.Time
+	}
+	snaps := make([]snap, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		snaps = append(snaps, snap{name: e.Name(), mod: info.ModTime()})
+	}
+	if len(snaps) <= s.keep {
+		return
+	}
+	sort.Slice(snaps, func(i, j int) bool { return snaps[i].mod.After(snaps[j].mod) })
+	for _, old := range snaps[s.keep:] {
+		_ = os.Remove(filepath.Join(dir, old.name))
+	}
 }
 
 // List returns revisions for rel, newest first.

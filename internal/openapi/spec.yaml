@@ -4,7 +4,11 @@ info:
   description: |
     REST API for the Overview self-hosted Markdown knowledge base.
     Authenticate with a session cookie (browser) or `Authorization: Bearer <token>`.
-  version: "0.7.0"
+
+    Beyond this REST API, Overview also exposes WebDAV at `/dav` (HTTP Basic auth
+    when authentication is enabled) and an MCP JSON-RPC server at `POST /mcp`
+    (bearer token via `OVERVIEW_MCP_TOKEN`, else a session token).
+  version: "0.10.2"
 servers:
   - url: /api/v1
 paths:
@@ -287,3 +291,51 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "200": { description: Deleted }
+  /settings/ai:
+    get:
+      summary: Get the AI configuration (admin)
+      tags: [ai]
+      responses:
+        "200": { description: "Configuration (API key masked as hasKey)" }
+    put:
+      summary: Update the AI configuration at runtime (admin)
+      tags: [ai]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                baseUrl: { type: string }
+                apiKey: { type: string, description: "Leave empty to keep the current key" }
+                model: { type: string }
+      responses:
+        "200": { description: Updated }
+  /assets/{path}:
+    get:
+      summary: Download an attachment
+      tags: [assets]
+      parameters:
+        - { name: path, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Attachment bytes }
+        "404": { description: Not found }
+  /export:
+    get:
+      summary: Export the whole vault (notes + assets) as a ZIP archive
+      tags: [archive]
+      responses:
+        "200": { description: ZIP archive }
+  /import:
+    post:
+      summary: Import notes and assets from a ZIP archive
+      tags: [archive]
+      requestBody:
+        required: true
+        content:
+          application/zip:
+            schema: { type: string, format: binary }
+      responses:
+        "200": { description: Import result (notes, assets, skipped) }
+

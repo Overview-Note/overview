@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -27,7 +28,7 @@ import (
 )
 
 // version is overridden at build time with -ldflags="-X main.version=...".
-var version = "0.2.0-dev"
+var version = "0.10.2"
 
 // runExport renders the vault to a static site. Configuration via the same
 // environment variables, plus OVERVIEW_EXPORT_DIR and OVERVIEW_EXPORT_BASE.
@@ -57,12 +58,39 @@ func envOr(key, def string) string {
 	return def
 }
 
+func printUsage() {
+	fmt.Print(`Overview - self-hosted Markdown knowledge base
+
+Usage:
+  overview                     start the server (default :5230)
+  overview export              export public notes to a static site
+  overview version             print the version
+  overview help                show this help
+
+Configuration is via OVERVIEW_* environment variables (see docs/DESIGN.md).
+`)
+}
+
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "export" {
-		runExport()
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "export":
+			runExport()
+			return
+		case "version", "--version", "-v":
+			fmt.Println("overview", version)
+			return
+		case "help", "--help", "-h":
+			printUsage()
+			return
+		}
 	}
 
+	serve()
+}
+
+// serve runs the HTTP server until the process receives a termination signal.
+func serve() {
 	cfg := config.Load()
 	logger := newLogger(cfg.LogLevel)
 	slog.SetDefault(logger)
@@ -86,7 +114,7 @@ func main() {
 		staticFS = sub
 	}
 
-	hist := history.New(cfg.HistoryDir)
+	hist := history.New(cfg.HistoryDir, cfg.HistoryKeep)
 	tr := trash.New(cfg.TrashDir)
 
 	var assets core.AssetStore = st
@@ -133,11 +161,13 @@ func main() {
 		mcpHandler = mcp.New(svc, verify)
 	}
 
-	dav := server.NewDAV(st.NotesDir(), auth, func() {
+	dav := server.NewDAV(st.NotesDir(), auth, func(paths []string) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if err := svc.Reindex(ctx); err != nil {
-			logger.Warn("reindex after WebDAV write failed", "error", err)
+		for _, p := range paths {
+			if err := svc.ReindexPath(ctx, p); err != nil {
+				logger.Warn("reindex after WebDAV write failed", "path", p, "error", err)
+			}
 		}
 	}, logger)
 	aiSvc := service.NewAI(idx, service.AIConfig{

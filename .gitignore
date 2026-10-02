@@ -4,6 +4,10 @@
 *.db-shm
 *.db-wal
 
+# runtime artifacts that may appear inside any vault
+**/.history/
+**/.trash/
+
 # frontend
 web/node_modules/
 web/dist/

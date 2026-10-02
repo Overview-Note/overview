@@ -5,6 +5,7 @@ package sitegen
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -108,6 +109,12 @@ func Generate(opts Options) (int, error) {
 		return 0, err
 	}
 	if err := os.WriteFile(filepath.Join(opts.OutDir, "style.css"), []byte(siteCSS), 0o644); err != nil {
+		return 0, err
+	}
+	if err := os.WriteFile(filepath.Join(opts.OutDir, "search.js"), []byte(siteJS), 0o644); err != nil {
+		return 0, err
+	}
+	if err := writeSearchIndex(opts.OutDir, pages, base); err != nil {
 		return 0, err
 	}
 
@@ -263,4 +270,34 @@ func extractHeadings(html string) []Heading {
 func htmlUnescape(s string) string {
 	r := strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">", "&#39;", "'", "&quot;", `"`)
 	return r.Replace(s)
+}
+
+// searchEntry is one page in the client-side search index.
+type searchEntry struct {
+	Title string `json:"title"`
+	URL   string `json:"url"`
+	Text  string `json:"text"`
+}
+
+var wsRe = regexp.MustCompile(`\s+`)
+
+// writeSearchIndex emits search-index.json used by search.js.
+func writeSearchIndex(outDir string, pages []Page, base string) error {
+	entries := make([]searchEntry, 0, len(pages))
+	for _, p := range pages {
+		text := strings.TrimSpace(wsRe.ReplaceAllString(htmlUnescape(tagRe.ReplaceAllString(string(p.HTML), " ")), " "))
+		if len(text) > 4000 {
+			text = text[:4000]
+		}
+		entries = append(entries, searchEntry{
+			Title: p.Title,
+			URL:   base + url.PathEscape(p.Slug) + ".html",
+			Text:  text,
+		})
+	}
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(outDir, "search-index.json"), data, 0o644)
 }

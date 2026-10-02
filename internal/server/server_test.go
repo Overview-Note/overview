@@ -40,8 +40,10 @@ func newTestServer(t *testing.T) *httptest.Server {
 	t.Cleanup(func() { _ = ix.Close() })
 	st := store.New(notes, assets)
 	svc := service.New(st, ix, st, nil, nil)
-	dav := server.NewDAV(st.NotesDir(), service.NewAuth(ix, "none"), func() {
-		_ = svc.Reindex(context.Background())
+	dav := server.NewDAV(st.NotesDir(), service.NewAuth(ix, "none"), func(paths []string) {
+		for _, p := range paths {
+			_ = svc.ReindexPath(context.Background(), p)
+		}
 	}, nil)
 	ts := httptest.NewServer(server.New(svc, server.Options{
 		MaxUploadBytes: 1 << 20,
