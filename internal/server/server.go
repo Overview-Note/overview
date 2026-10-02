@@ -39,6 +39,7 @@ type Server struct {
 	opts   Options
 	logger *slog.Logger
 	mux    *http.ServeMux
+	static *staticHandler
 }
 
 // New constructs a Server.
@@ -201,20 +202,14 @@ func (s *Server) mountStatic() {
 		})
 		return
 	}
-	fileServer := http.FileServer(http.FS(s.opts.Static))
+	static := newStaticHandler(s.opts.Static)
+	s.static = static
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			writeError(w, http.StatusNotFound, "not found")
 			return
 		}
-		p := strings.TrimPrefix(r.URL.Path, "/")
-		if p == "" {
-			p = "index.html"
-		}
-		if _, err := fs.Stat(s.opts.Static, p); err != nil {
-			r.URL.Path = "/"
-		}
-		fileServer.ServeHTTP(w, r)
+		static.serve(w, r)
 	})
 }
 

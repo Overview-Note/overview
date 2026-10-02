@@ -225,11 +225,12 @@ func (s *Server) handleUploadAsset(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request) {
 	rel := r.PathValue("path")
 	// Embedded frontend assets share the /assets/ prefix; prefer them so the
-	// SPA bundle wins over an upload with a colliding name.
-	if s.opts.Static != nil {
+	// SPA bundle wins over an upload with a colliding name. They still go
+	// through the static handler for compression and long-term caching.
+	if s.static != nil {
 		if _, err := fs.Stat(s.opts.Static, "assets/"+rel); err == nil {
 			r.URL.Path = "/assets/" + rel
-			http.FileServer(http.FS(s.opts.Static)).ServeHTTP(w, r)
+			s.static.serve(w, r)
 			return
 		}
 	}

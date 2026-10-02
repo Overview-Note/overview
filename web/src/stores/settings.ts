@@ -12,7 +12,7 @@ const KEY_SIDEBAR = "overview.sidebarWidth";
 
 export const SIDEBAR_MIN = 200;
 export const SIDEBAR_MAX = 560;
-export const SIDEBAR_DEFAULT = 268;
+export const SIDEBAR_DEFAULT = 300;
 
 function clampSidebar(px: number): number {
   if (!Number.isFinite(px)) return SIDEBAR_DEFAULT;

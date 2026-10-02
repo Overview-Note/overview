@@ -1,39 +1,54 @@
 import { createRouter, createWebHistory } from "vue-router";
-import EmptyState from "./components/EmptyState.vue";
-import EditorPane from "./components/EditorPane.vue";
 import { useAuthStore } from "./stores/auth";
 import { useSiteStore } from "./stores/site";
-import CaptureView from "./views/CaptureView.vue";
-import LoginView from "./views/LoginView.vue";
-import PublicHomeView from "./views/PublicHomeView.vue";
-import PublicNoteView from "./views/PublicNoteView.vue";
-import SetupView from "./views/SetupView.vue";
-import TrashView from "./views/TrashView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/", name: "home", component: EmptyState },
+    {
+      path: "/",
+      name: "home",
+      component: () => import("./components/EmptyState.vue"),
+    },
     {
       path: "/note/:path(.*)",
       name: "note",
-      component: EditorPane,
+      component: () => import("./components/EditorPane.vue"),
       props: true,
     },
-    { path: "/trash", name: "trash", component: TrashView },
-    { path: "/capture", name: "capture", component: CaptureView, meta: { plain: true } },
-    { path: "/login", name: "login", component: LoginView, meta: { plain: true } },
-    { path: "/setup", name: "setup", component: SetupView, meta: { plain: true } },
+    {
+      path: "/trash",
+      name: "trash",
+      component: () => import("./views/TrashView.vue"),
+    },
+    {
+      path: "/capture",
+      name: "capture",
+      component: () => import("./views/CaptureView.vue"),
+      meta: { plain: true },
+    },
+    {
+      path: "/login",
+      name: "login",
+      component: () => import("./views/LoginView.vue"),
+      meta: { plain: true },
+    },
+    {
+      path: "/setup",
+      name: "setup",
+      component: () => import("./views/SetupView.vue"),
+      meta: { plain: true },
+    },
     {
       path: "/public",
       name: "public-home",
-      component: PublicHomeView,
+      component: () => import("./views/PublicHomeView.vue"),
       meta: { plain: true, public: true },
     },
     {
       path: "/public/:path(.*)",
       name: "public",
-      component: PublicNoteView,
+      component: () => import("./views/PublicNoteView.vue"),
       props: true,
       meta: { plain: true, public: true },
     },

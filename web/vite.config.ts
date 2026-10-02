@@ -6,6 +6,7 @@ export default defineConfig({
   build: {
     outDir: "../internal/webui/dist",
     emptyOutDir: true,
+    chunkSizeWarningLimit: 900,
   },
   server: {
     port: 5173,

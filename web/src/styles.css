@@ -514,7 +514,7 @@ button:disabled {
    -------------------------------------------------------------------------- */
 
 .sidebar {
-  width: 268px;
+  width: var(--sidebar-w, 300px);
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--bg);
@@ -2378,7 +2378,7 @@ mark {
 
 @media (max-width: 900px) {
   .sidebar {
-    width: 240px;
+    width: min(var(--sidebar-w, 300px), 240px);
   }
   .editor-scroll {
     padding: 32px 24px 120px;

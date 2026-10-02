@@ -122,7 +122,7 @@ async function moveNode(node: TreeNode, target: string) {
 </script>
 
 <template>
-  <aside class="sidebar" :style="{ width: `${sidebarWidth}px` }">
+  <aside class="sidebar" :style="{ '--sidebar-w': `${sidebarWidth}px` }">
     <nav class="tree">
       <TreeNodeItem
         v-for="node in store.tree"
