@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.11.2（API/MCP 令牌管理）
+> 版本：v0.11.3（令牌管理入口移入设置 · 弹框层级修复）
 > 更新日期：2026-10-02
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -24,6 +24,7 @@
 | v0.11.0 | CLI 化 · MCP 升级 · 性能与品牌 | 离线 CLI（笔记/检索/历史/回收站/附件/归档）、`build` 静态站生成、MCP 升级到 `2026-07-28`（无状态 `_meta` + `server/discover` + `resultType`）并补齐到 22 个工具、前端路由切分 + 静态资源 gzip/immutable 缓存（Lighthouse 99）、可拖拽侧栏与对比度回归、笔记风格新 Logo 与暖色柔和主题、GHCR 多架构镜像 |
 | v0.11.1 | 图片性能与静态站主题 | 笔记图片 `loading=lazy`/`decoding=async` + 切换时取消过期请求与在飞图片（修复图片密集页切换卡顿）；静态站可选主题 `--theme auto\|light\|dark`（`OVERVIEW_SITE_THEME`）并与 App 设计令牌对齐配色 |
 | v0.11.2 | API/MCP 令牌管理 | 管理员界面 + `/auth/tokens` API 生成/吊销持久令牌（仅存哈希，明文一次性）；令牌同时用于 REST 与 MCP，`OVERVIEW_MCP_TOKEN` 作为回退 |
+| v0.11.3 | 令牌 UI 修正 | 令牌管理入口从顶栏移入「设置」（较少用）；修复弹框层级（DialogHost `z-index:300` 恒在最上）；令牌对话框加宽、生成后常驻可复制密钥框 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 

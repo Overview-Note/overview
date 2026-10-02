@@ -8,7 +8,7 @@ info:
     Beyond this REST API, Overview also exposes WebDAV at `/dav` (HTTP Basic auth
     when authentication is enabled) and an MCP JSON-RPC server at `POST /mcp`
     (bearer token via `OVERVIEW_MCP_TOKEN`, else a session token).
-  version: "0.11.2"
+  version: "0.11.3"
 servers:
   - url: /api/v1
 paths:
