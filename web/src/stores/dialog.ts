@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { t } from "../i18n";
 
 export interface PromptState {
   title: string;
@@ -30,7 +31,7 @@ export const useDialogStore = defineStore("dialog", () => {
         title,
         value,
         placeholder: opts.placeholder ?? "",
-        confirmLabel: opts.confirmLabel ?? "确定",
+        confirmLabel: opts.confirmLabel ?? t("dialog.confirm"),
         resolve,
       };
     });

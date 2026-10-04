@@ -2,13 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import BrandMark from "./components/BrandMark.vue";
+import CaptureDialog from "./components/CaptureDialog.vue";
 import DialogHost from "./components/DialogHost.vue";
 import SearchBox from "./components/SearchBox.vue";
-import SettingsDialog from "./components/SettingsDialog.vue";
 import ShortcutsDialog from "./components/ShortcutsDialog.vue";
 import Sidebar from "./components/Sidebar.vue";
-import TokensDialog from "./components/TokensDialog.vue";
-import UsersDialog from "./components/UsersDialog.vue";
 import { t } from "./i18n";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
@@ -21,14 +19,27 @@ const settings = useSettingsStore();
 const site = useSiteStore();
 const route = useRoute();
 const router = useRouter();
-const usersOpen = ref(false);
-const tokensOpen = ref(false);
-const settingsOpen = ref(false);
 const shortcutsOpen = ref(false);
+const captureOpen = ref(false);
 const userMenuOpen = ref(false);
+const userMenu = ref<HTMLElement | null>(null);
 
 const plain = computed(() => site.render || route.meta.plain === true);
 const showSearch = computed(() => auth.mode !== "multi" || !!auth.user);
+const isSettings = computed(() => String(route.name ?? "").startsWith("settings"));
+
+const SETTINGS_RETURN_KEY = "overview.settingsReturn";
+
+function openSettings() {
+  if (!isSettings.value) {
+    try {
+      sessionStorage.setItem(SETTINGS_RETURN_KEY, route.fullPath);
+    } catch {
+      /* ignore */
+    }
+  }
+  router.push({ name: "settings" });
+}
 
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -43,6 +54,10 @@ function onKeydown(event: KeyboardEvent) {
     settings.toggleFocus();
     return;
   }
+  if (event.key === "Escape" && userMenuOpen.value) {
+    userMenuOpen.value = false;
+    return;
+  }
   if (event.key === "?" && !isTyping(event.target)) {
     event.preventDefault();
     shortcutsOpen.value = true;
@@ -53,8 +68,17 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
+function onDocumentClick(event: MouseEvent) {
+  if (!userMenuOpen.value) return;
+  const el = userMenu.value;
+  if (el && !el.contains(event.target as Node)) {
+    userMenuOpen.value = false;
+  }
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("click", onDocumentClick);
   if (!auth.loaded) {
     await auth.loadState().catch(() => undefined);
   }
@@ -63,7 +87,10 @@ onMounted(async () => {
   }
 });
 
-onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("click", onDocumentClick);
+});
 
 watch(
   () => auth.user,
@@ -113,8 +140,15 @@ async function logout() {
           >
             ?
           </button>
-          <button class="topbar-link" @click="settingsOpen = true">
+          <button class="topbar-link" @click="openSettings">
             {{ t("settings.title") }}
+          </button>
+          <button
+            v-if="showSearch"
+            class="topbar-link"
+            @click="captureOpen = true"
+          >
+            {{ t("capture.open") }}
           </button>
           <button
             v-if="auth.user"
@@ -123,45 +157,35 @@ async function logout() {
           >
             {{ t("trash.link") }}
           </button>
-          <button
-            v-if="auth.user?.role === 'admin'"
-            class="topbar-link"
-            @click="usersOpen = true"
+          <div
+            v-if="auth.mode === 'multi' && auth.user"
+            ref="userMenu"
+            class="user-menu"
           >
-            {{ t("topbar.users") }}
-          </button>
-          <div v-if="auth.mode === 'multi' && auth.user" class="user-menu">
             <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
               <span class="avatar">{{
                 auth.user.username.slice(0, 1).toUpperCase()
               }}</span>
             </button>
-            <div
-              v-if="userMenuOpen"
-              class="user-dropdown"
-              @mouseleave="userMenuOpen = false"
-            >
+            <div v-if="userMenuOpen" class="user-dropdown">
               <div class="user-dropdown-name">{{ auth.user.username }}</div>
-              <button @click="logout">{{ t("topbar.logout") }}</button>
+              <div class="user-dropdown-sep"></div>
+              <button class="user-dropdown-logout" @click="logout">
+                {{ t("topbar.logout") }}
+              </button>
             </div>
           </div>
         </nav>
       </header>
       <div class="layout">
-        <Sidebar />
+        <Sidebar v-if="!isSettings" />
         <main class="content">
           <RouterView />
         </main>
       </div>
     </template>
     <DialogHost />
-    <UsersDialog :open="usersOpen" @close="usersOpen = false" />
-    <SettingsDialog
-      :open="settingsOpen"
-      @close="settingsOpen = false"
-      @tokens="tokensOpen = true"
-    />
     <ShortcutsDialog :open="shortcutsOpen" @close="shortcutsOpen = false" />
-    <TokensDialog :open="tokensOpen" @close="tokensOpen = false" />
+    <CaptureDialog :open="captureOpen" @close="captureOpen = false" />
   </div>
 </template>

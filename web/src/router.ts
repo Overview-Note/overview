@@ -22,16 +22,92 @@ export const router = createRouter({
       component: () => import("./views/TrashView.vue"),
     },
     {
+      path: "/settings",
+      name: "settings",
+      component: () => import("./views/SettingsView.vue"),
+      redirect: { name: "settings-appearance" },
+      children: [
+        {
+          path: "appearance",
+          name: "settings-appearance",
+          component: () => import("./views/settings/AppearanceSection.vue"),
+        },
+        {
+          path: "editor",
+          name: "settings-editor",
+          component: () => import("./views/settings/EditorSection.vue"),
+        },
+        {
+          path: "ai",
+          name: "settings-ai",
+          component: () => import("./views/settings/AISection.vue"),
+        },
+        {
+          path: "mail",
+          name: "settings-mail",
+          component: () => import("./views/settings/MailSection.vue"),
+        },
+        {
+          path: "site",
+          name: "settings-site",
+          component: () => import("./views/settings/SiteSection.vue"),
+        },
+        {
+          path: "data",
+          name: "settings-data",
+          component: () => import("./views/settings/DataSection.vue"),
+        },
+        {
+          path: "users",
+          name: "settings-users",
+          component: () => import("./views/settings/UsersSection.vue"),
+        },
+        {
+          path: "tokens",
+          name: "settings-tokens",
+          component: () => import("./views/settings/TokensSection.vue"),
+        },
+      ],
+    },
+    {
       path: "/capture",
-      name: "capture",
-      component: () => import("./views/CaptureView.vue"),
-      meta: { plain: true },
+      redirect: { name: "home" },
     },
     {
       path: "/login",
       name: "login",
       component: () => import("./views/LoginView.vue"),
       meta: { plain: true },
+    },
+    {
+      path: "/register",
+      name: "register",
+      component: () => import("./views/RegisterView.vue"),
+      meta: { plain: true, public: true },
+    },
+    {
+      path: "/forgot-password",
+      name: "forgot-password",
+      component: () => import("./views/ForgotPasswordView.vue"),
+      meta: { plain: true, public: true },
+    },
+    {
+      path: "/reset-password",
+      name: "reset-password",
+      component: () => import("./views/ResetPasswordView.vue"),
+      meta: { plain: true, public: true },
+    },
+    {
+      path: "/accept-invite",
+      name: "accept-invite",
+      component: () => import("./views/AcceptInviteView.vue"),
+      meta: { plain: true, public: true },
+    },
+    {
+      path: "/verify-email",
+      name: "verify-email",
+      component: () => import("./views/VerifyEmailView.vue"),
+      meta: { plain: true, public: true },
     },
     {
       path: "/setup",
@@ -64,7 +140,9 @@ router.beforeEach(async (to) => {
   if (site.render) {
     if (to.name === "home") return { name: "public-home" };
     if (to.name === "note") return { name: "public", params: { path: to.params.path } };
-    if (to.name === "capture") return { name: "public-home" };
+    if (to.name === "settings" || String(to.name ?? "").startsWith("settings-")) {
+      return { name: "public-home" };
+    }
     return true;
   }
 
