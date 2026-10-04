@@ -205,6 +205,72 @@ async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface AIStatus {
+  enabled: boolean;
+  model?: string;
+  toolCalling: boolean | "unknown";
+  agentEnabled: boolean;
+  maxSteps: number;
+  confirmPolicy: string;
+}
+
+export type AgentRisk = "read" | "write" | "dangerous";
+export type AgentStepStatus = "ok" | "error" | "denied" | "rejected";
+export type AgentRunStatus = "done" | "needs_confirmation" | "max_steps";
+
+export interface AgentStep {
+  toolCallId: string;
+  name: string;
+  args: unknown;
+  risk: AgentRisk | string;
+  status: AgentStepStatus | string;
+  summary: string;
+}
+
+export interface AgentPending {
+  toolCallId: string;
+  name: string;
+  args: unknown;
+  preview: string;
+  risk: AgentRisk | string;
+}
+
+export interface AgentResult {
+  runId: string;
+  status: AgentRunStatus | string;
+  text: string;
+  steps: AgentStep[];
+  pending?: AgentPending;
+}
+
+export interface AgentConfirmBody {
+  runId: string;
+  toolCallId: string;
+  decision: "approve" | "reject";
+  args?: unknown;
+}
+
+// Maps the machine-readable error codes the agent endpoints return to i18n
+// message keys, so callers can surface a readable reason instead of the raw
+// provider text.
+export function aiErrorKey(e: unknown): string {
+  if (e instanceof ApiError) {
+    switch (e.code) {
+      case "agent_disabled":
+        return "agent.disabled";
+      case "tool_calling_unsupported":
+        return "agent.unsupported";
+      case "run_not_found":
+        return "agent.runNotFound";
+      case "input is required":
+        return "agent.inputRequired";
+    }
+    if (e.status === 429) return "agent.rateLimited";
+    if (e.status === 503) return "ai.notConfiguredHint";
+  }
+  return "agent.error";
+}
+
 export const api = {
   async tree(): Promise<TreeNode[]> {
     const res = await fetch(`${BASE}/tree`);
@@ -273,9 +339,61 @@ export const api = {
     if (!res.ok) throw await parseError(res);
   },
 
-  async aiStatus(): Promise<{ enabled: boolean; model?: string }> {
+  async aiStatus(): Promise<AIStatus> {
     const res = await fetch(`${BASE}/ai/status`);
-    return json<{ enabled: boolean; model?: string }>(res);
+    const raw = await json<{
+      enabled: boolean;
+      model?: string;
+      toolCalling?: boolean | string;
+      agentEnabled?: boolean;
+      maxSteps?: number;
+      confirmPolicy?: string;
+    }>(res);
+    const toolCalling: boolean | "unknown" =
+      raw.toolCalling === true || raw.toolCalling === "true"
+        ? true
+        : raw.toolCalling === false || raw.toolCalling === "false"
+          ? false
+          : "unknown";
+    return {
+      enabled: raw.enabled,
+      model: raw.model,
+      toolCalling,
+      agentEnabled: raw.agentEnabled === true,
+      maxSteps: raw.maxSteps ?? 0,
+      confirmPolicy: raw.confirmPolicy ?? "dangerous",
+    };
+  },
+
+  async aiAgent(body: {
+    runId?: string;
+    input: string;
+    context?: { path?: string; selection?: string };
+  }): Promise<AgentResult> {
+    const res = await fetch(`${BASE}/ai/agent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return json<AgentResult>(res);
+  },
+
+  async aiAgentConfirm(body: AgentConfirmBody): Promise<AgentResult> {
+    const res = await fetch(`${BASE}/ai/agent/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return json<AgentResult>(res);
+  },
+
+  async aiAgentStop(body: { runId: string }): Promise<{ runId: string; status: string }> {
+    const res = await fetch(`${BASE}/ai/agent/stop`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return json<{ runId: string; status: string }>(res);
   },
 
   async aiSettings(): Promise<{ baseUrl: string; model: string; hasKey: boolean }> {

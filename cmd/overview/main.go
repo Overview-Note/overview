@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Overview-Note/overview/internal/agent"
 	"github.com/Overview-Note/overview/internal/cli"
 	"github.com/Overview-Note/overview/internal/config"
 	"github.com/Overview-Note/overview/internal/core"
@@ -29,7 +30,7 @@ import (
 )
 
 // version is overridden at build time with -ldflags="-X main.version=...".
-var version = "0.12.0"
+var version = "0.13.0"
 
 func main() {
 	if len(os.Args) > 1 {
@@ -150,6 +151,7 @@ func serve() {
 		Model:   cfg.AIModel,
 	})
 	aiSvc.Load(context.Background())
+	agt := agent.New(svc, aiSvc, idx)
 	mailSvc := service.NewMail(idx, service.MailConfig{
 		Host:     cfg.MailHost,
 		Port:     cfg.MailPort,
@@ -173,6 +175,7 @@ func serve() {
 		DAV:            dav,
 		MCP:            mcpHandler,
 		AI:             aiSvc,
+		Agent:          agt,
 		Mail:           mailSvc,
 		Site:           siteSvc,
 		BaseURL:        cfg.BaseURL,

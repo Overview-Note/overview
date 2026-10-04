@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/Overview-Note/overview/internal/service"
+	"github.com/Overview-Note/overview/internal/tools"
 )
 
 // ProtocolVersion is the newest revision this server implements.
@@ -41,13 +42,13 @@ type TokenVerifier func(ctx context.Context, token string) error
 
 // Server is an MCP JSON-RPC handler.
 type Server struct {
-	svc    *service.Service
+	set    *tools.Set
 	verify TokenVerifier
 }
 
 // New creates an MCP server backed by the note service.
 func New(svc *service.Service, verify TokenVerifier) *Server {
-	return &Server{svc: svc, verify: verify}
+	return &Server{set: tools.NewSet(svc), verify: verify}
 }
 
 // request is a JSON-RPC 2.0 request.
@@ -147,7 +148,7 @@ func (s *Server) dispatch(ctx context.Context, req request) (any, *rpcError) {
 		// Removed in 2026-07-28, retained for legacy clients.
 		return emptyResult(), nil
 	case "tools/list":
-		return map[string]any{"resultType": "complete", "tools": toolDefs()}, nil
+		return map[string]any{"resultType": "complete", "tools": tools.Defs()}, nil
 	case "tools/call":
 		return s.callTool(ctx, req.Params)
 	default:

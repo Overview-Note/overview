@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { BubbleMenu, EditorContent, useEditor } from "@tiptap/vue-3";
 import { TableOfContents } from "@tiptap/extension-table-of-contents";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
-import { api, ApiError, type Asset } from "../api";
+import { api, ApiError, type AIStatus, type Asset } from "../api";
 import { baseExtensions } from "../editor/extensions";
 import { SlashCommand, slashItems, type SlashItem } from "../editor/slash";
 import { compressImage } from "../media/compress";
@@ -15,6 +15,7 @@ import { createTurndown, htmlToMarkdown, mdToHtml } from "../markdown/pipeline";
 import { useDialogStore } from "../stores/dialog";
 import { useSettingsStore } from "../stores/settings";
 import { useWorkspaceStore } from "../stores/workspace";
+import AgentPanel from "./AgentPanel.vue";
 import AiPanel from "./AiPanel.vue";
 import HistoryPanel from "./HistoryPanel.vue";
 import LinksPanel from "./LinksPanel.vue";
@@ -38,7 +39,10 @@ const toc = ref<TocItem[]>([]);
 const showToc = ref(true);
 const isPublic = ref(false);
 const showAI = ref(false);
-const aiEnabled = ref(false);
+const aiStatus = ref<AIStatus | null>(null);
+const aiTab = ref<"assistant" | "agent">("assistant");
+const aiSelection = ref("");
+const aiEnabled = computed(() => aiStatus.value?.enabled ?? false);
 const showHistory = ref(false);
 const visibilityMenuOpen = ref(false);
 const aiContent = ref("");
@@ -188,7 +192,18 @@ const editor = useEditor({
     aiContent.value = editor.value?.getText() ?? "";
     scheduleSave();
   },
+  onSelectionUpdate: () => {
+    aiSelection.value = selectedText();
+  },
 });
+
+function selectedText(): string {
+  const e = editor.value;
+  if (!e) return "";
+  const { from, to } = e.state.selection;
+  if (from === to) return "";
+  return e.state.doc.textBetween(from, to, "\n");
+}
 
 function insertAI(payload: { text: string; replace: boolean }) {
   if (!editor.value) return;
@@ -199,6 +214,19 @@ function insertAI(payload: { text: string; replace: boolean }) {
   }
   dirty.value = true;
   scheduleSave();
+}
+
+async function onAgentChanged(payload: { wrote: boolean; paths: string[] }) {
+  if (!payload.wrote) return;
+  await flush();
+  await store.refreshTree();
+  // A failed flush (e.g. a version conflict) leaves the editor dirty; don't
+  // drop the user's unsaved edits by reloading over them.
+  if (dirty.value) return;
+  const current = store.note?.path ?? currentPath;
+  if (current && (payload.paths.length === 0 || payload.paths.includes(current))) {
+    await load(current);
+  }
 }
 
 async function load(path: string) {
@@ -452,9 +480,9 @@ onBeforeRouteLeave(async () => {
 onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
   try {
-    aiEnabled.value = (await api.aiStatus()).enabled;
+    aiStatus.value = await api.aiStatus();
   } catch {
-    aiEnabled.value = false;
+    aiStatus.value = null;
   }
 });
 onBeforeUnmount(() => {
@@ -748,12 +776,33 @@ onBeforeUnmount(() => {
 
       <div class="editor-side" v-if="showToc || showAI || showHistory || store.note">
         <TocPanel v-if="showToc" :items="toc" @navigate="navigateHeading" />
-        <AiPanel
-          v-if="showAI"
-          :content="aiContent"
-          :enabled="aiEnabled"
-          @insert="insertAI"
-        />
+        <div v-if="showAI" class="ai-section">
+          <div class="segmented ai-tabs">
+            <button
+              :class="{ on: aiTab === 'assistant' }"
+              @click="aiTab = 'assistant'"
+            >
+              {{ t("ai.tabAssistant") }}
+            </button>
+            <button :class="{ on: aiTab === 'agent' }" @click="aiTab = 'agent'">
+              {{ t("ai.tabAgent") }}
+            </button>
+          </div>
+          <AiPanel
+            v-if="aiTab === 'assistant'"
+            :content="aiContent"
+            :enabled="aiEnabled"
+            @insert="insertAI"
+          />
+          <AgentPanel
+            v-else
+            :path="store.note?.path ?? ''"
+            :selection="aiSelection"
+            :status="aiStatus"
+            @insert="insertAI"
+            @changed="onAgentChanged"
+          />
+        </div>
         <HistoryPanel
           v-if="showHistory && store.note"
           :path="store.note.path"

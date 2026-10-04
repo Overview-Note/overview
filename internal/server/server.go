@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Overview-Note/overview/internal/agent"
 	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/service"
 )
@@ -28,6 +29,7 @@ type Options struct {
 	DAV            http.Handler
 	MCP            http.Handler
 	AI             *service.AIService
+	Agent          *agent.Agent
 	Mail           *service.MailService
 	Site           *service.SiteService
 	// BaseURL is the externally reachable origin used to build links in
@@ -48,6 +50,7 @@ type Server struct {
 	static       *staticHandler
 	ipLimiter    *rateLimiter
 	emailLimiter *rateLimiter
+	agentLimiter *rateLimiter
 }
 
 // New constructs a Server.
@@ -69,6 +72,7 @@ func New(svc *service.Service, opts Options) *Server {
 		mux:          http.NewServeMux(),
 		ipLimiter:    newRateLimiter(10, 15*time.Minute, 4096),
 		emailLimiter: newRateLimiter(3, time.Hour, 4096),
+		agentLimiter: newRateLimiter(20, 5*time.Minute, 4096),
 	}
 	s.routes()
 	return s
@@ -218,6 +222,9 @@ func (s *Server) routes() {
 	// AI assistance (available only when configured).
 	s.mux.HandleFunc("GET "+base+"/ai/status", s.handleAIStatus)
 	s.mux.HandleFunc("POST "+base+"/ai/chat", s.handleAIChat)
+	s.mux.HandleFunc("POST "+base+"/ai/agent", s.handleAgent)
+	s.mux.HandleFunc("POST "+base+"/ai/agent/confirm", s.handleAgentConfirm)
+	s.mux.HandleFunc("POST "+base+"/ai/agent/stop", s.handleAgentStop)
 	s.mux.HandleFunc("GET "+base+"/settings/ai", s.handleGetAISettings)
 	s.mux.HandleFunc("PUT "+base+"/settings/ai", s.handleSaveAISettings)
 
