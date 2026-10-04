@@ -84,20 +84,32 @@ type PathLocator interface {
 	AbsPath(rel string) (string, error)
 }
 
-// UserStore persists user accounts and sessions.
+// UserStore persists user accounts, sessions and single-use user tokens.
 type UserStore interface {
 	CreateUser(ctx context.Context, user User, passwordHash string) error
 	UserByUsername(ctx context.Context, username string) (User, string, error)
 	UserByID(ctx context.Context, id string) (User, error)
+	UserByEmail(ctx context.Context, email string) (User, string, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	DeleteUser(ctx context.Context, id string) error
 	UpdatePassword(ctx context.Context, id, passwordHash string) error
 	CountUsers(ctx context.Context) (int, error)
+	CountActiveUsers(ctx context.Context) (int, error)
+	ActivateUser(ctx context.Context, id, passwordHash string, emailVerified bool) error
+	SetUserStatus(ctx context.Context, id, status string) error
+	SetUserEmail(ctx context.Context, id, email string) error
+	SetEmailVerified(ctx context.Context, id string, verified bool) error
 
 	CreateSession(ctx context.Context, token, userID string, expires time.Time) error
 	UserBySession(ctx context.Context, token string) (User, error)
 	DeleteSession(ctx context.Context, token string) error
+	DeleteSessionsByUser(ctx context.Context, userID string) error
 	DeleteExpiredSessions(ctx context.Context, now time.Time) error
+
+	CreateUserToken(ctx context.Context, t UserToken, tokenHash string) error
+	ConsumeUserToken(ctx context.Context, tokenHash string, purpose UserTokenPurpose, now time.Time) (UserToken, error)
+	DeleteUserTokens(ctx context.Context, userID string, purpose UserTokenPurpose) error
+	DeleteExpiredUserTokens(ctx context.Context, now time.Time) error
 }
 
 // AssetStore persists binary attachments.

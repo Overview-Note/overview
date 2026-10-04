@@ -28,6 +28,11 @@ type Options struct {
 	DAV            http.Handler
 	MCP            http.Handler
 	AI             *service.AIService
+	Mail           *service.MailService
+	Site           *service.SiteService
+	// BaseURL is the externally reachable origin used to build links in
+	// outbound email. When empty it is derived from each request.
+	BaseURL string
 	// Render runs the server as a public documentation site: no auth, the
 	// note tree is exposed read-only and the SPA renders notes directly.
 	Render    bool
@@ -36,11 +41,13 @@ type Options struct {
 
 // Server routes HTTP requests to the application service.
 type Server struct {
-	svc    *service.Service
-	opts   Options
-	logger *slog.Logger
-	mux    *http.ServeMux
-	static *staticHandler
+	svc          *service.Service
+	opts         Options
+	logger       *slog.Logger
+	mux          *http.ServeMux
+	static       *staticHandler
+	ipLimiter    *rateLimiter
+	emailLimiter *rateLimiter
 }
 
 // New constructs a Server.
@@ -55,9 +62,33 @@ func New(svc *service.Service, opts Options) *Server {
 		// A documentation site is fully public and read-only.
 		opts.Auth = service.NewAuth(nil, "none")
 	}
-	s := &Server{svc: svc, opts: opts, logger: opts.Logger, mux: http.NewServeMux()}
+	s := &Server{
+		svc:          svc,
+		opts:         opts,
+		logger:       opts.Logger,
+		mux:          http.NewServeMux(),
+		ipLimiter:    newRateLimiter(10, 15*time.Minute, 4096),
+		emailLimiter: newRateLimiter(3, time.Hour, 4096),
+	}
 	s.routes()
 	return s
+}
+
+// publicBaseURL returns the origin to use in outbound email links. An explicit
+// BaseURL wins; otherwise the scheme and host are derived from the request,
+// honouring a reverse proxy's X-Forwarded-Proto.
+func (s *Server) publicBaseURL(r *http.Request) string {
+	if base := strings.TrimRight(s.opts.BaseURL, "/"); base != "" {
+		return base
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = strings.TrimSpace(strings.Split(proto, ",")[0])
+	}
+	return scheme + "://" + r.Host
 }
 
 // Handler returns the composed handler (middleware + routes).
@@ -127,6 +158,18 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/auth/users", s.handleListUsers)
 	s.mux.HandleFunc("POST "+base+"/auth/users", s.handleCreateUser)
 	s.mux.HandleFunc("DELETE "+base+"/auth/users/{id}", s.handleDeleteUser)
+	s.mux.HandleFunc("POST "+base+"/auth/users/invite", s.handleInviteUser)
+	s.mux.HandleFunc("POST "+base+"/auth/users/{id}/resend-invite", s.handleResendInvite)
+	s.mux.HandleFunc("PUT "+base+"/auth/users/{id}/email", s.handleSetUserEmail)
+	s.mux.HandleFunc("POST "+base+"/auth/users/{id}/send-verification", s.handleSendVerification)
+
+	// Email account flows (public).
+	s.mux.HandleFunc("POST "+base+"/auth/password/request", s.handlePasswordRequest)
+	s.mux.HandleFunc("POST "+base+"/auth/password/reset", s.handlePasswordReset)
+	s.mux.HandleFunc("POST "+base+"/auth/accept-invite", s.handleAcceptInvite)
+	s.mux.HandleFunc("POST "+base+"/auth/verify-email", s.handleVerifyEmail)
+	s.mux.HandleFunc("POST "+base+"/auth/register", s.handleRegister)
+	s.mux.HandleFunc("POST "+base+"/auth/verify/resend", s.handleResendVerification)
 	s.mux.HandleFunc("GET "+base+"/auth/tokens", s.handleListTokens)
 	s.mux.HandleFunc("POST "+base+"/auth/tokens", s.handleCreateToken)
 	s.mux.HandleFunc("DELETE "+base+"/auth/tokens/{id}", s.handleDeleteToken)
@@ -143,6 +186,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/resolve", s.handleResolve)
 	s.mux.HandleFunc("POST "+base+"/assets", s.handleUploadAsset)
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
+	s.mux.HandleFunc("POST "+base+"/capture/preview", s.handleCapturePreview)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
 
 	// API documentation (public).
@@ -176,6 +220,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST "+base+"/ai/chat", s.handleAIChat)
 	s.mux.HandleFunc("GET "+base+"/settings/ai", s.handleGetAISettings)
 	s.mux.HandleFunc("PUT "+base+"/settings/ai", s.handleSaveAISettings)
+
+	// Mail / SMTP configuration (reserved for email-based user management).
+	s.mux.HandleFunc("GET "+base+"/settings/mail", s.handleGetMailSettings)
+	s.mux.HandleFunc("PUT "+base+"/settings/mail", s.handleSaveMailSettings)
+
+	// Public site configuration (login page presentation).
+	s.mux.HandleFunc("GET "+base+"/settings/site", s.handleGetSiteSettings)
+	s.mux.HandleFunc("PUT "+base+"/settings/site", s.handleSaveSiteSettings)
 
 	// Public (anonymous) read-only access to shared notes.
 	s.mux.HandleFunc("GET "+base+"/public/notes", s.handlePublicNotes)
@@ -308,7 +360,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !requiresAuth(p, s.opts.Static) {
+		if !requiresAuth(r.Method, p, s.opts.Static) {
 			next.ServeHTTP(w, r) // SPA shell and bundled assets are public
 			return
 		}
@@ -334,6 +386,12 @@ func isPublicPath(p string) bool {
 		"/api/v1/auth/state",
 		"/api/v1/auth/setup",
 		"/api/v1/auth/login",
+		"/api/v1/auth/password/request",
+		"/api/v1/auth/password/reset",
+		"/api/v1/auth/accept-invite",
+		"/api/v1/auth/verify-email",
+		"/api/v1/auth/register",
+		"/api/v1/auth/verify/resend",
 		"/api/v1/public/notes",
 		"/api/v1/public/note":
 		return true
@@ -345,7 +403,14 @@ func isPublicPath(p string) bool {
 // requiresAuth reports whether a request path must be authenticated. API and
 // uploaded attachment paths do; the SPA shell and embedded static assets do
 // not, and the WebDAV handler performs its own Basic auth.
-func requiresAuth(p string, static fs.FS) bool {
+//
+// Anonymous GET/HEAD of /assets/... is intentionally allowed: public notes are
+// rendered with their attachments rewritten to /assets/... and must load for
+// readers who have no session. Asset names carry a random ULID prefix and are
+// not enumerable, so this read-only relaxation is an accepted trade-off.
+// Uploads (POST /api/v1/assets), asset maintenance (orphans/purge) and
+// /api/v1/assets/{path} all remain authenticated.
+func requiresAuth(method, p string, static fs.FS) bool {
 	switch {
 	case strings.HasPrefix(p, "/dav"):
 		return false
@@ -356,6 +421,9 @@ func requiresAuth(p string, static fs.FS) bool {
 	case strings.HasPrefix(p, "/api/v1/"):
 		return true
 	case strings.HasPrefix(p, "/assets/"):
+		if method == http.MethodGet || method == http.MethodHead {
+			return false
+		}
 		// A real static file wins over the attachment route.
 		if static != nil {
 			if _, err := fs.Stat(static, strings.TrimPrefix(p, "/")); err == nil {
@@ -407,6 +475,10 @@ func statusCode(status int) string {
 		return "not_found"
 	case http.StatusConflict:
 		return "conflict"
+	case http.StatusTooManyRequests:
+		return "rate_limited"
+	case http.StatusServiceUnavailable:
+		return "unavailable"
 	default:
 		return "internal"
 	}
@@ -425,6 +497,12 @@ func (s *Server) writeDomainError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, core.ErrForbidden):
 		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, service.ErrEmailNotVerified):
+		writeJSON(w, http.StatusForbidden, map[string]apiError{
+			"error": {Code: "email_not_verified", Message: err.Error()},
+		})
+	case errors.Is(err, service.ErrMailDisabled), errors.Is(err, service.ErrMailDelivery):
+		writeError(w, http.StatusServiceUnavailable, err.Error())
 	default:
 		s.logger.Error("internal error", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal server error")

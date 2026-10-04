@@ -102,6 +102,7 @@ func serve() {
 	auth := service.NewAuth(idx, cfg.AuthMode)
 	tokens := service.NewTokenService(idx)
 	_ = idx.DeleteExpiredSessions(context.Background(), time.Now().UTC())
+	_ = idx.DeleteExpiredUserTokens(context.Background(), time.Now().UTC())
 
 	var mcpHandler http.Handler
 	{
@@ -149,6 +150,18 @@ func serve() {
 		Model:   cfg.AIModel,
 	})
 	aiSvc.Load(context.Background())
+	mailSvc := service.NewMail(idx, service.MailConfig{
+		Host:     cfg.MailHost,
+		Port:     cfg.MailPort,
+		Username: cfg.MailUsername,
+		Password: cfg.MailPassword,
+		From:     cfg.MailFrom,
+		StartTLS: cfg.MailStartTLS,
+	})
+	mailSvc.Load(context.Background())
+	auth.SetMailer(mailSvc)
+	siteSvc := service.NewSite(idx)
+	siteSvc.Load(context.Background())
 
 	srv := server.New(svc, server.Options{
 		MaxUploadBytes: cfg.MaxUploadMB << 20,
@@ -160,6 +173,9 @@ func serve() {
 		DAV:            dav,
 		MCP:            mcpHandler,
 		AI:             aiSvc,
+		Mail:           mailSvc,
+		Site:           siteSvc,
+		BaseURL:        cfg.BaseURL,
 		Render:         cfg.Render,
 		SiteTitle:      cfg.SiteTitle,
 	})

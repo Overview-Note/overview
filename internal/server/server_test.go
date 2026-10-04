@@ -198,11 +198,13 @@ func newAuthServer(t *testing.T) (*httptest.Server, *http.Client) {
 	svc := service.New(st, ix, st, nil, nil)
 	auth := service.NewAuth(ix, "multi")
 	aiSvc := service.NewAI(ix, service.AIConfig{Model: "gpt-4o-mini"})
+	mailSvc := service.NewMail(ix, service.MailConfig{})
 	ts := httptest.NewServer(server.New(svc, server.Options{
 		MaxUploadBytes: 1 << 20,
 		Auth:           auth,
 		Tokens:         service.NewTokenService(ix),
 		AI:             aiSvc,
+		Mail:           mailSvc,
 	}).Handler())
 	t.Cleanup(ts.Close)
 	jar, _ := cookiejar.New(nil)
@@ -407,6 +409,63 @@ func TestAISettingsPersistence(t *testing.T) {
 	}
 }
 
+func TestMailSettingsPersistence(t *testing.T) {
+	ts, client := newAuthServer(t)
+	authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/setup",
+		map[string]string{"username": "admin", "password": "secret1"}, nil)
+
+	// Initially unconfigured.
+	var initial map[string]any
+	authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/settings/mail", nil, &initial)
+	if initial["enabled"] != false || initial["hasPassword"] != false {
+		t.Errorf("mail should start unconfigured: %v", initial)
+	}
+
+	// Admin saves configuration.
+	var saved map[string]any
+	if code := authJSON(t, client, http.MethodPut, ts.URL+"/api/v1/settings/mail",
+		map[string]any{
+			"host":     "smtp.example.com",
+			"port":     465,
+			"username": "mailer",
+			"password": "smtp-secret",
+			"from":     "noreply@example.com",
+			"starttls": true,
+		}, &saved); code != http.StatusOK {
+		t.Fatalf("save mail settings = %d (%v)", code, saved)
+	}
+	if saved["hasPassword"] != true {
+		t.Errorf("expected hasPassword true: %v", saved)
+	}
+	if saved["enabled"] != true {
+		t.Errorf("expected enabled true: %v", saved)
+	}
+
+	// Read back; the password must never be returned.
+	var cfg map[string]any
+	if code := authJSON(t, client, http.MethodGet, ts.URL+"/api/v1/settings/mail", nil, &cfg); code != http.StatusOK {
+		t.Fatalf("get mail settings = %d", code)
+	}
+	if _, leaked := cfg["password"]; leaked {
+		t.Errorf("password must not be returned: %v", cfg)
+	}
+	if cfg["host"] != "smtp.example.com" {
+		t.Errorf("host = %v", cfg["host"])
+	}
+	if cfg["from"] != "noreply@example.com" {
+		t.Errorf("from = %v", cfg["from"])
+	}
+	if cfg["starttls"] != true {
+		t.Errorf("starttls = %v", cfg["starttls"])
+	}
+	if port, _ := cfg["port"].(float64); int(port) != 465 {
+		t.Errorf("port = %v", cfg["port"])
+	}
+	if cfg["hasPassword"] != true {
+		t.Errorf("hasPassword = %v", cfg["hasPassword"])
+	}
+}
+
 func TestPathValidation(t *testing.T) {
 	ts := newTestServer(t)
 	resp, _ := doJSON(t, http.MethodGet, ts.URL+"/api/v1/note?path="+url.QueryEscape("../secret"), nil)
@@ -508,5 +567,117 @@ func TestAssetUploadAndServe(t *testing.T) {
 	body, _ := io.ReadAll(got.Body)
 	if strings.TrimSpace(string(body)) != "PNGDATA" {
 		t.Errorf("asset body = %q", body)
+	}
+}
+
+func uploadAndServe(t *testing.T, ts *httptest.Server, filename string, data []byte) *http.Response {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("file", filename)
+	_, _ = fw.Write(data)
+	_ = mw.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/assets", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var asset map[string]string
+	_ = json.NewDecoder(resp.Body).Decode(&asset)
+	if resp.StatusCode != http.StatusOK || asset["url"] == "" {
+		t.Fatalf("upload failed: %d %v", resp.StatusCode, asset)
+	}
+	got, err := http.Get(ts.URL + asset["url"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func TestAssetAttachmentDisposition(t *testing.T) {
+	ts := newTestServer(t)
+
+	got := uploadAndServe(t, ts, "spec.pdf", []byte("%PDF-1.4"))
+	defer got.Body.Close()
+	if ct := got.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/pdf") {
+		t.Errorf("pdf content-type = %q", ct)
+	}
+	cd := got.Header.Get("Content-Disposition")
+	if !strings.HasPrefix(cd, "attachment; filename=") || !strings.Contains(cd, "spec.pdf") {
+		t.Errorf("pdf content-disposition = %q", cd)
+	}
+}
+
+func TestAnonymousAssetAccess(t *testing.T) {
+	ts, client := newAuthServer(t)
+	if code := authJSON(t, client, http.MethodPost, ts.URL+"/api/v1/auth/setup",
+		map[string]string{"username": "admin", "password": "secret1"}, nil); code != http.StatusOK {
+		t.Fatalf("setup = %d", code)
+	}
+
+	// Upload while authenticated.
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("file", "shared.pdf")
+	_, _ = fw.Write([]byte("%PDF-1.4"))
+	_ = mw.Close()
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/assets", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var asset map[string]string
+	_ = json.NewDecoder(resp.Body).Decode(&asset)
+	if resp.StatusCode != http.StatusOK || asset["url"] == "" {
+		t.Fatalf("upload = %d %v", resp.StatusCode, asset)
+	}
+
+	anon := &http.Client{}
+
+	// Anonymous readers can load attachments referenced by public notes.
+	got, err := anon.Get(ts.URL + asset["url"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Body.Close()
+	if got.StatusCode != http.StatusOK {
+		t.Errorf("anonymous asset GET = %d, want 200", got.StatusCode)
+	}
+
+	// Uploads stay authenticated.
+	upReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/assets", nil)
+	upResp, err := anon.Do(upReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upResp.Body.Close()
+	if upResp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("anonymous upload = %d, want 401", upResp.StatusCode)
+	}
+
+	// Orphan maintenance stays authenticated.
+	if code := authJSON(t, anon, http.MethodGet, ts.URL+"/api/v1/assets/orphans", nil, nil); code != http.StatusUnauthorized {
+		t.Errorf("anonymous orphans = %d, want 401", code)
+	}
+}
+
+func TestCapturePreviewValidation(t *testing.T) {
+	ts := newTestServer(t)
+
+	resp, _ := doJSON(t, http.MethodPost, ts.URL+"/api/v1/capture/preview",
+		map[string]string{"url": "not a url"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid url status = %d, want 400", resp.StatusCode)
+	}
+
+	resp, _ = doJSON(t, http.MethodPost, ts.URL+"/api/v1/capture/preview",
+		map[string]string{"url": "http://127.0.0.1:5230/"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("private url status = %d, want 400", resp.StatusCode)
 	}
 }

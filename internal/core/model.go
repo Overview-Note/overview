@@ -8,14 +8,43 @@ const (
 	RoleMember = "member"
 )
 
+// Account lifecycle statuses. Invited accounts exist but cannot authenticate
+// until the invitation is accepted.
+const (
+	StatusActive  = "active"
+	StatusInvited = "invited"
+)
+
 // User is an authenticated account. The password hash never leaves the
 // persistence layer.
 type User struct {
-	ID       string    `json:"id"`
-	Username string    `json:"username"`
-	Role     string    `json:"role"`
-	Created  time.Time `json:"created"`
-	Updated  time.Time `json:"updated"`
+	ID            string    `json:"id"`
+	Username      string    `json:"username"`
+	Email         string    `json:"email,omitempty"`
+	Role          string    `json:"role"`
+	Status        string    `json:"status"`
+	EmailVerified bool      `json:"emailVerified"`
+	Created       time.Time `json:"created"`
+	Updated       time.Time `json:"updated"`
+}
+
+// UserTokenPurpose scopes a single-use user token to one flow.
+type UserTokenPurpose string
+
+const (
+	PurposeInvite UserTokenPurpose = "invite"
+	PurposeReset  UserTokenPurpose = "reset"
+	PurposeVerify UserTokenPurpose = "verify"
+)
+
+// UserToken is a single-use, purpose-scoped credential (invitation, password
+// reset or email verification). Only a hash of the plaintext token is stored.
+type UserToken struct {
+	ID      string           `json:"id"`
+	UserID  string           `json:"userId"`
+	Purpose UserTokenPurpose `json:"purpose"`
+	Created time.Time        `json:"created"`
+	Expires time.Time        `json:"expires"`
 }
 
 // IsAdmin reports whether the user has administrative privileges.

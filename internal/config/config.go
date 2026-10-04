@@ -8,34 +8,41 @@ import (
 
 // Config holds runtime configuration resolved from environment variables.
 type Config struct {
-	Addr        string
-	DataDir     string
-	NotesDir    string
-	AssetsDir   string
-	DBPath      string
-	HistoryDir  string
-	TrashDir    string
-	MaxUploadMB int64
-	HistoryKeep int
-	LogLevel    string
-	LogFormat   string
-	LogFile     string
-	LogMaxMB    int
-	LogBackups  int
-	AuthMode    string
-	MCPToken    string
-	AIBaseURL   string
-	AIAPIKey    string
-	AIModel     string
-	S3Endpoint  string
-	S3Region    string
-	S3AccessKey string
-	S3SecretKey string
-	S3Bucket    string
-	S3UseSSL    bool
-	S3PublicURL string
-	SiteTitle   string
-	Render      bool
+	Addr         string
+	DataDir      string
+	NotesDir     string
+	AssetsDir    string
+	DBPath       string
+	HistoryDir   string
+	TrashDir     string
+	MaxUploadMB  int64
+	HistoryKeep  int
+	LogLevel     string
+	LogFormat    string
+	LogFile      string
+	LogMaxMB     int
+	LogBackups   int
+	AuthMode     string
+	MCPToken     string
+	AIBaseURL    string
+	AIAPIKey     string
+	AIModel      string
+	MailHost     string
+	MailPort     int
+	MailUsername string
+	MailPassword string
+	MailFrom     string
+	MailStartTLS bool
+	BaseURL      string
+	S3Endpoint   string
+	S3Region     string
+	S3AccessKey  string
+	S3SecretKey  string
+	S3Bucket     string
+	S3UseSSL     bool
+	S3PublicURL  string
+	SiteTitle    string
+	Render       bool
 }
 
 // S3Enabled reports whether an S3-compatible asset backend is configured.
@@ -67,35 +74,46 @@ func Load() Config {
 	if err != nil || logBackups < 0 {
 		logBackups = 3
 	}
+	mailPort, err := strconv.Atoi(env("OVERVIEW_MAIL_PORT", "587"))
+	if err != nil || mailPort <= 0 {
+		mailPort = 587
+	}
 	return Config{
-		Addr:        env("OVERVIEW_ADDR", ":5230"),
-		DataDir:     dataDir,
-		NotesDir:    filepath.Join(dataDir, "notes"),
-		AssetsDir:   filepath.Join(dataDir, "assets"),
-		DBPath:      env("OVERVIEW_DB", filepath.Join(dataDir, "overview.db")),
-		HistoryDir:  filepath.Join(dataDir, ".history"),
-		TrashDir:    filepath.Join(dataDir, ".trash"),
-		MaxUploadMB: maxUpload,
-		HistoryKeep: historyKeep,
-		LogLevel:    env("OVERVIEW_LOG_LEVEL", "info"),
-		LogFormat:   env("OVERVIEW_LOG_FORMAT", "json"),
-		LogFile:     env("OVERVIEW_LOG_FILE", ""),
-		LogMaxMB:    logMaxMB,
-		LogBackups:  logBackups,
-		AuthMode:    env("OVERVIEW_AUTH", "multi"),
-		MCPToken:    env("OVERVIEW_MCP_TOKEN", ""),
-		AIBaseURL:   env("OVERVIEW_AI_BASE_URL", ""),
-		AIAPIKey:    env("OVERVIEW_AI_API_KEY", ""),
-		AIModel:     env("OVERVIEW_AI_MODEL", "gpt-4o-mini"),
-		S3Endpoint:  env("OVERVIEW_S3_ENDPOINT", ""),
-		S3Region:    env("OVERVIEW_S3_REGION", "us-east-1"),
-		S3AccessKey: env("OVERVIEW_S3_ACCESS_KEY", ""),
-		S3SecretKey: env("OVERVIEW_S3_SECRET_KEY", ""),
-		S3Bucket:    env("OVERVIEW_S3_BUCKET", ""),
-		S3UseSSL:    env("OVERVIEW_S3_USE_SSL", "true") == "true",
-		S3PublicURL: env("OVERVIEW_S3_PUBLIC_URL", ""),
-		SiteTitle:   env("OVERVIEW_SITE_TITLE", "Overview"),
-		Render:      env("OVERVIEW_RENDER", "") == "true",
+		Addr:         env("OVERVIEW_ADDR", ":5230"),
+		DataDir:      dataDir,
+		NotesDir:     filepath.Join(dataDir, "notes"),
+		AssetsDir:    filepath.Join(dataDir, "assets"),
+		DBPath:       env("OVERVIEW_DB", filepath.Join(dataDir, "overview.db")),
+		HistoryDir:   filepath.Join(dataDir, ".history"),
+		TrashDir:     filepath.Join(dataDir, ".trash"),
+		MaxUploadMB:  maxUpload,
+		HistoryKeep:  historyKeep,
+		LogLevel:     env("OVERVIEW_LOG_LEVEL", "info"),
+		LogFormat:    env("OVERVIEW_LOG_FORMAT", "json"),
+		LogFile:      env("OVERVIEW_LOG_FILE", ""),
+		LogMaxMB:     logMaxMB,
+		LogBackups:   logBackups,
+		AuthMode:     env("OVERVIEW_AUTH", "multi"),
+		MCPToken:     env("OVERVIEW_MCP_TOKEN", ""),
+		AIBaseURL:    env("OVERVIEW_AI_BASE_URL", ""),
+		AIAPIKey:     env("OVERVIEW_AI_API_KEY", ""),
+		AIModel:      env("OVERVIEW_AI_MODEL", "gpt-4o-mini"),
+		MailHost:     env("OVERVIEW_MAIL_HOST", ""),
+		MailPort:     mailPort,
+		MailUsername: env("OVERVIEW_MAIL_USERNAME", ""),
+		MailPassword: env("OVERVIEW_MAIL_PASSWORD", ""),
+		MailFrom:     env("OVERVIEW_MAIL_FROM", ""),
+		MailStartTLS: env("OVERVIEW_MAIL_STARTTLS", "true") == "true",
+		BaseURL:      env("OVERVIEW_BASE_URL", ""),
+		S3Endpoint:   env("OVERVIEW_S3_ENDPOINT", ""),
+		S3Region:     env("OVERVIEW_S3_REGION", "us-east-1"),
+		S3AccessKey:  env("OVERVIEW_S3_ACCESS_KEY", ""),
+		S3SecretKey:  env("OVERVIEW_S3_SECRET_KEY", ""),
+		S3Bucket:     env("OVERVIEW_S3_BUCKET", ""),
+		S3UseSSL:     env("OVERVIEW_S3_USE_SSL", "true") == "true",
+		S3PublicURL:  env("OVERVIEW_S3_PUBLIC_URL", ""),
+		SiteTitle:    env("OVERVIEW_SITE_TITLE", "Overview"),
+		Render:       env("OVERVIEW_RENDER", "") == "true",
 	}
 }
 

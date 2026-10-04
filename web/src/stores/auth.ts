@@ -6,12 +6,22 @@ export const useAuthStore = defineStore("auth", () => {
   const mode = ref<"none" | "multi">("none");
   const needsSetup = ref(false);
   const user = ref<User | null>(null);
+  const mailEnabled = ref(false);
+  const registrationEnabled = ref(false);
+  const loginHint = ref("");
+  const loginIcp = ref("");
+  const loginLink = ref<{ text: string; url: string } | null>(null);
   const loaded = ref(false);
 
   async function loadState() {
     const state = await api.authState();
     mode.value = state.mode;
     needsSetup.value = state.needsSetup;
+    mailEnabled.value = state.mailEnabled;
+    registrationEnabled.value = state.registrationEnabled ?? false;
+    loginHint.value = state.loginHint ?? "";
+    loginIcp.value = state.loginIcp ?? "";
+    loginLink.value = state.loginLink ?? null;
     user.value = state.user ?? null;
     loaded.value = true;
   }
@@ -34,5 +44,20 @@ export const useAuthStore = defineStore("auth", () => {
     user.value = null;
   }
 
-  return { mode, needsSetup, user, loaded, loadState, setup, login, logout, clear };
+  return {
+    mode,
+    needsSetup,
+    user,
+    mailEnabled,
+    registrationEnabled,
+    loginHint,
+    loginIcp,
+    loginLink,
+    loaded,
+    loadState,
+    setup,
+    login,
+    logout,
+    clear,
+  };
 });

@@ -12,7 +12,10 @@ export type NodeType = "folder" | "note";
 export interface User {
   id: string;
   username: string;
+  email?: string;
   role: "admin" | "member";
+  status: "active" | "invited";
+  emailVerified: boolean;
   created: string;
   updated: string;
 }
@@ -30,7 +33,44 @@ export interface AuthState {
   mode: "none" | "multi";
   needsSetup: boolean;
   authenticated: boolean;
+  mailEnabled: boolean;
+  registrationEnabled: boolean;
+  loginHint: string;
+  loginIcp: string;
+  loginLink?: { text: string; url: string };
   user?: User;
+}
+
+export interface SiteSettings {
+  registrationEnabled: boolean;
+  loginHint: string;
+  loginIcp: string;
+  loginLinkUrl: string;
+  loginLinkText: string;
+}
+
+export interface RegisterResult {
+  user: User;
+  verificationRequired: boolean;
+}
+
+export interface MailSettings {
+  host: string;
+  port: number;
+  username: string;
+  from: string;
+  starttls: boolean;
+  hasPassword: boolean;
+  enabled: boolean;
+}
+
+export interface MailSettingsInput {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  from: string;
+  starttls: boolean;
 }
 
 export interface TreeNode {
@@ -83,6 +123,12 @@ export interface Asset {
   name: string;
   size: number;
   contentType: string;
+}
+
+export interface CapturePreview {
+  title: string;
+  text: string;
+  url: string;
 }
 
 export interface NoteMeta {
@@ -250,6 +296,20 @@ export const api = {
     return json<{ baseUrl: string; model: string; hasKey: boolean }>(res);
   },
 
+  async mailSettings(): Promise<MailSettings> {
+    const res = await fetch(`${BASE}/settings/mail`);
+    return json<MailSettings>(res);
+  },
+
+  async saveMailSettings(cfg: MailSettingsInput): Promise<MailSettings> {
+    const res = await fetch(`${BASE}/settings/mail`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    return json<MailSettings>(res);
+  },
+
   async aiChat(
     mode: "chat" | "organize" | "complete",
     payload: { messages?: { role: string; content: string }[]; content?: string },
@@ -335,6 +395,15 @@ export const api = {
     return json<Asset>(res);
   },
 
+  async capturePreview(url: string): Promise<CapturePreview> {
+    const res = await fetch(`${BASE}/capture/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    return json<CapturePreview>(res);
+  },
+
   async authState(): Promise<AuthState> {
     const res = await fetch(`${BASE}/auth/state`);
     return json<AuthState>(res);
@@ -382,6 +451,111 @@ export const api = {
       method: "DELETE",
     });
     if (!res.ok) throw await parseError(res);
+  },
+
+  async inviteUser(email: string, role: string): Promise<User> {
+    const res = await fetch(`${BASE}/auth/users/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, role }),
+    });
+    return (await json<{ user: User }>(res)).user;
+  },
+
+  async resendInvite(id: string): Promise<void> {
+    const res = await fetch(
+      `${BASE}/auth/users/${encodeURIComponent(id)}/resend-invite`,
+      { method: "POST" },
+    );
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async setUserEmail(
+    id: string,
+    email: string,
+  ): Promise<{ user: User; verificationSent: boolean }> {
+    const res = await fetch(`${BASE}/auth/users/${encodeURIComponent(id)}/email`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    return json<{ user: User; verificationSent: boolean }>(res);
+  },
+
+  async sendVerification(id: string): Promise<void> {
+    const res = await fetch(
+      `${BASE}/auth/users/${encodeURIComponent(id)}/send-verification`,
+      { method: "POST" },
+    );
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async acceptInvite(token: string, password: string): Promise<User> {
+    const res = await fetch(`${BASE}/auth/accept-invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    return (await json<{ user: User }>(res)).user;
+  },
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const res = await fetch(`${BASE}/auth/password/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    const res = await fetch(`${BASE}/auth/password/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async verifyEmail(token: string): Promise<void> {
+    const res = await fetch(`${BASE}/auth/verify-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async register(email: string, password: string): Promise<RegisterResult> {
+    const res = await fetch(`${BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    return json<RegisterResult>(res);
+  },
+
+  async resendVerification(email: string): Promise<void> {
+    const res = await fetch(`${BASE}/auth/verify/resend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async siteSettings(): Promise<SiteSettings> {
+    const res = await fetch(`${BASE}/settings/site`);
+    return json<SiteSettings>(res);
+  },
+
+  async saveSiteSettings(cfg: SiteSettings): Promise<SiteSettings> {
+    const res = await fetch(`${BASE}/settings/site`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    return json<SiteSettings>(res);
   },
 
   async listTokens(): Promise<APIToken[]> {
