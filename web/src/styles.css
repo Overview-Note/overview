@@ -366,7 +366,7 @@ button:disabled {
 
 .brand-name {
   font-weight: 700;
-  font-size: 17px;
+  font-size: 18px;
   letter-spacing: -0.01em;
   color: var(--text-strong);
 }
@@ -402,7 +402,7 @@ button:disabled {
 }
 
 .topbar-link {
-  font-size: var(--text-nav);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
   padding: 6px 10px;
@@ -644,16 +644,16 @@ button:disabled {
   margin-top: 12px;
 }
 .tree-row.folder.depth-0 {
-  font-size: calc(var(--base-size) - 3px);
+  font-size: var(--text-sm);
   color: var(--text-soft);
 }
 .tree-row.folder.depth-1 {
-  font-size: calc(var(--base-size) - 3px);
+  font-size: var(--text-sm);
   color: var(--text-soft);
 }
 .tree-row.folder.depth-2,
 .tree-row.folder.depth-3 {
-  font-size: calc(var(--base-size) - 3px);
+  font-size: var(--text-sm);
   color: var(--text-faint);
 }
 
@@ -872,7 +872,7 @@ body.resizing {
 }
 
 .note-bar-title {
-  font-size: var(--text-ui);
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -2898,7 +2898,7 @@ mark {
   padding: 5px 12px;
   font: inherit;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 15px;
   cursor: pointer;
 }
 
@@ -2908,7 +2908,7 @@ mark {
 }
 
 .public-home-link {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-muted);
   text-decoration: none;
