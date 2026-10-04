@@ -28,7 +28,10 @@ Yes, via WebDAV at `http://<host>:5230/dav/`. External edits are re-indexed auto
 ## Can AI agents use it?
 
 Yes — the built-in MCP server (protocol `2026-07-28`) exposes 22 tools covering notes,
-folders, history, trash, assets and reindex, mirroring the CLI and REST API.
+folders, history, trash, assets and reindex, mirroring the CLI and REST API. The same tool
+surface powers the built-in **AI agent**, which can execute those actions in-app using
+OpenAI-compatible function calling; dangerous operations require explicit confirmation and
+every call is audited.
 
 ## Can users sign up or reset their password?
 

@@ -27,7 +27,7 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 | Built-in full-text search (CJK-aware) | ⚠️ | ✅ | ✅ |
 | REST API + WebDAV | partial | ❌ | ✅ |
 | MCP server for AI agents | ❌ | ❌ | ✅ |
-| Built-in AI assistant | ❌ | plugin | ✅ |
+| Built-in AI assistant + tool-calling agent | ❌ | plugin | ✅ |
 | Single binary / one `docker run` | ✅ | ❌ | ✅ |
 
 **Design goals**
@@ -70,6 +70,13 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 ### 🤖 AI-native
 - **AI assistant** — chat, *organize* and *complete* notes, using any OpenAI-compatible
   endpoint (OpenAI, DeepSeek, Ollama, vLLM, …)
+- **AI agent (tool calling)** — the built-in assistant can **perform in-app actions**, not just
+  chat: list, search, read, write, move, rename and delete notes and attachments via
+  OpenAI-compatible function calling. It runs a bounded loop (8 steps by default) through a
+  single capability source (`internal/tools`) shared with MCP. **Dangerous actions are never
+  run blindly** — they pause with a human-readable preview and require an explicit
+  approve/reject in the editor's *Agent* tab; tools are trimmed by role and every call is
+  audited with redacted arguments
 - **MCP server** — expose notes as tools so AI agents can list/search/read/write — 22 tools
   (notes, folders, history, trash, assets, reindex, public notes) matching the CLI/REST surface
 - **API tokens** — create and revoke long-lived bearer tokens in **Settings → API tokens**
@@ -294,6 +301,10 @@ data/
 ┌──────────────▼───────────────────────────────────────────┐
 │  server   HTTP adapter · /api/v1 · middleware · ETag      │
 ├───────────────────────────────────────────────────────────┤
+│  agent    bounded tool loop · sessions · confirmation     │
+├───────────────────────────────────────────────────────────┤
+│  tools    single capability source (MCP + agent)          │
+├───────────────────────────────────────────────────────────┤
 │  service  use cases · transaction boundaries · tree build │
 ├───────────────────────────────────────────────────────────┤
 │  core     domain models · ports (interfaces) · errors     │
@@ -353,6 +364,9 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] Email user management (invite, verification, password reset), self-registration, login notice
 - [x] File attachments (any type) with download headers, anonymous read-only `/assets/`
 - [x] In-app quick capture with SSRF guarding; static-site palette synced with the app
+- [x] AI agent with tool calling: bounded loop, two-phase confirmation for dangerous actions,
+  role-trimmed tools, prompt-injection defense and redacted tool audit
+  (single capability source `internal/tools`, shared with MCP)
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

@@ -1,7 +1,7 @@
 # Overview 设计文档
 
-> 版本：v0.12.0（Gridea 风格配色与主题色自定义 · 独立设置页 · 邮箱用户管理 · 文件附件 · 应用内捕获）
-> 更新日期：2026-10-04
+> 版本：v0.13.0（AI 智能体 · 工具调用 · 危险操作两段式确认 · 工具审计）
+> 更新日期：2026-10-05
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
 ---
@@ -26,6 +26,7 @@
 | v0.11.2 | API/MCP 令牌管理 | 管理员界面 + `/auth/tokens` API 生成/吊销持久令牌（仅存哈希，明文一次性）；令牌同时用于 REST 与 MCP，`OVERVIEW_MCP_TOKEN` 作为回退 |
 | v0.11.3 | 令牌 UI 修正 | 令牌管理入口从顶栏移入「设置」（较少用）；修复弹框层级（DialogHost `z-index:300` 恒在最上）；令牌对话框加宽、生成后常驻可复制密钥框 |
 | v0.12.0 | 配色 · 设置页 · 邮箱用户 · 附件 · 捕获 | 整体改为 Gridea 风格（琥珀主色 `#D4870E`，暖白/深色两套）+ 主题色自定义（预设 + 取色器，明暗自适应）；设置从弹窗改为独立路由页（外观/编辑器/AI 助手/邮件服务器/站点/数据/用户管理/API 令牌），删除旧 `SettingsDialog/TokensDialog/UsersDialog`；邮箱用户管理（邀请/邮箱验证/密码重置）、可开关自注册、登录页内容注入；文件附件（任意类型，下载链接 + RFC5987）；应用内快速捕获（顶栏弹窗 + SSRF 防护）；静态站样式与应用调色板同步 |
+| v0.13.0 | AI 智能体（工具调用） | 内置助手从纯文本聊天升级为**可执行应用内操作的智能体**：抽取 `internal/tools` 为唯一能力源（原 `internal/mcp/generate.go`+`tools.go` 的 `toolBindings`/`runTool`/schema 迁入，MCP 变薄适配器），新增 `Defs()/DefsOpenAI()/Exec()/Risk()/Allows()/Preview()`；`internal/ai` 支持 OpenAI 兼容 function/tool calling（`ChatTools`/`AgentMessage`/`ToolCall`/`ErrToolsUnsupported` + 能力探测）；新增 `internal/agent` 有界循环（默认 8 步）、进程内会话 registry（TTL/容量）、危险操作「预览→确认→执行」（`/ai/agent/confirm`）、`Stop` 与审计；迁移 `0009_ai_tool_audit` + `internal/index/audit.go`（args 脱敏）；HTTP 新增 `/ai/agent`、`/ai/agent/confirm`、`/ai/agent/stop`，`/ai/status` 与 `/settings/ai` 扩展 agent 字段；前端新增 `AgentPanel/ToolCallCard/ConfirmBar` + `stores/agent.ts` + 编辑器「助手 / 智能体」分段；安全模型含按角色裁剪工具、危险必确认、防提示注入、按用户限流与能力探测降级 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -63,6 +64,11 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 │ server (HTTP 适配层)                                        │
 │   路由 /api/v1 · 中间件(request-id/recovery/log) · ETag      │
 ├────────────────────────────────────────────────────────────┤
+│ agent (AI 智能体)  ← 有界工具循环 · 会话 registry · 两段式确认 · 审计 │
+├────────────────────────────────────────────────────────────┤
+│ tools (能力源)  ← OpenAPI 生成 schema · Defs/Exec/Risk/Allows/Preview │
+│   MCP 与 agent 共用同一工具面（MCP 仅为薄 JSON-RPC 适配器）    │
+├────────────────────────────────────────────────────────────┤
 │ service (应用服务层)  ← 用例、事务边界、Tree 组装、认证/邮件/站点/捕获 │
 ├────────────────────────────────────────────────────────────┤
 │ core (领域层)                                              │
@@ -71,6 +77,13 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 │ store        │ index         │ textproc                    │
 │ (文件系统)    │ (SQLite+FTS5) │ (CJK 分词/快照)              │
 └──────────────┴───────────────┴─────────────────────────────┘
+
+数据流（一次智能体回合）：
+Browser → POST /api/v1/ai/agent → server/agent.go → internal/agent.Run
+  → internal/tools.Defs()（按角色裁剪）→ internal/ai.ChatTools
+  → 若模型请求工具：internal/tools.Exec / Preview → service（落盘 + 索引）
+  → 危险操作暂停返回 needs_confirmation → /ai/agent/confirm → 续跑
+  → 每步写 internal/index 的 ai_tool_audit（args 脱敏）
                 │
         data/ (notes/, assets/, overview.db)
 ```
@@ -132,6 +145,13 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 | ADR-041 | 附件支持任意文件类型，Markdown 保存相对路径 | 仅图片不够用，用户需要上传 PDF/ZIP 等并以下载链接引用 | 非内联类型强制 `Content-Disposition: attachment`（含 RFC5987 文件名）；前端与静态站重写 `href` |
 | ADR-042 | 应用内快速捕获走服务端抓取，内置 SSRF 防护 | 浏览器受 CORS 限制无法跨域抓取，服务端抓取又可能被用于探测内网 | 连接时校验解析后的 IP、限制重定向与响应体、仅 http/https |
 | ADR-043 | 匿名只读放行 `GET/HEAD /assets/` | 公开笔记的图片/附件托管在 `/assets/`，匿名读者没有会话 | 仅放行读取；上传/维护/`/api/v1/assets` 仍需认证；文件名带随机 ULID 前缀，不可枚举 |
+| ADR-044 | 抽取 `internal/tools` 作为唯一能力源（原 `internal/mcp/generate.go`+`tools.go` 迁入） | 智能体与 MCP 需要同一套能力面，重复实现会漂移 | MCP 变为薄 JSON-RPC 适配器；工具 schema/风险/权限单点维护；新增 `Defs()/DefsOpenAI()/Exec()/Risk()/Allows()/Preview()` |
+| ADR-045 | `internal/ai` 增加 OpenAI 兼容 function/tool calling（`ChatTools`/`AgentMessage`/`Tool`/`ToolCall`） | 智能体需模型返回结构化工具调用；保持无 SDK 依赖 | 复用同一 `/chat/completions`；`tool_choice:"auto"`；不支持时返回 `ErrToolsUnsupported` |
+| ADR-046 | 新增 `internal/agent` 有界循环（默认 8 步，上限 32） | 无界的模型-工具往返可能失控或烧 token | 步数用尽返回 `max_steps`；超出上下文预算时裁剪最旧回合（保留 tool_calls→tool 配对） |
+| ADR-047 | 危险操作「预览→确认→执行」两段式（`/ai/agent/confirm`） | 删除/清空等不可逆操作不能由模型单方面触发 | 命中确认策略时暂停并返回 `preview`；用户批准可覆盖 args，拒绝则回填 `rejected` 并续跑 |
+| ADR-048 | 工具调用审计（迁移 `0009_ai_tool_audit`，args 脱敏，可撤销操作记录版本/回收站/修订 id） | 智能体执行了写操作，需要事后追责与撤销依据 | 审计只存脱敏摘要（密钥 `[redacted]`、正文/上传存 sha256+长度），无明文正文 |
+| ADR-049 | 工具调用能力探测与降级（`tool_calling_unsupported`） | 部分 OpenAI 兼容后端不支持 tools，硬失败体验差 | 首次被 4xx 拒绝即缓存「不支持」，`/ai/status` 暴露 `toolCalling`，前端禁用智能体 |
+| ADR-050 | 提示注入防护：笔记正文/检索/工具输出一律视为不可信数据 | 笔记内容可能包含针对模型的恶意指令 | `SystemPrompt` 明确「数据非指令」；工具集按角色裁剪；危险操作强制人工确认 |
 
 ---
 
@@ -169,7 +189,7 @@ updated: "2026-10-01T16:54:09Z"
 
 - 迁移文件位于 `internal/index/migrations/*.sql`，通过 `go:embed` 内嵌
 - 迁移记录表 `schema_migrations(version, applied_at)`，启动时按序应用未执行项
-- 迁移清单（0001–0008）：
+- 迁移清单（0001–0009）：
 
 | 版本 | 内容 |
 | --- | --- |
@@ -181,12 +201,14 @@ updated: "2026-10-01T16:54:09Z"
 | `0006_settings` | `settings(key, value)`（运行时 AI / 邮件 / 站点配置） |
 | `0007_api_tokens` | `api_tokens`（仅存 sha256 哈希 + 短前缀，明文一次性） |
 | `0008_email_users` | `users` 增加 `email/status/email_verified`；新增 `user_tokens`（一次性、带用途、可过期） |
+| `0009_ai_tool_audit` | `ai_tool_audit`（智能体工具调用审计：run/user/role/step/tool/args/result_summary/status/destructive + note_version/trash_id/revision_id） |
 
 - `users`（迁移 0004 + 0008）：`id`、`username`（唯一）、`password_hash`、`role`（`admin`/`member`）、`created`、`updated`、`email`（唯一，非空时）、`status`（`active`/`invited`）、`email_verified`。受邀账号 `password_hash` 为空串（bcrypt 永不匹配），必须先接受邀请设置密码。
 - `user_tokens`（迁移 0008）：`id`、`user_id`、`purpose`（`invite`/`reset`/`verify`）、`token_hash`（sha256，唯一）、`created`、`expires`、`used`。令牌单次消费：读取-校验-写入在同一事务内完成（连接池限单连接以串行化）。
 - `settings`（迁移 0006）：`key`/`value` 字符串键值表，存 `ai_*`、`mail_*`、`registration_enabled`、`login_*` 等运行时配置。
 - `api_tokens`（迁移 0007）：`id`、`name`、`prefix`、`token_hash`、`created`、`last_used`、`expires`。
 - `sessions`（迁移 0004）：`token`、`user_id`、`created`、`expires`。
+- `ai_tool_audit`（迁移 0009）：`id`、`run_id`、`user_id`、`username`、`role`、`step`、`tool`、`args`（脱敏后 JSON）、`result_summary`、`status`（`ok`/`error`/`denied`/`rejected`）、`destructive`、`note_version`、`trash_id`、`revision_id`、`created_at`；按 `run_id` 与 `(user_id, created_at)` 建索引。写入前由 `sanitizeAuditArgs` 脱敏：`key/token/password/secret/authorization` → `[redacted]`，`body/content` → `sha256:<hash> (len N)`，截断至 2 KB。
 
 > 从旧版（v0.1，无迁移表且 `notes` 缺列）升级：索引可直接删除重建，内容文件不受影响。
 
@@ -203,8 +225,12 @@ updated: "2026-10-01T16:54:09Z"
 | `internal/store` | 文件系统实现 | 原子写、版本校验、`List`(结构)、`Walk`(全量) |
 | `internal/index` | SQLite 实现 | 迁移、`Upsert` `Sync` `Tree` `Search` |
 | `internal/textproc` | 文本处理 | `Tokens` `Segment` `Snippet` |
-| `internal/server` | HTTP 适配 | 路由、中间件、错误映射、ETag |
+| `internal/server` | HTTP 适配 | 路由、中间件、错误映射、ETag、`agent.go`（`/ai/agent*`） |
 | `internal/markdown` | frontmatter 解析/序列化 | `Parse` `Document.String` |
+| `internal/tools` | **唯一能力源**（原 MCP 工具实现迁入） | `Defs` `DefsOpenAI` `Exec` `Risk` `Allows` `Preview` `Known`、`Set` |
+| `internal/agent` | AI 智能体：有界工具循环、会话、确认、审计 | `Agent` `Run` `Confirm` `Stop` `SystemPrompt`、`Session`/`Result`/`Step` |
+| `internal/ai` | OpenAI 兼容客户端（chat + tool calling） | `Chat` `ChatTools` `AgentMessage` `Tool` `ToolCall` `ErrToolsUnsupported` |
+| `internal/mcp` | MCP JSON-RPC 适配器（薄） | `Server.ServeHTTP`（工具面委托 `internal/tools`） |
 
 ### 5.2 关键读写路径
 
@@ -234,6 +260,21 @@ GET /api/v1/search?q=
       → textproc.Tokens(q) → FTS5 MATCH
       → 命中 id 列表
       → 从 notes 表取原文 → textproc.Snippet 生成并转义快照
+```
+
+**智能体回合（工具调用）**
+```
+POST /api/v1/ai/agent {runId?, input, context{path,selection}}
+  → server 鉴权/限流 + 配置门禁（AI 已配置 + agentEnabled + 支持 tool calling）
+  → agent.Session（无 runId 则 Start，登记进程内 registry）
+  → agent.Run → 追加 system 提示 + user 输入（含笔记/选区上下文）
+      → loop（≤ maxSteps）:
+          tools.Defs() → 按角色 + allowedTools 过滤 → ai.ChatTools
+          无 tool_calls → done；有则逐条：
+              工具不允许 → denied；需确认 → 暂停返回 needs_confirmation
+              否则 tools.Exec → service 落盘/索引 → 记录 step + 审计
+  → 危险操作: /ai/agent/confirm {runId, toolCallId, decision, args?} 续跑
+  → /ai/agent/stop 丢弃会话
 ```
 
 ### 5.3 版本与并发（ADR-007）
@@ -292,10 +333,13 @@ Base：`/api/v1`
 | POST | `/auth/verify/resend` | 重发验证邮件（匿名，限流，防枚举） |
 | GET | `/public/notes` | 公开笔记列表（匿名） |
 | GET | `/public/note?path=` | 公开笔记正文（匿名，非公开返回 404） |
-| GET | `/ai/status` | AI 是否可用及模型名 |
-| POST | `/ai/chat` | AI：`{mode: chat\|organize\|complete, messages, content}` |
-| GET | `/settings/ai` | 读取 AI 配置，密钥以 `hasKey` 表示（仅管理员） |
-| PUT | `/settings/ai` | 运行时更新 AI 配置（仅管理员） |
+| GET | `/ai/status` | AI 是否可用、模型名，以及 `toolCalling`（`true`/`false`/`unknown`）`agentEnabled` `maxSteps` `confirmPolicy` |
+| POST | `/ai/chat` | AI：`{mode: chat\|organize\|complete, messages, content}`（纯文本，无工具） |
+| POST | `/ai/agent` | 运行一个智能体回合：`{runId?, input, context?}`，返回 `{runId,status,text,steps[],pending?}`；`status` ∈ `done`/`needs_confirmation`/`max_steps`（未配置/停用/不支持时分别 503/400 `agent_disabled`/400 `tool_calling_unsupported`） |
+| POST | `/ai/agent/confirm` | 批准/拒绝待确认工具调用：`{runId, toolCallId, decision: approve\|reject, args?}`，批准可用 `args` 覆盖原参数 |
+| POST | `/ai/agent/stop` | 丢弃会话（终止该 run）`{runId}` |
+| GET | `/settings/ai` | 读取 AI + 智能体配置：`baseUrl` `model` `hasKey` `agentEnabled` `toolCalling`（`auto`/`off`）`confirmPolicy` `maxSteps` `allowedTools[]`（仅管理员，密钥永不回传） |
+| PUT | `/settings/ai` | 运行时更新 AI/智能体配置（仅管理员，**部分更新**：省略字段保持不变） |
 | GET | `/settings/mail` | 读取 SMTP 配置，密码永不回传（仅管理员） |
 | PUT | `/settings/mail` | 运行时更新 SMTP 配置（仅管理员） |
 | GET | `/settings/site` | 读取登录页/注册配置（仅管理员） |
@@ -441,8 +485,10 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | `server` | 完整生命周期、409、路径校验、附件上传/服务头（含 RFC5987）、静态资源 gzip/304/SPA 回退、render 白名单、邮箱认证流程、站点设置、限流 |
 | `history`/`trash` | 版本快照与裁剪、回收站恢复/清理 |
 | `archivex`/`sitegen` | ZIP 往返、静态站生成与搜索索引 |
-| `config`/`logging`/`ai`/`openapi` | 配置解析、日志轮转、AI 客户端、OpenAPI 规范 |
-| `mcp` | 初始化/发现、工具调用、认证、**协议版本协商**、`resultType`、工具面平铺（≥20 工具） |
+| `config`/`logging`/`ai`/`openapi` | 配置解析、日志轮转、AI 客户端（含 `ChatTools`/`ErrToolsUnsupported` 探测与解析）、OpenAPI 规范 |
+| `tools` | 能力源 schema、OpenAPI 生成/回退、`Risk`/`Allows` 分类、`Preview`、`Exec` 输出 |
+| `agent` | 有界循环、`max_steps`、危险操作需确认（approve/reject/改参）、按角色拒绝、会话 TTL/淘汰、审计写入、上下文裁剪、能力探测降级 |
+| `mcp` | 初始化/发现、工具调用、认证、**协议版本协商**、`resultType`、工具面平铺（≥20 工具）、与 `internal/tools` 的一致性（parity） |
 | `cli` | 读写/检索、参数位置无关解析、list/move、归档往返、history/restore、`build`/`export` 别名、用法错误 |
 
 前端：`vue-tsc` 类型检查、**Vitest** 单元测试（`npm test`，覆盖 `markdown/html`、`markdown/doc`、`markdown/roundtrip`）、`vite build`。
@@ -471,6 +517,12 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | 防枚举 | 找回密码、重发验证对未知/未激活账号一律返回成功；令牌校验失败统一返回「无效或过期」 |
 | 限流 | 公开认证端点按客户端 IP（10 次/15min）与邮箱（3 次/小时）固定窗口限流，超限 429 |
 | SSRF | 捕获抓取仅允许 `http(s)`；连接时校验解析后的 IP，拒绝 loopback/私网/链路本地/CGNAT/组播等；限制重定向次数（5）与响应体（2 MiB） |
+| 智能体工具权限 | `tools.Allows(role, name)`：`member` 仅可读/写工具，`admin`/no-auth `owner` 才可执行危险工具；可选 `allowedTools` 白名单再收窄；被拒调用记为 `denied` 并回填模型 |
+| 危险操作确认 | 确认策略 `dangerous`（默认，写工具需确认）/`all`（读写都确认）/`none`；危险工具在 `none` 下仍执行，但默认与推荐为 `dangerous`；确认可改参或拒绝 |
+| 提示注入 | 笔记正文/标题/检索结果/工具输出在 `SystemPrompt` 中明确定为**不可信数据**；模型只能调用受白名单约束的工具，危险动作必须人工确认 |
+| 智能体限流 | 按用户（无身份时回退客户端 IP）20 次 / 5 分钟固定窗口，超限 429；会话有 TTL（30min）与容量（256）上限，超限淘汰最旧 |
+| 工具调用能力探测 | 被 provider 4xx 明确拒绝 tools 时缓存「不支持」并降级（前端禁用智能体、返回 `tool_calling_unsupported`），避免反复失败 |
+| 工具审计 | `ai_tool_audit` 仅存脱敏摘要：密钥字段 `[redacted]`，正文/上传存 `sha256 + 长度`，不落明文正文；记录可撤销操作对应的版本/回收站/修订 id |
 | 匿名资产只读 | `GET/HEAD /assets/` 匿名放行以渲染公开页；上传/维护/`/api/v1/assets` 仍需认证；文件名含随机 ULID，不可枚举 |
 | base URL / Host | 邮件链接优先用 `OVERVIEW_BASE_URL`，否则按请求推导（尊重 `X-Forwarded-Proto`）；生产应在反代后使用 HTTPS |
 | 密钥 | AI/MCP/S3/SMTP 密钥仅存服务端，接口永不回传（`hasKey` / `hasPassword`） |
@@ -500,6 +552,10 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 >
 > v0.12.0 待权衡：限流与令牌表为**单进程内存/单库**实现，多实例部署下各自计数且不共享令牌状态；
 > 邮件发送为同步阻塞（10s 拨号超时），高并发邀请/重置可能拖慢请求。
+>
+> v0.13.0 待权衡：智能体会话 registry 与限流同为**单进程内存**，多实例下会话不共享（确认请求须落到同一实例），
+> 需要粘性会话或外部存储；审计 async 写入（失败仅忽略）且无清理策略；上下文裁剪按字节估算，
+> 极端长会话仍可能触发 provider 上限；工具调用为**非流式**（一次回合返回完整结果）。
 
 ---
 
@@ -635,6 +691,25 @@ P2 — 打磨与生态
 - [x] 匿名只读 `/assets/`（公开页附件）
 - [x] 应用内快速捕获（顶栏弹窗 + SSRF 防护）
 
+**Phase 10 — AI 智能体与工具调用（v0.13.0）**
+
+能力与循环
+- [x] 抽取 `internal/tools` 为唯一能力源（`Defs/DefsOpenAI/Exec/Risk/Allows/Preview`），MCP 变薄适配器
+- [x] `internal/ai` 支持 OpenAI 兼容 function/tool calling（`ChatTools` + 能力探测降级）
+- [x] `internal/agent` 有界循环（默认 8 步 / 上限 32）、进程内会话 registry（TTL + 容量）、`Stop`
+- [x] 危险操作「预览→确认→执行」两段式（`/ai/agent/confirm`），批准可改参、拒绝回填
+
+安全与审计
+- [x] 按角色裁剪工具集（member 只读/写，危险仅 admin/owner）+ 可选 `allowedTools` 白名单
+- [x] 提示注入防护（内容视为不可信数据）+ 危险必确认（策略 `dangerous`/`all`/`none`）
+- [x] 按用户智能体限流（20 次 / 5 分钟）
+- [x] 工具审计 `0009_ai_tool_audit` + `internal/index/audit.go`（args 脱敏、无明文正文）
+
+HTTP 与前端
+- [x] `POST /ai/agent`、`/ai/agent/confirm`、`/ai/agent/stop`；`/ai/status`、`/settings/ai` 扩展 agent 字段
+- [x] 前端「智能体面板」：`AgentPanel/ToolCallCard/ConfirmBar` + `stores/agent.ts` + `api.ts`
+- [x] 编辑器右侧「助手 / 智能体」分段；受影响对象可跳转、写类操作后刷新目录
+
 ---
 
 ## 13. 附录
@@ -698,8 +773,8 @@ P2 — 打磨与生态
 
 - **TOC**：`@tiptap/extension-table-of-contents` 生成标题锚点并跟踪滚动高亮；`TocPanel` 支持层级缩进、平滑跳转，工具栏可开关。
 - **公开分享**（ADR-016）：frontmatter `public`（迁移 0005）；`/api/v1/public/*` 匿名可读，仅暴露公开笔记；前端 `/public` 列表与只读页，编辑器工具栏「分享」一键复制链接。公开页把 wiki 链接降级为纯文本，避免泄漏私有目标。
-- **MCP**（ADR-017）：`POST /mcp` JSON-RPC，方法 `initialize`/`tools/list`/`tools/call`；工具 `notes_list/search/read/write/delete/links`；令牌认证（`OVERVIEW_MCP_TOKEN`，否则回退会话令牌）；工具错误按规范 in-band 返回。
-- **AI**（ADR-018）：`internal/ai` 无依赖 OpenAI 兼容客户端；`AIService` 提供 `organize`/`complete`/`chat`；`/api/v1/ai/*` 未配置返回 503；前端 AI 面板支持对话、整理（替换）、补全（追加）、插入。
+- **MCP**（ADR-017）：`POST /mcp` JSON-RPC，方法 `initialize`/`tools/list`/`tools/call`；工具面由 `internal/tools` 统一提供（v0.13 起，见 §13.19）；令牌认证（`OVERVIEW_MCP_TOKEN`，否则回退会话令牌）；工具错误按规范 in-band 返回。
+- **AI**（ADR-018）：`internal/ai` 无依赖 OpenAI 兼容客户端；`AIService` 提供 `organize`/`complete`/`chat`；`/api/v1/ai/*` 未配置返回 503；前端 AI 面板支持对话、整理（替换）、补全（追加）、插入。v0.13 起 `internal/ai` 另支持 tool calling，`/ai/agent*` 提供可执行应用内操作的智能体（见 §13.19）。
 
 ### 13.6 规模化与运维（v0.7）
 
@@ -798,6 +873,8 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   `folder_create`、`notes_history/revision/restore`、`trash_list/restore/purge`、
   `assets_upload/orphans/purge`、`notes_reindex`、`public_notes/public_note`。
   Schema 由 OpenAPI 生成，`notes_rename`/`assets_upload` 等用手写覆盖。
+  > v0.13.0 起该工具面迁至 `internal/tools`（`Defs()`/`Exec()`），MCP 仅保留薄 JSON-RPC 适配器，
+  > 与 AI 智能体共用（见 §13.19、ADR-044）。
 - **令牌管理（ADR-035）**：管理员在**设置 → API 令牌**生成/吊销长期令牌（`GET/POST/DELETE
   /api/v1/auth/tokens`），仅存哈希、明文只显示一次；令牌同时可用于 REST 的 `Bearer`
   认证；未配置时回退到服务端 `OVERVIEW_MCP_TOKEN` 或登录会话令牌。
@@ -870,3 +947,46 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - 端到端：未验证邮箱登录 403 `email_not_verified`；邀请→接受→登录、重置→新密码→旧会话失效；自注册开关生效；公开认证端点超限 429
 - 附件：非图片返回 `Content-Disposition`（含 RFC5987 中文名）；`GET /assets/…` 匿名 200，`POST /api/v1/assets` 未认证 401
 - 捕获：内网/loopback URL 被拒（502/400），公网页面返回标题与正文
+
+### 13.19 AI 智能体与工具调用（v0.13.0，ADR-044…050）
+
+内置助手从「纯文本聊天」升级为**可执行应用内操作的智能体**。
+
+**能力源 `internal/tools`（ADR-044）**
+
+- 原 `internal/mcp/generate.go`（OpenAPI → schema 生成）与 `internal/mcp/tools.go`（`toolBindings` + `runTool`）整体迁入 `internal/tools`，删除 `generate.go`。
+- 对外 API：`Defs()`（MCP 形状工具列表，schema 由 OpenAPI 生成、可回退手写）、`DefsOpenAI(allow)`（OpenAI `tools[].function` 形状）、`Exec()`（进程内执行，输出与旧 MCP 逐字节一致）、`Risk()`/`Allows()`（风险与角色判定）、`Preview()`（危险操作的人类可读预览）、`Known()`。
+- `Set` 仅依赖 `service.Service`；MCP 的 `Server` 持有一个 `tools.Set`，`tools/list`/`tools/call` 直接委托，适配器变薄。
+
+**工具调用客户端 `internal/ai`（ADR-045）**
+
+- 新增 `ChatTools(ctx, messages, offered, temperature)`，请求体带 `tools` + `tool_choice:"auto"`，解析 `choices[0].message` 的 `content` 与 `tool_calls`，返回 `ChatResult{Content, ToolCalls, FinishReason}`。
+- 新增类型 `AgentMessage`（`role`/`content`/`tool_calls`/`tool_call_id`）、`Tool`、`ToolCall`。
+- provider 以 4xx 明确拒绝 tools（错误体含 tool/function）时返回 `ErrToolsUnsupported`，由 `AIService` 缓存该事实。
+
+**智能体循环 `internal/agent`（ADR-046/047）**
+
+- `Agent.Run`：首轮注入 `SystemPrompt`，追加用户输入（可带当前笔记 `path` 与选区 `selection`），进入有界循环；`maxSteps` 默认 8、上限 32，用尽返回 `StatusMaxSteps`。
+- 每轮 `tools.Defs()` 按角色 + `allowedTools` 过滤后交给模型；无 `tool_calls` 即 `done`；否则逐条处理，工具不允许记为 `denied` 并回填。
+- 需确认时保存 `PendingCall` 并返回 `needs_confirmation`（含 `preview`）；`Confirm` 批准可覆盖 args，拒绝回填 `rejected`，随后从停点续跑。
+- 进程内会话 registry：`Start`/`Session`/`Stop`，TTL 30 分钟、容量 256（超限淘汰最旧）；上下文超预算时按「完整回合」裁剪并保留 `tool_calls`→`tool` 配对。
+- `RunID` 为 ULID；`Stop` 丢弃会话。
+
+**审计（ADR-048）**：每步写 `ai_tool_audit`（见 §4.3），`sanitizeAuditArgs` 脱敏密钥与正文、截断，另记录危险操作对应的 `note_version`/`trash_id`/`revision_id` 作为撤销线索。
+
+**HTTP（`internal/server/agent.go`）**
+
+- `POST /ai/agent`：无 `runId` 则 `Start`，否则复用；返回 `{runId,status,text,steps[],pending?}`；步进项含 `toolCallId/name/args/risk/status/summary`。
+- `POST /ai/agent/confirm`、`POST /ai/agent/stop`；错误码 `agent_disabled`、`tool_calling_unsupported`、`run_not_found`。
+- 门禁：AI 未配置 503；agent 停用 400 `agent_disabled`；探测到不支持 400 `tool_calling_unsupported`；按用户限流 20 次/5 分钟。
+
+**前端「智能体面板」**
+
+- `AgentPanel.vue`（可用性判定/上下文 chip/步骤/文本/确认/停止/重试）、`ToolCallCard.vue`（可折叠、风险与状态徽章、受影响 `.md` 路径可跳转）、`ConfirmBar.vue`（预览 + 可编辑 args + 批准/拒绝）；`stores/agent.ts` 管理 `idle/running/awaiting/done/max_steps/error`；`api.ts` 新增 `aiAgent/aiAgentConfirm/aiAgentStop` 与 `AIStatus`。
+- 编辑器右栏改为「助手 / 智能体」分段（`EditorPane.vue`）；写类操作完成后 `flush` + 刷新目录，命中当前笔记则重载。
+
+### 13.20 v0.13.0 验证记录
+
+- `go build ./...`、`go test ./...` 全绿（新增 `internal/tools`、`internal/agent`、`internal/ai` 工具调用、`server/agent`、MCP↔tools parity 覆盖）
+- 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿
+- 端到端：读写工具可自动执行；删除/清空触发 `needs_confirmation` 且需 `approve`；`reject` 回填并续跑；`member` 调用危险工具被拒；不支持 tool calling 的 provider 返回 `tool_calling_unsupported`；限流超限 429；审计表仅含脱敏 args

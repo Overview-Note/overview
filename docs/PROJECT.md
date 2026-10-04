@@ -59,6 +59,10 @@ store · index · s3store · watcher · mcp · server
 - **MCP 服务端**：`POST /mcp`（JSON-RPC 2.0，协议 `2026-07-28`，向下兼容旧握手），暴露 22 个工具
   （笔记/目录/历史/回收站/附件/索引/公开笔记），与 CLI、REST 能力拉平
 - **AI 助手**：对话 / 整理（替换）/ 补全（追加），支持 OpenAI、DeepSeek、Ollama、vLLM 等
+- **AI 智能体（工具调用）**：内置助手可**执行应用内操作**——用 OpenAI 兼容 function calling 读取、
+  搜索、写入、移动、删除笔记与附件。能力源统一在 `internal/tools`（MCP 与智能体共用）；
+  循环有界（默认 8 步）、**危险操作必须预览后人工确认**、按角色裁剪工具、提示注入防护、
+  工具调用审计（`ai_tool_audit`，参数脱敏）
 - 管理员可在**设置**中运行时配置，无需重启
 
 ### 7. 多端接入与自动化
@@ -81,7 +85,7 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 **内容与组织**：层级目录 · Markdown 存储 · 双链与反链 · 每篇私有/公开 + 独立公开页 · 拖拽移动
 **编辑**：富文本（Tiptap）· 代码高亮 · 任务列表 · 数学公式（KaTeX）· Mermaid 图表 · GFM 脚注 · 图片粘贴/拖拽 + 压缩 · **文件附件（任意类型，下载链接）** · 表格 + 就近浮动工具条 · 斜杠命令 · 大纲 · 专注模式 + 快捷键面板
 **检索**：CJK 全文检索 · 全局搜索
-**AI**：AI 助手（对话/整理/补全）· MCP 服务端（工具由 OpenAPI 生成）
+**AI**：AI 助手（对话/整理/补全）· **AI 智能体（工具调用，可执行应用内操作 + 危险操作确认）** · MCP 服务端（工具与智能体同源于 `internal/tools`）
 **账户**：多用户认证（bcrypt/会话/角色）· **邮箱邀请/验证/密码重置** · **可开关自注册** · 持久 API/MCP 令牌 · 登录页内容注入（提示语/备案号/链接）
 **访问**：WebDAV · REST + OpenAPI · PWA · 应用内快速捕获（顶栏弹窗 · 服务端抓取标题/正文 · SSRF 防护）
 **外观**：Gridea 风格配色（琥珀主色 `#D4870E`）· 明暗主题 · **主题色自定义（预设 + 取色器）** · **独立设置页**（外观/编辑器/AI/邮件/站点/数据/用户/令牌）
@@ -98,7 +102,7 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 | 检索 | SQLite FTS5 + 自研 CJK 分词 |
 | 前端 | Vue 3 + TypeScript + Vite 6 + Pinia + vue-router |
 | 编辑器 | Tiptap 2（ProseMirror） |
-| AI/MCP | OpenAI 兼容客户端（无 SDK）+ 自研 JSON-RPC MCP 服务端 |
+| AI/MCP | OpenAI 兼容客户端（无 SDK，含 function/tool calling）+ 自研 JSON-RPC MCP 服务端；`internal/tools` 统一能力源 + `internal/agent` 有界工具循环 |
 | 集成 | WebDAV（`x/net/webdav`）、S3（`minio-go`）、SMTP（标准库 `net/smtp`）、fsnotify |
 | 发布 | 前端 `go:embed` → 单二进制；Docker 三阶段构建 |
 
@@ -106,16 +110,16 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 
 ## 项目状态
 
-- **版本**：v0.12.0（Gridea 风格配色 + 主题色自定义、独立设置页、邮箱用户管理/自注册、文件附件、应用内快速捕获；Phase 7 部分待排期）
-- **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli
-  以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试）；前端 `vue-tsc` 类型检查、
+- **版本**：v0.13.0（AI 智能体 / 工具调用：可执行应用内操作、危险操作两段式确认、能力源 `internal/tools`、工具审计；Phase 7 部分待排期）
+- **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli/agent/tools
+  以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试与 MCP↔tools parity）；前端 `vue-tsc` 类型检查、
   **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
 - **CI**：GitHub Actions（后端 race 测试、前端类型检查+测试+构建、golangci-lint）；
   推送 `v*` 标签自动构建 **多架构镜像** 发布到 GHCR
 - **交付**：Docker / 单二进制（内嵌前端）/ GHCR 镜像，浏览器访问
 - **规模**：后端 ~9k 行 Go / 20 个 internal 包；前端 ~5k 行 TS/Vue
-- **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.12.0 待权衡的是限流/令牌的
-  单实例假设与同步发信；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
+- **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.13.0 待权衡的是智能体会话/限流的
+  单实例内存假设（确认需同实例）、审计无清理策略与工具调用为非流式；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
 
 ---
 
@@ -137,6 +141,9 @@ v0.12 新增认证流程端点：`/auth/password/request`、`/auth/password/rese
 `/auth/verify-email`、`/auth/register`、`/auth/verify/resend`，以及管理员
 `/auth/users/invite`、`/auth/users/{id}/resend-invite`、`/auth/users/{id}/email`、
 `/auth/users/{id}/send-verification`；设置 `/settings/{ai,mail,site}`；捕获 `/capture/preview`。
+v0.13 新增智能体端点：`POST /ai/agent`（运行一回合）、`POST /ai/agent/confirm`（批准/拒绝危险操作）、
+`POST /ai/agent/stop`（终止会话）；`GET /ai/status` 与 `GET/PUT /settings/ai` 扩展
+`toolCalling`、`agentEnabled`、`confirmPolicy`、`maxSteps`、`allowedTools` 字段。
 
 ---
 

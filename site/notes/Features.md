@@ -35,6 +35,12 @@ public: true
 ## AI-native
 
 - **AI assistant** — chat, *organize* and *complete* notes
+- **AI agent (tool calling)** — the assistant can **execute in-app actions**: read, search,
+  write, move, rename and delete notes and attachments via OpenAI-compatible function
+  calling. A bounded loop (8 steps by default) runs against a single capability source
+  (`internal/tools`) shared with MCP. **Dangerous actions pause for an explicit
+  approve/reject** with a human-readable preview; tools are trimmed by role and every call
+  is audited with redacted arguments
 - **MCP server** — protocol `2026-07-28` (stateless `_meta`, `server/discover`, `resultType`)
   with backward compatibility, exposing 22 tools that mirror the CLI/REST API
 

@@ -24,6 +24,39 @@ The editor then shows an AI panel with:
 - **Organize** — restructure a note (replaces the body)
 - **Complete** — continue a note naturally (appends)
 
+## AI agent (tool calling)
+
+The assistant can do more than chat: with OpenAI-compatible **function/tool calling** it
+executes real actions on your vault — list, search, read, write, move, rename and delete
+notes, create folders, restore revisions/trash and manage attachments. Switch the editor's
+right panel from **Assistant** to **Agent**, describe what you want, and the agent runs a
+bounded loop (8 steps by default) until it is done, pauses for confirmation, or hits the
+step ceiling.
+
+Safety model:
+
+- **Single capability source** — the tool surface lives in `internal/tools` and is shared
+  with the MCP server, so both stay in lock-step.
+- **Role-trimmed tools** — members may run read/write tools; only administrators (or the
+  no-auth owner) may run dangerous ones. An optional `allowedTools` whitelist narrows this
+  further.
+- **Dangerous actions require confirmation** — deleting, purging and other destructive calls
+  pause with a human-readable preview and an approve/reject bar. You can even edit the
+  arguments before approving. The confirmation policy is `dangerous` (default), `all` or
+  `none`.
+- **Prompt-injection defense** — note bodies, titles, search results and tool outputs are
+  treated as untrusted data, never as instructions.
+- **Audit** — every tool call is recorded in `ai_tool_audit` with redacted arguments (secrets
+  become `[redacted]`, note bodies/uploads become a SHA-256 hash plus length), plus the note
+  version / trash / revision ids needed to undo destructive calls.
+- **Rate limiting** — agent calls are throttled per user (20 requests / 5 minutes).
+- **Graceful degradation** — if the provider refuses tool calling, the agent is disabled with
+  `tool_calling_unsupported` instead of failing repeatedly.
+
+Agent endpoints: `POST /ai/agent`, `POST /ai/agent/confirm`, `POST /ai/agent/stop`
+(session-based; `GET /ai/status` reports `toolCalling`, `agentEnabled`, `maxSteps` and
+`confirmPolicy`). Admins tune the agent under **Settings → AI assistant**.
+
 ## MCP server
 
 Overview speaks the Model Context Protocol so AI agents can operate your notes.
@@ -47,8 +80,9 @@ If a request declares a version the server does not support it replies with
 `UnsupportedProtocolVersionError` (`-32022`) listing the supported versions.
 
 Methods: `server/discover`, `initialize`, `tools/list`, `tools/call`, `ping`
-(legacy). The tool list is generated from the OpenAPI document so it stays in
-sync with the REST API.
+(legacy). The tool list comes from the shared capability source (`internal/tools`),
+whose schemas are generated from the OpenAPI document, so MCP and the AI agent
+always expose the same surface.
 
 ### Tokens
 

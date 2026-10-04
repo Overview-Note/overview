@@ -14,6 +14,10 @@ public: true
 ┌──────────────▼───────────────────────────────────────────┐
 │  server   HTTP adapter · /api/v1 · middleware · ETag      │
 ├───────────────────────────────────────────────────────────┤
+│  agent    bounded tool loop · sessions · confirmation     │
+├───────────────────────────────────────────────────────────┤
+│  tools    single capability source (MCP + agent)          │
+├───────────────────────────────────────────────────────────┤
 │  service  use cases · transaction boundaries · tree build │
 ├───────────────────────────────────────────────────────────┤
 │  core     domain models · ports (interfaces) · errors     │
@@ -29,7 +33,9 @@ public: true
    disposable, rebuildable index.
 2. **Dependency inversion.** `service` depends only on interfaces declared in `core`,
    so backends (e.g. S3 assets) can be swapped without touching business logic.
-3. **Thin adapters.** The same `service` powers REST, WebDAV, MCP **and the offline CLI**.
+3. **Thin adapters.** The same `service` powers REST, WebDAV, MCP, the offline CLI **and the
+   in-app AI agent**; the tool surface lives once in `tools`, and `mcp` is only a JSON-RPC
+   shell over it.
 4. **Safe writes.** Atomic writes (temp → fsync → rename) and optimistic concurrency
    (content hash / ETag → 409).
 
@@ -47,11 +53,13 @@ public: true
 | `watcher` | fsnotify-based live reindex |
 | `archivex` | Portable ZIP export/import |
 | `s3store` | S3-compatible asset backend |
-| `mcp` | MCP server (protocol `2026-07-28`, dual-era, 22 tools) |
+| `tools` | Single capability source shared by MCP and the AI agent (`Defs/Exec/Risk/Allows/Preview`) |
+| `agent` | AI agent: bounded tool loop, in-process sessions, two-phase confirmation, audit |
+| `mcp` | MCP server (protocol `2026-07-28`, dual-era); thin JSON-RPC adapter over `tools` |
 | `cli` | Offline command-line adapter (notes, history, trash, assets, static site) |
-| `openapi` | OpenAPI spec (also drives MCP tool schemas) |
+| `openapi` | OpenAPI spec (drives `tools` schemas) |
 | `sitegen` | Static documentation-site export (HTML + client-side search) |
-| `ai` | OpenAI-compatible chat client |
+| `ai` | OpenAI-compatible chat client (including function/tool calling) |
 | `config`, `logging` | Environment config, structured logging |
 | `server`, `webui` | HTTP routing/middleware, static handler (gzip + caching), embedded frontend |
 
