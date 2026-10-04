@@ -42,7 +42,20 @@ export function createTurndown(): TurndownService {
 export function mdToHtml(markdown: string): string {
   const prepared = renderMathInMarkdown(wikiToHtml(footnotesToHtml(markdown)));
   const html = marked.parse(prepared, { async: false }) as string;
-  return normalizeTaskLists(mermaidToDivs(resolveAssetSrc(html)));
+  return normalizeTaskLists(
+    mermaidToDivs(resolveAssetSrc(trimFencedCodeNewline(html))),
+  );
+}
+
+// marked terminates the last line of every fenced code block with a newline.
+// Because code is rendered with `white-space: pre`, that newline shows up as an
+// extra blank line inside the block, so drop exactly one trailing newline per
+// <pre><code> while preserving any intentional blank lines in the source.
+function trimFencedCodeNewline(html: string): string {
+  return html.replace(
+    /(<pre><code\b[^>]*>)([\s\S]*?)\r?\n(<\/code><\/pre>)/gi,
+    "$1$2$3",
+  );
 }
 
 /** Converts the editor's HTML back to vault Markdown. */

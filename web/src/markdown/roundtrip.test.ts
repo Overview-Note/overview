@@ -66,6 +66,28 @@ describe("editor markdown round-trip", () => {
     expect(out).toContain("- [x] inner");
   });
 
+  it("does not leave a trailing blank line inside fenced code blocks", () => {
+    const html = mdToHtml("```go\nfunc main() {}\n```\n");
+    expect(html).not.toContain("func main() {}\n</code>");
+
+    const editor = new Editor({ extensions: baseExtensions(), content: html });
+    const code = editor.view.dom.querySelector("code") as HTMLElement | null;
+    const trailingBreak = editor.view.dom.querySelector(".ProseMirror-trailingBreak");
+    const text = editor.state.doc.firstChild?.textContent ?? "";
+    editor.destroy();
+    expect(text).toBe("func main() {}");
+    expect(code?.textContent).toBe("func main() {}");
+    expect(trailingBreak).toBeNull();
+  });
+
+  it("keeps intentional blank lines inside fenced code blocks", () => {
+    const html = mdToHtml("```\nline one\n\nline three\n```\n");
+    const editor = new Editor({ extensions: baseExtensions(), content: html });
+    const text = editor.state.doc.firstChild?.textContent ?? "";
+    editor.destroy();
+    expect(text).toBe("line one\n\nline three");
+  });
+
   it("keeps attachment links vault-relative across the round-trip", () => {
     const out = roundTrip("[报告](assets/2026/10/report.pdf)\n");
     expect(out).toContain("](assets/2026/10/report.pdf)");
