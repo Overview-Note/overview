@@ -30,6 +30,12 @@ Yes, via WebDAV at `http://<host>:5230/dav/`. External edits are re-indexed auto
 Yes — the built-in MCP server (protocol `2026-07-28`) exposes 22 tools covering notes,
 folders, history, trash, assets and reindex, mirroring the CLI and REST API.
 
+## Can users sign up or reset their password?
+
+Yes. Admins can invite users by email, and configure an SMTP server (or the `OVERVIEW_MAIL_*`
+variables) for verification and password-reset mail. Self-registration and the login-page
+notice/ICP/link are toggled in **Settings → Site**.
+
 ## Is there a command-line tool?
 
 Yes. `overview <command>` runs against a data directory with no server:

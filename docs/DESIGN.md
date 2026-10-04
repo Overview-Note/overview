@@ -1,7 +1,7 @@
 # Overview 设计文档
 
-> 版本：v0.11.3（令牌管理入口移入设置 · 弹框层级修复）
-> 更新日期：2026-10-02
+> 版本：v0.12.0（Gridea 风格配色与主题色自定义 · 独立设置页 · 邮箱用户管理 · 文件附件 · 应用内捕获）
+> 更新日期：2026-10-04
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
 ---
@@ -25,6 +25,7 @@
 | v0.11.1 | 图片性能与静态站主题 | 笔记图片 `loading=lazy`/`decoding=async` + 切换时取消过期请求与在飞图片（修复图片密集页切换卡顿）；静态站可选主题 `--theme auto\|light\|dark`（`OVERVIEW_SITE_THEME`）并与 App 设计令牌对齐配色 |
 | v0.11.2 | API/MCP 令牌管理 | 管理员界面 + `/auth/tokens` API 生成/吊销持久令牌（仅存哈希，明文一次性）；令牌同时用于 REST 与 MCP，`OVERVIEW_MCP_TOKEN` 作为回退 |
 | v0.11.3 | 令牌 UI 修正 | 令牌管理入口从顶栏移入「设置」（较少用）；修复弹框层级（DialogHost `z-index:300` 恒在最上）；令牌对话框加宽、生成后常驻可复制密钥框 |
+| v0.12.0 | 配色 · 设置页 · 邮箱用户 · 附件 · 捕获 | 整体改为 Gridea 风格（琥珀主色 `#D4870E`，暖白/深色两套）+ 主题色自定义（预设 + 取色器，明暗自适应）；设置从弹窗改为独立路由页（外观/编辑器/AI 助手/邮件服务器/站点/数据/用户管理/API 令牌），删除旧 `SettingsDialog/TokensDialog/UsersDialog`；邮箱用户管理（邀请/邮箱验证/密码重置）、可开关自注册、登录页内容注入；文件附件（任意类型，下载链接 + RFC5987）；应用内快速捕获（顶栏弹窗 + SSRF 防护）；静态站样式与应用调色板同步 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -62,7 +63,7 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 │ server (HTTP 适配层)                                        │
 │   路由 /api/v1 · 中间件(request-id/recovery/log) · ETag      │
 ├────────────────────────────────────────────────────────────┤
-│ service (应用服务层)  ← 业务用例、事务边界、Tree 组装         │
+│ service (应用服务层)  ← 用例、事务边界、Tree 组装、认证/邮件/站点/捕获 │
 ├────────────────────────────────────────────────────────────┤
 │ core (领域层)                                              │
 │   模型 Note/TreeNode · 端口接口 · 哨兵错误                   │
@@ -123,6 +124,14 @@ memos 等轻量工具部署简单但不支持层级目录，内容锁定数据�
 | ADR-033 | 静态资源在 Go 侧 gzip 压缩 + 哈希资源 immutable 缓存 | Lighthouse 从 80+ 提升到 99 | 前端资源不再走 `http.FileServer` 裸服务 |
 | ADR-034 | 品牌改为笔记/文档图形 + 暖色柔和调色板 | 定位是笔记软件；降低刺眼对比但保留层级 | 设计令牌整体调整，符号色改为变量 |
 | ADR-035 | 新增持久 API/MCP 令牌（管理界面 + `/auth/tokens` API，仅存 SHA-256 哈希） | 环境变量无法在界面管理，会话令牌无 UI 且短期 | 令牌与登录会话共用 Bearer 认证，`OVERVIEW_MCP_TOKEN` 作为回退 |
+| ADR-036 | 整体配色改为 Gridea 风格（琥珀主色 `#D4870E`，暖白/深色两套） | 文档化知识库需要克制、偏纸张感的视觉，同时保留清晰层级 | 设计令牌整体替换；静态站调色板同步 |
+| ADR-037 | 主题色可在设置中自定义（预设 + 取色器，单值 hex 派生 `--accent/-hover/-soft/-ring`，明暗自适应） | 单一固定主色无法满足品牌/偏好；直接改 4 个变量易出现对比度问题 | 由前端根据明暗模式计算色阶；持久化到 `localStorage` |
+| ADR-038 | 设置从弹窗改为独立路由页 `/settings`（左侧分类导航 + 内容面板） | 设置项增多后弹窗难以承载，深链接/刷新保持也需要路由 | 删除 `SettingsDialog/TokensDialog/UsersDialog`，改为 `settings/*` 子路由；仅管理员可见管理分区 |
+| ADR-039 | 邮箱用户管理（邀请/验证/密码重置/自注册）与 SMTP 运行时配置 | 需要一个不依赖外部 IdP 的多用户自助流程；SMTP 也应像 AI 一样可运行时配置 | 新增 `user_tokens` 表（sha256 哈希、一次性、可过期）；SMTP 存 `settings` 表；邮件未配置时优雅降级 |
+| ADR-040 | 公开认证端点限流 + 防枚举 | 注册/找回密码是匿名可写的，易被滥用或用于探测账号 | 进程内固定窗口限流（按 IP 与邮箱），未知账号一律静默成功 |
+| ADR-041 | 附件支持任意文件类型，Markdown 保存相对路径 | 仅图片不够用，用户需要上传 PDF/ZIP 等并以下载链接引用 | 非内联类型强制 `Content-Disposition: attachment`（含 RFC5987 文件名）；前端与静态站重写 `href` |
+| ADR-042 | 应用内快速捕获走服务端抓取，内置 SSRF 防护 | 浏览器受 CORS 限制无法跨域抓取，服务端抓取又可能被用于探测内网 | 连接时校验解析后的 IP、限制重定向与响应体、仅 http/https |
+| ADR-043 | 匿名只读放行 `GET/HEAD /assets/` | 公开笔记的图片/附件托管在 `/assets/`，匿名读者没有会话 | 仅放行读取；上传/维护/`/api/v1/assets` 仍需认证；文件名带随机 ULID 前缀，不可枚举 |
 
 ---
 
@@ -135,7 +144,7 @@ data/
 ├── notes/                         # 目录树 = 物理文件夹
 │   ├── 欢迎.md
 │   └── 技术/Go/并发模型.md
-├── assets/2026/10/<ulid>-<name>.# attachments
+├── assets/2026/10/<ulid>-<name>   # 附件（图片与任意文件）
 └── overview.db                    # SQLite 索引（可删除重建）
 ```
 
@@ -160,7 +169,24 @@ updated: "2026-10-01T16:54:09Z"
 
 - 迁移文件位于 `internal/index/migrations/*.sql`，通过 `go:embed` 内嵌
 - 迁移记录表 `schema_migrations(version, applied_at)`，启动时按序应用未执行项
-- `0001_init.sql`：`notes`（元数据）+ `notes_fts`（FTS5，unicode61，存**分词后**文本）
+- 迁移清单（0001–0008）：
+
+| 版本 | 内容 |
+| --- | --- |
+| `0001_init` | `notes`（元数据）+ `notes_fts`（FTS5，unicode61，存**分词后**文本） |
+| `0002_links` | `links(source_id, source_path, target_raw, target_key)` 双链 |
+| `0003_notes_name` | `notes.name`（按文件名解析 wiki 链接） |
+| `0004_users` | `users`（bcrypt 哈希 + 角色）、`sessions` |
+| `0005_public` | `notes.public`（公开可见性） |
+| `0006_settings` | `settings(key, value)`（运行时 AI / 邮件 / 站点配置） |
+| `0007_api_tokens` | `api_tokens`（仅存 sha256 哈希 + 短前缀，明文一次性） |
+| `0008_email_users` | `users` 增加 `email/status/email_verified`；新增 `user_tokens`（一次性、带用途、可过期） |
+
+- `users`（迁移 0004 + 0008）：`id`、`username`（唯一）、`password_hash`、`role`（`admin`/`member`）、`created`、`updated`、`email`（唯一，非空时）、`status`（`active`/`invited`）、`email_verified`。受邀账号 `password_hash` 为空串（bcrypt 永不匹配），必须先接受邀请设置密码。
+- `user_tokens`（迁移 0008）：`id`、`user_id`、`purpose`（`invite`/`reset`/`verify`）、`token_hash`（sha256，唯一）、`created`、`expires`、`used`。令牌单次消费：读取-校验-写入在同一事务内完成（连接池限单连接以串行化）。
+- `settings`（迁移 0006）：`key`/`value` 字符串键值表，存 `ai_*`、`mail_*`、`registration_enabled`、`login_*` 等运行时配置。
+- `api_tokens`（迁移 0007）：`id`、`name`、`prefix`、`token_hash`、`created`、`last_used`、`expires`。
+- `sessions`（迁移 0004）：`token`、`user_id`、`created`、`expires`。
 
 > 从旧版（v0.1，无迁移表且 `notes` 缺列）升级：索引可直接删除重建，内容文件不受影响。
 
@@ -172,8 +198,8 @@ updated: "2026-10-01T16:54:09Z"
 
 | 包 | 职责 | 关键类型/方法 |
 | --- | --- | --- |
-| `internal/core` | 领域模型、端口接口、哨兵错误 | `Note` `TreeNode` `NoteRepository` `Index` `AssetStore` `ErrNotFound/ErrConflict/ErrInvalid` |
-| `internal/service` | 应用用例编排 | `Tree` `GetNote` `SaveNote` `Delete` `Move` `Mkdir` `Search` `Upload` `Reindex` |
+| `internal/core` | 领域模型、端口接口、哨兵错误 | `Note` `TreeNode` `User` `UserToken` `APIToken` `NoteRepository` `Index` `UserStore` `AssetStore` `TokenStore` `ErrNotFound/ErrConflict/ErrInvalid/ErrForbidden` |
+| `internal/service` | 应用用例编排 | `Tree` `GetNote` `SaveNote` `Delete` `Move` `Mkdir` `Search` `Upload` `Reindex`、`AuthService` `MailService` `SiteService` `TokenService`、`FetchPreview`（捕获） |
 | `internal/store` | 文件系统实现 | 原子写、版本校验、`List`(结构)、`Walk`(全量) |
 | `internal/index` | SQLite 实现 | 迁移、`Upsert` `Sync` `Tree` `Search` |
 | `internal/textproc` | 文本处理 | `Tokens` `Segment` `Snippet` |
@@ -236,27 +262,44 @@ Base：`/api/v1`
 | POST | `/folder` | 新建文件夹 `{path}` |
 | POST | `/rename` | 重命名 `{from, to}` |
 | GET | `/search?q=&limit=&offset=` | 全文检索 |
-| POST | `/assets` | 上传附件（multipart `file`） |
+| POST | `/assets` | 上传附件（multipart `file`，任意类型） |
 | GET | `/assets/{path...}` | 访问附件（nosniff，非图片强制下载） |
+| POST | `/capture/preview` | 抓取网页并返回 `{title, text, url}`（SSRF 防护） |
 | POST | `/reindex` | 重建索引 |
 | GET | `/links?path=` | 出链与反链 |
 | GET | `/resolve?target=` | 解析 wiki 链接目标 |
-| GET | `/auth/state` | 认证模式 / 是否需要初始化 / 当前用户 |
+| GET | `/auth/state` | 认证模式 / 是否需要初始化 / 当前用户 / 站点与邮件状态 |
 | POST | `/auth/setup` | 创建首个管理员 |
-| POST | `/auth/login` | 登录 |
+| POST | `/auth/login` | 登录（未验证邮箱返回 403 `email_not_verified`） |
 | POST | `/auth/logout` | 登出 |
 | GET | `/auth/me` | 当前用户 |
 | POST | `/auth/password` | 修改本人密码 |
 | GET | `/auth/users` | 用户列表（仅管理员） |
 | POST | `/auth/users` | 创建用户（仅管理员） |
 | DELETE | `/auth/users/{id}` | 删除用户（仅管理员） |
+| POST | `/auth/users/invite` | 邀请用户（仅管理员，发邀请邮件） |
+| POST | `/auth/users/{id}/resend-invite` | 重发邀请（仅管理员） |
+| PUT | `/auth/users/{id}/email` | 设置/更换邮箱，返回 `verificationSent`（仅管理员） |
+| POST | `/auth/users/{id}/send-verification` | 重发验证邮件（仅管理员） |
 | GET | `/auth/tokens` | API/MCP 令牌列表（仅管理员） |
 | POST | `/auth/tokens` | 生成令牌，明文仅返回一次（仅管理员） |
 | DELETE | `/auth/tokens/{id}` | 吊销令牌（仅管理员） |
+| POST | `/auth/password/request` | 请求密码重置（匿名，限流，防枚举） |
+| POST | `/auth/password/reset` | 用一次性令牌重置密码（匿名，限流） |
+| POST | `/auth/accept-invite` | 接受邀请并设置密码（匿名，限流） |
+| POST | `/auth/verify-email` | 用一次性令牌验证邮箱（匿名，限流） |
+| POST | `/auth/register` | 自注册（匿名，需开启，限流） |
+| POST | `/auth/verify/resend` | 重发验证邮件（匿名，限流，防枚举） |
 | GET | `/public/notes` | 公开笔记列表（匿名） |
 | GET | `/public/note?path=` | 公开笔记正文（匿名，非公开返回 404） |
 | GET | `/ai/status` | AI 是否可用及模型名 |
 | POST | `/ai/chat` | AI：`{mode: chat\|organize\|complete, messages, content}` |
+| GET | `/settings/ai` | 读取 AI 配置，密钥以 `hasKey` 表示（仅管理员） |
+| PUT | `/settings/ai` | 运行时更新 AI 配置（仅管理员） |
+| GET | `/settings/mail` | 读取 SMTP 配置，密码永不回传（仅管理员） |
+| PUT | `/settings/mail` | 运行时更新 SMTP 配置（仅管理员） |
+| GET | `/settings/site` | 读取登录页/注册配置（仅管理员） |
+| PUT | `/settings/site` | 更新注册开关、提示语、备案号、链接（仅管理员） |
 | GET | `/assets/orphans` | 未被引用的附件列表 |
 | POST | `/assets/orphans/purge` | 清理孤儿附件 |
 | GET | `/history?path=` | 笔记历史版本列表 |
@@ -271,7 +314,7 @@ Base：`/api/v1`
 
 | 路径 | 说明 |
 | --- | --- |
-| `/assets/{path...}` | 附件访问（需认证；内嵌前端资源优先，经静态处理器压缩/缓存） |
+| `/assets/{path...}` | 附件访问（`GET`/`HEAD` 匿名只读以支持公开页；上传与 `/api/v1/assets` 仍需认证；内嵌前端资源优先，经静态处理器压缩/缓存） |
 | `/dav/` | WebDAV 挂载（Basic 认证，需 auth=multi） |
 | `/mcp` | MCP 服务端（JSON-RPC 2.0，Bearer 令牌，协议 `2026-07-28`） |
 | `/api/docs` | 自包含的 OpenAPI 交互文档 |
@@ -288,7 +331,8 @@ Base：`/api/v1`
 ```json
 { "error": { "code": "conflict", "message": "note was modified by another client" } }
 ```
-`code` ∈ `invalid` | `not_found` | `conflict` | `internal`，对应 HTTP 400/404/409/500。
+`code` ∈ `invalid` | `not_found` | `conflict` | `rate_limited` | `unavailable` | `email_not_verified` | `internal`，
+对应 HTTP 400/404/409/429/503/403/500。未验证邮箱登录返回 `email_not_verified`，邮件未配置/投递失败返回 503。
 
 **中间件**：`X-Request-Id` 注入、panic 恢复、结构化请求日志（method/path/status/duration/request_id）。
 
@@ -314,28 +358,35 @@ Base：`/api/v1`
 ```
 main.ts → Pinia + Router
 router.ts        全部路由懒加载（import()）：/ → EmptyState ； /note/:path(.*) → EditorPane
-                 /public[/:path] → PublicHomeView / PublicNoteView ； /login /setup /trash
+                 /settings/{appearance|editor|ai|mail|site|data|users|tokens} → SettingsView 分区
+                 /public[/:path] → PublicHomeView / PublicNoteView ； /trash
+                 /login /setup /register /forgot-password /reset-password /accept-invite /verify-email
                  /capture → 重定向首页（快速捕获改为顶栏弹窗）
 stores/
   workspace.ts   目录树、当前笔记、增删改查、搜索
-  settings.ts    主题/字号/语言/压缩/专注/侧栏宽度（localStorage）
+  settings.ts    主题/字号/语言/压缩/专注/侧栏宽度/主题色（localStorage）
   auth.ts site.ts dialog.ts
+views/           Login/Setup/Register/ForgotPassword/ResetPassword/AcceptInvite/VerifyEmail
+                 SettingsView + settings/{Appearance,Editor,AI,Mail,Site,Data,Users,Tokens}Section
 components/
-  App.vue        布局 + RouterView + DialogHost
+  App.vue        布局 + RouterView + DialogHost + CaptureDialog
   BrandMark.vue  品牌图形（笔记/文档 SVG）
-  Sidebar.vue    操作 + 搜索 + 目录树 + 可拖拽宽度
+  Sidebar.vue    操作 + 搜索 + 目录树 + 可拖拽宽度（紧凑字号）
   TreeNodeItem.vue 递归节点（行内操作浮层，不改变行高）
-  EditorPane.vue Tiptap 编辑器 + 工具栏 + 笔记栏
+  EditorPane.vue Tiptap 编辑器 + 工具栏 + 笔记栏（图片 + 文件附件）
+  CaptureDialog.vue 顶栏快速捕获弹窗（URL → 抓取预览 → 选目录保存）
   PublicShell.vue 公开页外壳（文档站风格）
-  DialogHost.vue EmptyState.vue SlashMenu.vue TocPanel.vue HistoryPanel.vue LinksPanel.vue AiPanel.vue
-editor/          extensions.ts / nodes.ts / lowlight.ts / slash.ts
-markdown/        pipeline.ts / tasks.ts / math.ts / diagrams.ts / doc.ts / rules.ts / footnotes.ts
+  TokensPanel.vue EmptyState.vue SlashMenu.vue TocPanel.vue HistoryPanel.vue LinksPanel.vue AiPanel.vue
+editor/          extensions.ts / nodes.ts / lowlight.ts / slash.ts / link.ts
+markdown/        pipeline.ts / tasks.ts / math.ts / diagrams.ts / doc.ts / rules.ts / footnotes.ts / assets.ts
 api.ts           类型化客户端（/api/v1，ApiError）
-styles.css       暖色柔和设计令牌（明/暗）+ 组件样式
+styles.css       Gridea 风格设计令牌（暖白/深色 + 主题色变量）+ 组件样式
 ```
 
 **构建分包**：路由懒加载使编辑器重依赖（TipTap / KaTeX / lowlight / Mermaid）不进首屏；
 Vite 自动按需拆分（不使用 `manualChunks`，避免把预加载 helper 分进巨块）。
+
+**设置页**（ADR-038）：`/settings` 为独立路由，左侧分类导航由 `SettingsView` 渲染（管理员多出邮件/站点/数据/用户/令牌分区），右侧 `<RouterView>` 内容面板；离开时经 `sessionStorage` 记忆返回路径。
 
 ### 8.2 编辑与自动保存
 
@@ -343,10 +394,12 @@ Vite 自动按需拆分（不使用 `manualChunks`，避免把预加载 helper �
 - 防抖 700ms 自动保存，携带 `baseVersion`
 - **保存 flush**：切换笔记、离开路由（`onBeforeRouteLeave`）、关闭页面（`beforeunload`）前强制落盘，避免防抖窗口丢数据
 - **冲突处理**：409 时不清空内容，提示用户刷新，避免覆盖
-- 图片粘贴/拖拽 → 上传 `/api/v1/assets` → 插入节点
+- 图片粘贴/拖拽 → 上传 `/api/v1/assets` → 插入节点（可选客户端压缩）
+- **文件附件**（ADR-041）：工具栏「附件」可选择任意类型；非图片以带 `title`（文件名 + 大小）的链接插入，服务端对非内联类型强制 `Content-Disposition: attachment`。Markdown 落盘为相对路径 `assets/...`，渲染/导出时重写为 `/assets/...`
 - 表格：工具栏插入 3×3；光标在表内时显示增删行列工具条
 - `/` 斜杠命令菜单（标题/列表/引用/代码块/表格/分割线）
 - 笔记栏：大纲 / 历史版本 / AI 助手 / 分享（页面级动作，与排版工具栏分离）
+- **快速捕获**（ADR-042）：顶栏「捕获」弹窗粘贴 URL → `POST /api/v1/capture/preview` 抓取标题/正文（SSRF 防护）→ 选择目标文件夹 → 以 `baseVersion:"*"` 新建笔记并跳转
 
 ### 8.3 路由
 
@@ -383,9 +436,9 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | `textproc` | CJK 分词、混合文本、快照高亮、HTML 转义 |
 | `markdown` | frontmatter 有无/往返/CRLF |
 | `store` | 路径安全、写读、版本契约、List/Walk、Move/Delete、附件 |
-| `index` | 迁移、Sync/Tree、中文中缀检索、快照转义、Upsert/Delete |
-| `service` | 树组装、保存+检索、删除笔记/文件夹、冲突传播 |
-| `server` | 完整生命周期、409、路径校验、附件上传/服务头、静态资源 gzip/304/SPA 回退、render 白名单 |
+| `index` | 迁移、Sync/Tree、中文中缀检索、快照转义、Upsert/Delete、用户/会话/令牌（邮箱唯一、一次性令牌消费） |
+| `service` | 树组装、保存+检索、删除笔记/文件夹、冲突传播、邀请/验证/重置、捕获抓取 |
+| `server` | 完整生命周期、409、路径校验、附件上传/服务头（含 RFC5987）、静态资源 gzip/304/SPA 回退、render 白名单、邮箱认证流程、站点设置、限流 |
 | `history`/`trash` | 版本快照与裁剪、回收站恢复/清理 |
 | `archivex`/`sitegen` | ZIP 往返、静态站生成与搜索索引 |
 | `config`/`logging`/`ai`/`openapi` | 配置解析、日志轮转、AI 客户端、OpenAPI 规范 |
@@ -409,12 +462,19 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | 项 | 现状 |
 | --- | --- |
 | 路径穿越 | `store.resolve` 净化 + `filepath.Rel` 校验；有测试覆盖 |
-| 存储型 XSS | 快照服务端转义；前端仅渲染已转义内容 |
-| 附件 | `X-Content-Type-Options: nosniff`；非图片强制 `Content-Disposition: attachment`；SVG 不内联 |
-| 上传体积 | `http.MaxBytesReader` + `ParseMultipartForm` |
-| 认证 | 多用户（bcrypt + 会话 + 角色），`auth=multi` 时对 `/api/v1/*` 与附件强制认证；`auth=none` 为单用户模式 |
-| 密钥 | AI/MCP/S3 密钥仅存服务端，接口永不回传 |
-| 日志 | 结构化 JSON，无敏感内容 |
+| 存储型 XSS | 快照服务端转义；前端仅渲染已转义内容；登录页外链仅放行 `http(s)://` |
+| 附件 | `X-Content-Type-Options: nosniff`；非内联类型强制 `Content-Disposition: attachment`（含 RFC5987 `filename*`，中文名不丢失）；SVG 不内联 |
+| 上传体积 | `http.MaxBytesReader` + `ParseMultipartForm`（`OVERVIEW_MAX_UPLOAD_MB`） |
+| 认证 | 多用户（bcrypt + 会话 + 角色），`auth=multi` 时对 `/api/v1/*` 与附件上传强制认证；`auth=none` 为单用户模式 |
+| 会话 | HttpOnly + SameSite=Lax Cookie；另支持 `Authorization: Bearer`（会话令牌或持久 API 令牌） |
+| 邮箱令牌 | `user_tokens` 仅存 **SHA-256 哈希**；一次性（消费即标记 `used`）、按用途（邀请/重置/验证）隔离、可过期（7d/2h/24h）；重置密码后注销该用户全部会话 |
+| 防枚举 | 找回密码、重发验证对未知/未激活账号一律返回成功；令牌校验失败统一返回「无效或过期」 |
+| 限流 | 公开认证端点按客户端 IP（10 次/15min）与邮箱（3 次/小时）固定窗口限流，超限 429 |
+| SSRF | 捕获抓取仅允许 `http(s)`；连接时校验解析后的 IP，拒绝 loopback/私网/链路本地/CGNAT/组播等；限制重定向次数（5）与响应体（2 MiB） |
+| 匿名资产只读 | `GET/HEAD /assets/` 匿名放行以渲染公开页；上传/维护/`/api/v1/assets` 仍需认证；文件名含随机 ULID，不可枚举 |
+| base URL / Host | 邮件链接优先用 `OVERVIEW_BASE_URL`，否则按请求推导（尊重 `X-Forwarded-Proto`）；生产应在反代后使用 HTTPS |
+| 密钥 | AI/MCP/S3/SMTP 密钥仅存服务端，接口永不回传（`hasKey` / `hasPassword`） |
+| 日志 | 结构化 JSON，无敏感内容；邮件收件人/正文/令牌从不记录 |
 
 > ✅ render 模式已收紧为**白名单**：`renderGuard` 仅放行 `health`、`auth/state`、
 > `tree`、`note`、`public/*`、`openapi.json`、`/api/docs` 与附件读取；其余 `/api/` 路径
@@ -437,6 +497,9 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 > v0.11.0 补充：侧栏悬浮抖动（行内操作改为绝对定位浮层）、长文件名不可见（新增可拖拽宽度 +
 > 悬浮提示）、柔和配色导致层级不清（加深文字令牌、强化激活态）、连续切换卡顿（取消过期加载、
 > 后台保存、Mermaid 渲染防抖）、首屏体积偏大（路由懒加载 + 静态资源 gzip/immutable）。
+>
+> v0.12.0 待权衡：限流与令牌表为**单进程内存/单库**实现，多实例部署下各自计数且不共享令牌状态；
+> 邮件发送为同步阻塞（10s 拨号超时），高并发邀请/重置可能拖慢请求。
 
 ---
 
@@ -516,7 +579,7 @@ P2 — 打磨与生态
 编辑体验
 - [ ] 版本历史 Diff 视图（现仅原文预览）
 - [ ] 草稿本地持久化（防意外关闭）
-- [ ] 非图片附件的插入 UI（现文件选择器仅 `image/*`）
+- [x] 非图片附件的插入 UI（v0.12 已支持任意类型，见 Phase 9）
 
 平台与运维
 - [ ] 出站 Webhook（签名 + SSRF 防护）
@@ -553,6 +616,25 @@ P2 — 打磨与生态
 交付
 - [x] GHCR 多架构（amd64/arm64）镜像自动发布（`.github/workflows/docker.yml`）
 
+**Phase 9 — 配色 · 设置页 · 邮箱用户 · 附件 · 捕获（v0.12.0）**
+
+外观与设置
+- [x] Gridea 风格整体配色（琥珀主色 `#D4870E`，暖白/深色两套），静态站调色板同步
+- [x] 主题色自定义：预设 + 取色器，前端派生明暗自适应色阶
+- [x] 设置改为独立路由页 `/settings`，分区导航（外观/编辑器/AI/邮件/站点/数据/用户/令牌）
+
+账户与邮件
+- [x] 邮箱用户管理：邀请、邮箱验证、密码重置（一次性哈希令牌）
+- [x] 可开关自注册（`settings` 表），登录页内容注入（提示语/备案号/链接）
+- [x] SMTP 运行时配置（`settings` 表 + `/settings/mail`），密钥仅存服务端
+- [x] 公开认证端点限流 + 防枚举
+- [x] `OVERVIEW_BASE_URL` 生成邮件链接
+
+编辑与捕获
+- [x] 文件附件：任意类型上传 + 下载链接（非内联强制 attachment，RFC5987 文件名）
+- [x] 匿名只读 `/assets/`（公开页附件）
+- [x] 应用内快速捕获（顶栏弹窗 + SSRF 防护）
+
 ---
 
 ## 13. 附录
@@ -577,10 +659,17 @@ P2 — 打磨与生态
 | `OVERVIEW_RENDER` | `false` | 设为 `true` 变为公开只读文档站 |
 | `OVERVIEW_EXPORT_DIR` | `_site` | `overview export` 输出目录 |
 | `OVERVIEW_EXPORT_BASE` | `/` | `overview export` URL 前缀 |
+| `OVERVIEW_BASE_URL` | 空 | 生成邮件链接的外部可达基址；空则按请求推导（尊重 `X-Forwarded-Proto`） |
 | `OVERVIEW_MCP_TOKEN` | 空 | MCP 静态 Bearer 令牌；空且 auth=multi 时用会话令牌或 UI 生成的 API 令牌 |
 | `OVERVIEW_AI_BASE_URL` | 空 | OpenAI 兼容基址（如 `https://api.openai.com/v1`）；空则禁用 AI |
 | `OVERVIEW_AI_API_KEY` | 空 | AI 密钥 |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | 模型名 |
+| `OVERVIEW_MAIL_HOST` | 空 | SMTP 主机；与 `OVERVIEW_MAIL_FROM` 同时设置才启用邮件 |
+| `OVERVIEW_MAIL_PORT` | `587` | SMTP 端口 |
+| `OVERVIEW_MAIL_USERNAME` | 空 | SMTP 用户名（空则不认证） |
+| `OVERVIEW_MAIL_PASSWORD` | 空 | SMTP 密码 |
+| `OVERVIEW_MAIL_FROM` | 空 | 发件地址 |
+| `OVERVIEW_MAIL_STARTTLS` | `true` | 是否使用 STARTTLS |
 | `OVERVIEW_S3_BUCKET` | 空 | 设置后附件改存 S3 兼容存储 |
 | `OVERVIEW_S3_ENDPOINT` | 空 | S3 端点（如 `s3.amazonaws.com`） |
 | `OVERVIEW_S3_REGION` | `us-east-1` | 区域 |
@@ -600,7 +689,7 @@ P2 — 打磨与生态
 
 ### 13.4 认证、WebDAV、i18n（v0.4/v0.5）
 
-- **认证**（ADR-011/012）：`users`/`sessions` 表（迁移 0004），bcrypt 哈希；`AuthService` 负责 setup/login/logout/用户管理；HTTP 中间件对 `/api/v1/*` 与附件强制会话（Cookie 或 `Bearer`）；无用户时前端跳转 `/setup` 创建管理员。角色 `admin`/`member`，仅管理员可管理用户，且禁止删除最后一个管理员。
+- **认证**（ADR-011/012）：`users`/`sessions` 表（迁移 0004，0008 扩展），bcrypt 哈希；`AuthService` 负责 setup/login/logout/用户管理；HTTP 中间件对 `/api/v1/*` 与附件上传强制认证（Cookie 或 `Bearer`）；无用户时前端跳转 `/setup` 创建管理员。角色 `admin`/`member`，仅管理员可管理用户，且禁止删除最后一个**活跃**管理员。详见 §13.14（邮箱用户管理）。
 - **WebDAV**（ADR-013）：`/dav/` 映射 `data/notes`，`auth=multi` 时启用 Basic 认证；成功写入去抖 1s 后全量重建索引，外部编辑器保存的内容即可被搜索。
 - **可移植附件**（ADR-014）：Markdown 中保存 `assets/2026/10/xxx.png`，SPA 渲染为重写为 `/assets/...`；`/assets/` 既是附件路由也是前端静态资源前缀，服务端优先命中内嵌资源。
 - **i18n**（ADR-015）：`web/src/i18n` 提供 `t()` 与响应式 `locale`，持久化到 `localStorage`，顶栏下拉切换中/英；斜杠菜单、弹窗、工具栏等全部接入。
@@ -623,10 +712,12 @@ P2 — 打磨与生态
 - **PWA**（ADR-022）：manifest + service worker，仅缓存应用壳与哈希构建产物，离线可启动。
 - **OpenAPI**（ADR-023）：`/api/v1/openapi.json` 与 `/api/docs`（无外部依赖）。
 
-### 13.7 设置中心与设计系统（v0.8）
+### 13.7 设置中心与设计系统（v0.8，v0.12 改为独立页）
 
-- **设置中心**（ADR-024）：顶栏齿轮打开，分三区：
-  - 外观：主题（跟随系统/浅色/深色）、字号（紧凑/默认/舒适/大）、语言
+> v0.12.0 起设置由弹窗改为独立路由页 `/settings`，分区扩展为 8 个；旧的 `SettingsDialog` 已删除。详见 §13.15。
+
+- **设置中心**（ADR-024/038）：独立页左侧分类导航：
+  - 外观：主题（跟随系统/浅色/深色）、字号（紧凑/默认/舒适/大）、语言、主题色
   - 编辑器：上传前压缩图片（默认开，持久化）
   - AI：状态 + 当前模型；管理员可编辑 Base URL / API Key / Model
 - **运行时 AI 配置**（ADR-025）：`settings` 表（迁移 0006）存 `ai_base_url`/`ai_api_key`/`ai_model`；`AIService.Load` 合成默认值与环境变量，`SaveConfig` 持久化并即时重载；接口 `GET/PUT /api/v1/settings/ai` 仅管理员，**密钥永不回传**（只返回 `hasKey`）。
@@ -707,7 +798,7 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   `folder_create`、`notes_history/revision/restore`、`trash_list/restore/purge`、
   `assets_upload/orphans/purge`、`notes_reindex`、`public_notes/public_note`。
   Schema 由 OpenAPI 生成，`notes_rename`/`assets_upload` 等用手写覆盖。
-- **令牌管理（ADR-035）**：管理员在 Web UI「API 令牌」生成/吊销长期令牌（`GET/POST/DELETE
+- **令牌管理（ADR-035）**：管理员在**设置 → API 令牌**生成/吊销长期令牌（`GET/POST/DELETE
   /api/v1/auth/tokens`），仅存哈希、明文只显示一次；令牌同时可用于 REST 的 `Bearer`
   认证；未配置时回退到服务端 `OVERVIEW_MCP_TOKEN` 或登录会话令牌。
 
@@ -739,3 +830,43 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   `tools/list` ≥20 工具；`folder_create`/`move`/`history`/`trash_list` 实测通过
 - Lighthouse（移动端模拟，登录页）：Performance **99**，FCP 1.3s / LCP 1.9s / TBT 30ms / CLS 0
 - Docker：推送 `v*` 触发 GHCR 多架构镜像构建成功
+
+### 13.14 邮箱用户管理（v0.12.0，ADR-039/040）
+
+- **账户模型**（迁移 0008）：`users` 增加 `email`（唯一，非空时）、`status`（`active`/`invited`）、`email_verified`；`user_tokens` 存一次性哈希令牌。
+- **邀请**：管理员 `POST /auth/users/invite` 创建 `status=invited` 且 `password_hash=''` 的账号（bcrypt 永不匹配），邮件发送 `/accept-invite#token=…`（令牌放 URL fragment，不进访问日志）。接受邀请（`POST /auth/accept-invite`）设置密码并置为 active + verified。重发邀请会轮换令牌（`DeleteUserTokens` 再签发）。
+- **邮箱验证**：配置 SMTP 后注册/改邮箱的账号需先验证；未验证登录返回 403 `email_not_verified`，登录页可重发（`POST /auth/verify/resend`）。无邮箱的旧账号跳过验证。
+- **密码重置**：`POST /auth/password/request` 对未知/未激活账号静默成功（防枚举），发送 `/reset-password#token=…`（2h）；`POST /auth/password/reset` 消费令牌、更新密码并注销该用户全部会话。
+- **自注册**：`POST /auth/register` 仅在 `settings.registration_enabled=on` 且 `auth=multi` 时可用；用户名即规范化邮箱、角色恒为 `member`（永不成 admin）。
+- **邮件配置**：`MailService`（`settings` 表，SMTP host/port/user/pass/from/starttls）优先于环境变量；`from` 与 `host` 同时存在才 `Enabled`；`hasPassword` 回传布尔，密码永不回传。未配置时邀请/重置返回 503 `ErrMailDisabled`，落地账号仍可稍后重发。
+- **限流**：`newRateLimiter(10, 15min, 4096)`（按 IP）+ `(3, 1h, 4096)`（按邮箱）；固定窗口、惰性清理、满时淘汰最旧键以限定内存。超限 429 `rate_limited`。
+- **base URL**：邮件链接优先 `OVERVIEW_BASE_URL`，否则 `scheme://Host`（`scheme` 取 `r.TLS` 或 `X-Forwarded-Proto`）。生产应置于 HTTPS 反代之后。
+
+### 13.15 设置页与 Gridea 配色（v0.12.0，ADR-036/037/038）
+
+- **独立设置页**（ADR-038）：`/settings` 重定向到 `settings-appearance`，子路由 `appearance/editor/ai/mail/site/data/users/tokens`；`SettingsView` 左侧导航按角色过滤（`admin` 才有邮件/站点/数据/用户/令牌）；返回路径记忆在 `sessionStorage`。删除 `SettingsDialog/TokensDialog/UsersDialog` 三个旧组件。
+- **配色**（ADR-036）：主色琥珀 `#D4870E`，浅色暖白纸感、深色近黑暖灰；静态站 `sitegen` 调色板与 App 令牌同步（`--accent:#d4870e`、深色 `#e9a23b`）。
+- **主题色自定义**（ADR-037）：`AppearanceSection` 提供 8 个预设 + 原生取色器 + 复位。单值 hex 在前端派生 `--accent`、`--accent-hover`、`--accent-soft`、`--accent-ring`（浅色向黑/白混合，深色整体提亮），持久化到 `localStorage`。
+- **侧栏紧凑**：笔记 15px / 文件夹 13px 的字号层级。
+
+### 13.16 文件附件（v0.12.0，ADR-041）
+
+- **上传**：`POST /api/v1/assets` 接受任意类型（仍受 `OVERVIEW_MAX_UPLOAD_MB` 限制）。图片沿用客户端压缩 + `setImage`；非图片以带 `title`（`文件名 (大小)`）的链接插入正文。
+- **落盘/渲染**：Markdown 使用相对路径 `assets/…`；前端 `resolveAssetSrc` 与静态站生成会把 `src=`/`href="assets/…"` 重写为 `/assets/…`；编辑器 `WikiLink` 的 `isAllowedUri` 特批 `assets/` 前缀以免往返丢失。
+- **下载头**：`assetMIMEType` 在平台 MIME 库外补充 pdf/zip/office/md/json 等；非内联类型返回 `Content-Disposition: attachment; filename="…"; filename*=UTF-8''…`（RFC 5987），中文文件名不丢。
+- **匿名只读**：`GET/HEAD /assets/…` 匿名放行（公开页图片/附件），上传与维护端点仍需认证（ADR-043）。
+
+### 13.17 应用内快速捕获（v0.12.0，ADR-042）
+
+- **流程**：顶栏「捕获」打开 `CaptureDialog`，粘贴 URL → `POST /api/v1/capture/preview` 返回 `{title, text, url}` → 选择目标文件夹（来自目录树）→ 以 `baseVersion:"*"` 新建 `# 标题 + 正文 + > 来源` 的笔记并跳转。
+- **抓取**：`service.FetchPreview` 仅允许 `http(s)`；正则抽取 `og:title`/`<title>` 与去标签正文（失败回退 meta description），正文截断 5000 字符；UA `OverviewBot/1.0`，超时 10s，响应体上限 2 MiB。
+- **SSRF 防护**：`isPrivateHost`/`isPrivateIP` 拒绝 loopback、私网、链路本地、组播、CGNAT、benchmarking、"this network" 与 IPv6 ULA；`net.Dialer.Control` 在**连接时**复核解析后的 IP（防 DNS rebinding）；重定向限 5 次且逐跳校验 scheme/地址。
+- **前端**：`/capture` 独立页已移除（路由重定向首页），改为顶栏弹窗；书签（bookmarklet）方案移除。
+
+### 13.18 v0.12.0 验证记录
+
+- `go build ./...`、`go test ./...` 全绿（新增 `index/users`、`service/auth_mail`、`service/capture`、`server/email_auth`、`server/site`、`server/ratelimit` 覆盖）
+- 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿
+- 端到端：未验证邮箱登录 403 `email_not_verified`；邀请→接受→登录、重置→新密码→旧会话失效；自注册开关生效；公开认证端点超限 429
+- 附件：非图片返回 `Content-Disposition`（含 RFC5987 中文名）；`GET /assets/…` 匿名 200，`POST /api/v1/assets` 未认证 401
+- 捕获：内网/loopback URL 被拒（502/400），公网页面返回标题与正文

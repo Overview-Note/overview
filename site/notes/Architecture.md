@@ -38,7 +38,7 @@ public: true
 | Package | Responsibility |
 | --- | --- |
 | `core` | Domain models, ports, sentinel errors |
-| `service` | Use cases (notes, search, auth, links, archive, AI) |
+| `service` | Use cases (notes, search, auth, email/mail, site settings, capture, links, archive, AI) |
 | `store` | Filesystem note/asset repository |
 | `index` | SQLite + FTS5 index, migrations |
 | `textproc` | CJK tokenizer, wiki-links, snippets |

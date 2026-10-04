@@ -7,7 +7,9 @@ info:
 
     Beyond this REST API, Overview also exposes WebDAV at `/dav` (HTTP Basic auth
     when authentication is enabled) and an MCP JSON-RPC server at `POST /mcp`
-    (bearer token via `OVERVIEW_MCP_TOKEN`, else a session token).
+    (bearer token via `OVERVIEW_MCP_TOKEN`, a long-lived API token created in
+    Settings, or a session token). Email-based account flows (invite, verification,
+    password reset) and runtime AI/SMTP/site settings are also part of this API.
   version: "0.11.3"
 servers:
   - url: /api/v1
@@ -131,6 +133,23 @@ paths:
       tags: [assets]
       responses:
         "200": { description: Count removed }
+  /capture/preview:
+    post:
+      summary: Fetch a remote page and return its title and text (SSRF-guarded)
+      tags: [capture]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, description: "http(s) URL to fetch" }
+      responses:
+        "200": { description: "Preview of title, text and url" }
+        "400": { description: Invalid or private URL }
+        "502": { description: Fetch failed }
   /reindex:
     post:
       summary: Rebuild the search index
@@ -291,6 +310,143 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "200": { description: Deleted }
+  /auth/users/invite:
+    post:
+      summary: Invite a user by email (admin); sends an invitation link
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                role: { type: string, enum: [admin, member] }
+      responses:
+        "200": { description: Pending user }
+        "409": { description: Email already exists }
+        "503": { description: Mail not configured }
+  /auth/users/{id}/resend-invite:
+    post:
+      summary: Re-send an invitation for a pending user (admin)
+      tags: [auth]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Sent }
+        "503": { description: Mail not configured }
+  /auth/users/{id}/email:
+    put:
+      summary: Set or replace a user's email (admin); may send verification
+      tags: [auth]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { email: { type: string } }
+      responses:
+        "200": { description: "Updated user; verificationSent indicates whether mail was sent" }
+        "409": { description: Email already exists }
+  /auth/users/{id}/send-verification:
+    post:
+      summary: Re-send an email verification link (admin)
+      tags: [auth]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Sent }
+        "503": { description: Mail not configured }
+  /auth/password/request:
+    post:
+      summary: Request a password reset email (anonymous; rate-limited)
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { email: { type: string } }
+      responses:
+        "200": { description: "Always reported success (enumeration-safe)" }
+        "429": { description: Too many requests }
+  /auth/password/reset:
+    post:
+      summary: Reset a password with a one-time token (anonymous; rate-limited)
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { token: { type: string }, password: { type: string } }
+      responses:
+        "200": { description: Password reset; all sessions invalidated }
+        "400": { description: Invalid or expired token }
+  /auth/accept-invite:
+    post:
+      summary: Accept an invitation and set a password (anonymous; rate-limited)
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { token: { type: string }, password: { type: string } }
+      responses:
+        "200": { description: Activated user }
+        "400": { description: Invalid or expired token }
+  /auth/verify-email:
+    post:
+      summary: Verify an email address with a one-time token (anonymous; rate-limited)
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { token: { type: string } }
+      responses:
+        "200": { description: Verified }
+        "400": { description: Invalid or expired token }
+  /auth/register:
+    post:
+      summary: Self-register a member account (anonymous; enabled by site settings)
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { email: { type: string }, password: { type: string } }
+      responses:
+        "200": { description: "Created user; verificationRequired flags email verification" }
+        "403": { description: Registration disabled }
+        "409": { description: Email already exists }
+        "429": { description: Too many requests }
+  /auth/verify/resend:
+    post:
+      summary: Re-send an email verification link (anonymous; enumeration-safe)
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { email: { type: string } }
+      responses:
+        "200": { description: "Always reported success" }
+        "429": { description: Too many requests }
   /auth/tokens:
     get:
       summary: List API/MCP tokens (admin)
@@ -329,6 +485,53 @@ paths:
                 baseUrl: { type: string }
                 apiKey: { type: string, description: "Leave empty to keep the current key" }
                 model: { type: string }
+      responses:
+        "200": { description: Updated }
+  /settings/mail:
+    get:
+      summary: Get the SMTP configuration (admin)
+      tags: [settings]
+      responses:
+        "200": { description: "Configuration (password masked as hasPassword)" }
+    put:
+      summary: Update the SMTP configuration at runtime (admin)
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                host: { type: string }
+                port: { type: integer }
+                username: { type: string }
+                password: { type: string, description: "Leave empty to keep the current password" }
+                from: { type: string }
+                starttls: { type: boolean }
+      responses:
+        "200": { description: Updated }
+  /settings/site:
+    get:
+      summary: Get the public site configuration (admin)
+      tags: [settings]
+      responses:
+        "200": { description: Site settings }
+    put:
+      summary: Update registration and login-page presentation (admin)
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                registrationEnabled: { type: boolean }
+                loginHint: { type: string }
+                loginIcp: { type: string }
+                loginLinkUrl: { type: string }
+                loginLinkText: { type: string }
       responses:
         "200": { description: Updated }
   /assets/{path}:

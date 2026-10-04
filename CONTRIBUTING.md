@@ -95,7 +95,9 @@ All of the above run in CI (`.github/workflows/ci.yml`) on every pull request.
 
 - Backend: `go test ./...` — unit tests per package plus `httptest` integration tests
   (config, logging, history, archivex, sitegen, trash, ai, openapi, index, markdown, mcp,
-  server, service, store, textproc).
+  server, service, store, textproc). New in v0.12: user/session/token persistence
+  (`index/users_test.go`), email account flows and capture (`service/*_test.go`),
+  email auth + rate limiting and site settings (`server/*_test.go`).
 - Frontend: `npm test` (Vitest) for pure logic, plus `vue-tsc` type-check and `vite build`.
 - When fixing a bug, add a test that fails before your fix and passes after.
 

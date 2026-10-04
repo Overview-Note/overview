@@ -62,6 +62,7 @@ services:
 | `OVERVIEW_SITE_TITLE` | `Overview` | Site title (UI and render mode) |
 | `OVERVIEW_SITE_THEME` | `auto` | Static-site theme: `auto` (follow system), `light` or `dark` |
 | `OVERVIEW_RENDER` | `false` | Read-only documentation-site mode |
+| `OVERVIEW_BASE_URL` | — | External origin used in email links (else derived per request) |
 | `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `OVERVIEW_LOG_FORMAT` | `json` | `json` or `text` |
 | `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset) |
@@ -71,6 +72,12 @@ services:
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI) |
 | `OVERVIEW_AI_API_KEY` | — | AI provider key |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | AI model |
+| `OVERVIEW_MAIL_HOST` | — | SMTP host (with `OVERVIEW_MAIL_FROM`, enables email) |
+| `OVERVIEW_MAIL_PORT` | `587` | SMTP port |
+| `OVERVIEW_MAIL_USERNAME` | — | SMTP username (empty → no auth) |
+| `OVERVIEW_MAIL_PASSWORD` | — | SMTP password |
+| `OVERVIEW_MAIL_FROM` | — | From address |
+| `OVERVIEW_MAIL_STARTTLS` | `true` | Use STARTTLS |
 | `OVERVIEW_S3_BUCKET` | — | Enable S3-compatible asset storage |
 | `OVERVIEW_S3_ENDPOINT` | — | S3 endpoint (e.g. `s3.amazonaws.com`) |
 | `OVERVIEW_S3_REGION` | `us-east-1` | S3 region |
@@ -90,7 +97,18 @@ overview -C ./data build ./public --theme dark     # force light|dark|auto
 ```
 
 The exported site follows the visitor's system preference by default (`--theme auto`);
-pass `--theme light` or `--theme dark` (or set `OVERVIEW_SITE_THEME`) to pin it.
+pass `--theme light` or `--theme dark` (or set `OVERVIEW_SITE_THEME`) to pin it. The
+palette matches the app (warm amber accent).
+
+## Email & accounts
+
+Email-based user management (invitations, verification, password reset) needs an SMTP
+transport. Configure it with the `OVERVIEW_MAIL_*` variables above **or** at runtime in
+**Settings → Mail server** (admin only) — the runtime value wins and the password is never
+returned by the API. Set `OVERVIEW_BASE_URL` so links in outbound email point at the right
+public origin when running behind a proxy.
+
+Self-registration and the login-page notice/ICP/link are managed in **Settings → Site**.
 
 ## Logging
 

@@ -70,18 +70,22 @@ store · index · s3store · watcher · mcp · server
 
 ### 8. 现代而克制的界面
 参考 Starlight 文档站的布局：全宽顶栏 + 居中搜索（`Ctrl/⌘ + K`）、左侧分组式层级导航、
-内容区大标题 + 右侧「大纲」栏；全站字号派生自 `--base-size`，随设置整体缩放；明暗主题随系统。
+内容区大标题 + 右侧「大纲」栏；全站字号派生自 `--base-size`，随设置整体缩放；
+Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色可在设置中自定义；
+设置从弹窗升级为**独立路由页**（外观 / 编辑器 / AI / 邮件 / 站点 / 数据 / 用户 / 令牌）。
 
 ---
 
 ## 功能清单（当前版本）
 
 **内容与组织**：层级目录 · Markdown 存储 · 双链与反链 · 每篇私有/公开 + 独立公开页 · 拖拽移动
-**编辑**：富文本（Tiptap）· 代码高亮 · 任务列表 · 数学公式（KaTeX）· Mermaid 图表 · GFM 脚注 · 图片粘贴/拖拽 + 压缩 · 表格 + 就近浮动工具条 · 斜杠命令 · 大纲 · 专注模式 + 快捷键面板
+**编辑**：富文本（Tiptap）· 代码高亮 · 任务列表 · 数学公式（KaTeX）· Mermaid 图表 · GFM 脚注 · 图片粘贴/拖拽 + 压缩 · **文件附件（任意类型，下载链接）** · 表格 + 就近浮动工具条 · 斜杠命令 · 大纲 · 专注模式 + 快捷键面板
 **检索**：CJK 全文检索 · 全局搜索
 **AI**：AI 助手（对话/整理/补全）· MCP 服务端（工具由 OpenAPI 生成）
-**访问**：多用户认证（bcrypt/会话/角色）· WebDAV · REST + OpenAPI · PWA · 应用内快速捕获（顶栏弹窗 · 服务端抓取标题/正文 · SSRF 防护）
-**运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · S3 附件后端 · 设置中心 · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
+**账户**：多用户认证（bcrypt/会话/角色）· **邮箱邀请/验证/密码重置** · **可开关自注册** · 持久 API/MCP 令牌 · 登录页内容注入（提示语/备案号/链接）
+**访问**：WebDAV · REST + OpenAPI · PWA · 应用内快速捕获（顶栏弹窗 · 服务端抓取标题/正文 · SSRF 防护）
+**外观**：Gridea 风格配色（琥珀主色 `#D4870E`）· 明暗主题 · **主题色自定义（预设 + 取色器）** · **独立设置页**（外观/编辑器/AI/邮件/站点/数据/用户/令牌）
+**运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · S3 附件后端 · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
 
 ---
 
@@ -95,23 +99,44 @@ store · index · s3store · watcher · mcp · server
 | 前端 | Vue 3 + TypeScript + Vite 6 + Pinia + vue-router |
 | 编辑器 | Tiptap 2（ProseMirror） |
 | AI/MCP | OpenAI 兼容客户端（无 SDK）+ 自研 JSON-RPC MCP 服务端 |
-| 集成 | WebDAV（`x/net/webdav`）、S3（`minio-go`）、fsnotify |
+| 集成 | WebDAV（`x/net/webdav`）、S3（`minio-go`）、SMTP（标准库 `net/smtp`）、fsnotify |
 | 发布 | 前端 `go:embed` → 单二进制；Docker 三阶段构建 |
 
 ---
 
 ## 项目状态
 
-- **版本**：v0.11.3（在 v0.11.2 基础上把令牌管理入口移入设置并修正弹框层级/交互；Phase 7 部分待排期）
+- **版本**：v0.12.0（Gridea 风格配色 + 主题色自定义、独立设置页、邮箱用户管理/自注册、文件附件、应用内快速捕获；Phase 7 部分待排期）
 - **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli
   以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试）；前端 `vue-tsc` 类型检查、
   **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
 - **CI**：GitHub Actions（后端 race 测试、前端类型检查+测试+构建、golangci-lint）；
   推送 `v*` 标签自动构建 **多架构镜像** 发布到 GHCR
 - **交付**：Docker / 单二进制（内嵌前端）/ GHCR 镜像，浏览器访问
-- **规模**：后端 ~8k 行 Go / 19 个 internal 包；前端 ~4k 行 TS/Vue
-- **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.11.0 已修复侧栏悬浮抖动/长文件名/性能/首屏体积
-  等问题；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
+- **规模**：后端 ~9k 行 Go / 20 个 internal 包；前端 ~5k 行 TS/Vue
+- **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.12.0 待权衡的是限流/令牌的
+  单实例假设与同步发信；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
+
+---
+
+## 配置与端点
+
+配置全部通过环境变量（完整表见 [`DESIGN.md`](DESIGN.md) §13.1 与 [`README.md`](../README.md)）。
+常用项：`OVERVIEW_ADDR`、`OVERVIEW_DATA_DIR`、`OVERVIEW_AUTH`、`OVERVIEW_MAX_UPLOAD_MB`、
+`OVERVIEW_SITE_TITLE`、`OVERVIEW_SITE_THEME`、`OVERVIEW_RENDER`。v0.12 新增/相关：
+
+- `OVERVIEW_BASE_URL`：生成邮件链接的外部基址（空则按请求推导）
+- `OVERVIEW_MAIL_HOST` / `OVERVIEW_MAIL_PORT` / `OVERVIEW_MAIL_USERNAME` / `OVERVIEW_MAIL_PASSWORD` /
+  `OVERVIEW_MAIL_FROM` / `OVERVIEW_MAIL_STARTTLS`：SMTP 默认值（也可在「设置 → 邮件服务器」运行时配置）
+- `OVERVIEW_AI_BASE_URL` / `OVERVIEW_AI_API_KEY` / `OVERVIEW_AI_MODEL`：AI（也可运行时配置）
+- `OVERVIEW_MCP_TOKEN`：MCP 静态令牌（推荐改用「设置 → API 令牌」生成）
+
+主要端点：REST 在 `/api/v1`（笔记/检索/历史/回收站/附件/公开笔记/AI/设置/认证），
+OpenAPI 文档 `/api/docs`、规范 `/api/v1/openapi.json`，MCP `POST /mcp`，WebDAV `/dav/`。
+v0.12 新增认证流程端点：`/auth/password/request`、`/auth/password/reset`、`/auth/accept-invite`、
+`/auth/verify-email`、`/auth/register`、`/auth/verify/resend`，以及管理员
+`/auth/users/invite`、`/auth/users/{id}/resend-invite`、`/auth/users/{id}/email`、
+`/auth/users/{id}/send-verification`；设置 `/settings/{ai,mail,site}`；捕获 `/capture/preview`。
 
 ---
 
@@ -137,7 +162,7 @@ docker compose up -d --build
 - 架构约定请参考 [`DESIGN.md`](DESIGN.md)（含架构决策记录 ADR）
 
 **接下来的方向**（Phase 7，未排期）：标签系统（管理 UI / 过滤 / 补全）· 置顶与保存视图 ·
-实时协作与评论 · 版本 Diff 与草稿持久化 · 修复 render 模式越权 · Webhook / OIDC / gRPC ·
+实时协作与评论 · 版本 Diff 与草稿持久化 · Webhook / OIDC / gRPC ·
 移动端原生 App。详见 [`DESIGN.md`](DESIGN.md) §12。
 
 ---

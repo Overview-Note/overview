@@ -52,8 +52,8 @@ sync with the REST API.
 
 ### Tokens
 
-Create and revoke **API tokens** in the web UI (admins: **API tokens** in the
-top bar). The secret is shown once; the same bearer token also authenticates the
+Create and revoke **API tokens** in the web UI (**Settings → API tokens**,
+admin only). The secret is shown once; the same bearer token also authenticates the
 REST API. Alternatively set `OVERVIEW_MCP_TOKEN` on the server for a single
 static token, or use a login session token.
 

@@ -69,9 +69,11 @@ Requirements: **Go 1.26+**, **Node 22+**, Docker (optional). See [[Development]]
 1. Open the app and create your first note with **＋ Note**.
 2. Organize with folders — the sidebar mirrors your directory tree (drag to move).
 3. Type `/` in the editor for slash commands (tables, tasks, math, diagrams, code).
-4. Paste or drop an image to upload it; use `[[Note]]` to link notes.
+4. Paste or drop an image to upload it; use the **Attachment** button for any other file type.
 5. Toggle a note's visibility to **Public** to share a read-only page, or click
    **Public page** to view it in the docs-style layout.
+6. Admins: open **Settings** to configure appearance (including the accent color), AI and
+   mail, invite users by email, enable self-registration, and manage API tokens.
 
 ## Next
 

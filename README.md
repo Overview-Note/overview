@@ -55,6 +55,8 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Code highlighting**, **task lists**, **math (KaTeX)** and **Mermaid diagrams**, plus
   **GFM footnotes** — all stored as plain Markdown
 - **Images** — paste / drag-and-drop, with optional **client-side compression** (WebP/JPEG)
+- **File attachments** — upload any file type and insert it as a download link
+  (non-inline types are served with `Content-Disposition: attachment`, RFC 5987 filenames)
 - **Slash commands** — type `/` for headings, lists, tasks, tables, math, diagrams, code blocks
 - **Outline (TOC)** — scroll-linked table of contents
 - **Table bubble menu** — row/column controls appear right above the active table
@@ -68,11 +70,14 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 ### 🤖 AI-native
 - **AI assistant** — chat, *organize* and *complete* notes, using any OpenAI-compatible
   endpoint (OpenAI, DeepSeek, Ollama, vLLM, …)
-- **MCP server** — expose notes as tools so AI agents can list/search/read/write
-  (`notes_list`, `notes_search`, `notes_read`, `notes_write`, `notes_delete`, `notes_links`)
+- **MCP server** — expose notes as tools so AI agents can list/search/read/write — 22 tools
+  (notes, folders, history, trash, assets, reindex, public notes) matching the CLI/REST surface
+- **API tokens** — create and revoke long-lived bearer tokens in **Settings → API tokens**
 
 ### 🔐 Access & integration
 - **Multi-user auth** — bcrypt, sessions, admin/member roles, first-run setup wizard
+- **Email accounts** — invite users, email verification and password reset (SMTP configurable at
+  runtime), plus optional **self-registration** and a customizable login page
 - **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
 - **REST API** — versioned under `/api/v1`, documented via OpenAPI at `/api/docs`
 - **PWA** — installable app shell
@@ -89,8 +94,10 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **CLI** — every vault operation (list, read, write, search, move, history, trash, …)
   runs directly against `data/` with no server, for scripts and tools
 - **Pluggable storage** — local filesystem or any S3-compatible object store
-- **Settings center** — theme (system/light/dark), font size, language, compression, AI config
-- **Static export & sitemap/robots** — publish public notes as a read-only site
+- **Settings page** — standalone `/settings` route: appearance (theme, font, language,
+  **accent color**), editor, AI, mail server, site, data, user management, API tokens
+- **Static export & sitemap/robots** — publish public notes as a read-only site, with the
+  same palette as the app
 
 ---
 
@@ -166,10 +173,17 @@ Overview is configured entirely through environment variables.
 | `OVERVIEW_SITE_TITLE` | `Overview` | Site title (UI and render mode) |
 | `OVERVIEW_SITE_THEME` | `auto` | Static-site theme: `auto` (system), `light`, `dark` |
 | `OVERVIEW_RENDER` | `false` | `true` → public read-only docs site |
-| `OVERVIEW_MCP_TOKEN` | — | Bearer token for MCP; falls back to session tokens |
+| `OVERVIEW_BASE_URL` | — | External origin used in email links (else derived per request) |
+| `OVERVIEW_MCP_TOKEN` | — | Static bearer token for MCP; prefer UI-managed API tokens |
 | `OVERVIEW_AI_BASE_URL` | — | OpenAI-compatible base URL (enables AI when set) |
 | `OVERVIEW_AI_API_KEY` | — | AI provider API key |
 | `OVERVIEW_AI_MODEL` | `gpt-4o-mini` | AI model name |
+| `OVERVIEW_MAIL_HOST` | — | SMTP host (with `OVERVIEW_MAIL_FROM`, enables email) |
+| `OVERVIEW_MAIL_PORT` | `587` | SMTP port |
+| `OVERVIEW_MAIL_USERNAME` | — | SMTP username (empty → no auth) |
+| `OVERVIEW_MAIL_PASSWORD` | — | SMTP password |
+| `OVERVIEW_MAIL_FROM` | — | From address |
+| `OVERVIEW_MAIL_STARTTLS` | `true` | Use STARTTLS |
 | `OVERVIEW_S3_BUCKET` | — | Enables S3-compatible asset storage when set |
 | `OVERVIEW_S3_ENDPOINT` | — | S3 endpoint (e.g. `s3.amazonaws.com`) |
 | `OVERVIEW_S3_REGION` | `us-east-1` | S3 region |
@@ -177,7 +191,9 @@ Overview is configured entirely through environment variables.
 | `OVERVIEW_S3_USE_SSL` | `true` | Use HTTPS for S3 |
 | `OVERVIEW_S3_PUBLIC_URL` | — | Optional CDN / public URL prefix |
 
-> AI can also be configured at runtime in **Settings → AI** (admin only) — no restart needed.
+> AI and mail can also be configured at runtime in the **Settings** page (admin only) —
+> **Settings → AI assistant** and **Settings → Mail server** — with no restart needed.
+> Self-registration and the login-page notice/ICP/link are configured under **Settings → Site**.
 
 `overview export` (static site) additionally reads `OVERVIEW_EXPORT_DIR` (default `_site`)
 and `OVERVIEW_EXPORT_BASE` (URL prefix, default `/`).
@@ -203,8 +219,8 @@ The tool surface mirrors the CLI/REST API: notes (list/search/read/write/delete/
 rename/links/resolve), folders, history (list/read/restore), trash (list/restore/purge),
 assets (upload/orphans/purge), reindex and public notes.
 
-Tokens: create and revoke **API tokens** in the web UI (admins → **API tokens**); the
-secret is shown once and also works as a REST bearer token. Alternatively set the
+Tokens: create and revoke **API tokens** in the web UI (**Settings → API tokens**, admin only);
+the secret is shown once and also works as a REST bearer token. Alternatively set the
 static `OVERVIEW_MCP_TOKEN` on the server.
 
 **OpenAPI**
@@ -332,13 +348,18 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
   22 tools matching the CLI/REST surface
 - [x] Performance: route code-splitting + gzip/immutable static caching (Lighthouse 99)
 - [x] Note/document logo, soft warm theme, resizable stable sidebar, GHCR multi-arch images
+- [x] Gridea-style palette, customizable accent color, compact sidebar
+- [x] Standalone settings page (appearance/editor/AI/mail/site/data/users/tokens)
+- [x] Email user management (invite, verification, password reset), self-registration, login notice
+- [x] File attachments (any type) with download headers, anonymous read-only `/assets/`
+- [x] In-app quick capture with SSRF guarding; static-site palette synced with the app
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 
 - [ ] Tags: management UI, tag tree, tag filtering, `#` autocomplete
 - [ ] Pin / favorites, saved filter views, timeline view
 - [ ] Real-time collaboration (SSE/WebSocket), comments, notifications
-- [ ] Version diff view, draft persistence, non-image attachments in the UI
+- [ ] Version diff view, draft persistence
 - [ ] Outbound webhooks, OIDC/SSO, gRPC, mobile-native app, more languages
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the full roadmap and known limitations.
