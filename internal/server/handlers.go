@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -241,14 +242,11 @@ func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	defer reader.Close()
 
-	ct := mime.TypeByExtension(path.Ext(rel))
-	if ct == "" {
-		ct = "application/octet-stream"
-	}
+	ct := assetMIMEType(path.Ext(rel))
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if !isInlineType(ct) {
-		w.Header().Set("Content-Disposition", "attachment")
+		w.Header().Set("Content-Disposition", contentDisposition(path.Base(rel)))
 	}
 	http.ServeContent(w, r, path.Base(rel), time.Time{}, reader)
 }
@@ -280,4 +278,69 @@ func isInlineType(ct string) bool {
 		return true
 	}
 	return false
+}
+
+// extraMIMETypes supplements the platform MIME database with common attachment
+// types so portable builds still serve a sensible Content-Type (and browsers
+// offer the right download name).
+var extraMIMETypes = map[string]string{
+	".pdf":  "application/pdf",
+	".zip":  "application/zip",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".txt":  "text/plain; charset=utf-8",
+	".csv":  "text/csv; charset=utf-8",
+	".md":   "text/markdown; charset=utf-8",
+	".json": "application/json; charset=utf-8",
+}
+
+func assetMIMEType(ext string) string {
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		return ct
+	}
+	if ct, ok := extraMIMETypes[strings.ToLower(ext)]; ok {
+		return ct
+	}
+	return "application/octet-stream"
+}
+
+// contentDisposition builds an attachment header that preserves the original
+// filename. Non-ASCII names get an RFC 5987 filename* parameter plus an ASCII
+// fallback for older clients.
+func contentDisposition(filename string) string {
+	var ascii strings.Builder
+	hasNonASCII := false
+	for _, r := range filename {
+		if r >= 0x20 && r < 0x7f && r != '"' && r != '\\' {
+			ascii.WriteRune(r)
+			continue
+		}
+		if r > 0x7f {
+			hasNonASCII = true
+		}
+		ascii.WriteByte('_')
+	}
+	fallback := ascii.String()
+	if fallback == "" {
+		fallback = "download"
+	}
+	if !hasNonASCII {
+		return fmt.Sprintf("attachment; filename=%q", fallback)
+	}
+	return fmt.Sprintf("attachment; filename=%q; filename*=UTF-8''%s", fallback, encodeRFC5987(filename))
+}
+
+func encodeRFC5987(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+			strings.IndexByte("!#$&+-.^_`|~", c) >= 0 {
+			b.WriteByte(c)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
 }

@@ -65,4 +65,44 @@ describe("editor markdown round-trip", () => {
     expect(out).toContain("- [ ] outer");
     expect(out).toContain("- [x] inner");
   });
+
+  it("keeps attachment links vault-relative across the round-trip", () => {
+    const out = roundTrip("[报告](assets/2026/10/report.pdf)\n");
+    expect(out).toContain("](assets/2026/10/report.pdf)");
+    expect(out).not.toContain("/assets/2026/10/report.pdf");
+  });
+
+  it("keeps an inserted attachment href (served path) and saves it vault-relative", () => {
+    // Reproduces the insertAttachment path, which inserts the served
+    // "/assets/..." href before resolveAssetSrc ever runs.
+    const editor = new Editor({ extensions: baseExtensions(), content: "" });
+    editor
+      .chain()
+      .insertContent({
+        type: "text",
+        text: "report.pdf",
+        marks: [
+          {
+            type: "link",
+            attrs: { href: "/assets/2026/10/report.pdf", title: "report.pdf (12.0 KB)" },
+          },
+        ],
+      })
+      .run();
+    const html = editor.getHTML();
+    editor.destroy();
+    expect(html).toContain('href="/assets/2026/10/report.pdf"');
+    const md = htmlToMarkdown(createTurndown(), html);
+    expect(md).toContain("](assets/2026/10/report.pdf");
+    expect(md).toContain("report.pdf (12.0 KB)");
+    expect(md).not.toContain("](/assets/");
+  });
+
+  it("preserves attachment link titles", () => {
+    const out = roundTrip(
+      '[report.pdf](assets/2026/10/report.pdf "report.pdf (12.0 KB)")\n',
+    );
+    expect(out).toContain("](assets/2026/10/report.pdf");
+    expect(out).toContain("report.pdf (12.0 KB)");
+  });
 });

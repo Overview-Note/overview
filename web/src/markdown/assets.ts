@@ -24,8 +24,10 @@ export function resolveAssetSrc(html: string): string {
   let out = html;
   for (const prefix of PREFIXES) {
     out = out.split(`src="${prefix}`).join('src="/assets/');
+    out = out.split(`href="${prefix}`).join('href="/assets/');
   }
   out = out.split('src="assets/').join('src="/assets/');
+  out = out.split('href="assets/').join('href="/assets/');
   return decorateImages(out);
 }
 

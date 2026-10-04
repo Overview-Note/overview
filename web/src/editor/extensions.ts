@@ -39,7 +39,14 @@ export function baseExtensions(): Extensions {
       allowBase64: false,
       HTMLAttributes: { loading: "lazy", decoding: "async" },
     }),
-    WikiLink.configure({ openOnClick: false, autolink: true }),
+    WikiLink.configure({
+      openOnClick: false,
+      autolink: true,
+      // Vault-relative attachment hrefs ("assets/...") are valid in notes but
+      // rejected by the stock protocol allowlist; accept them so links pasted
+      // or loaded in that form survive the editor round-trip.
+      isAllowedUri: (url, ctx) => /^assets\//i.test(url.trim()) || ctx.defaultValidate(url),
+    }),
     Placeholder.configure({ placeholder: t("editor.placeholder") }),
     Table.configure({ resizable: true, HTMLAttributes: { class: "md-table" } }),
     TableRow,

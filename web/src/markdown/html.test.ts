@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decorateImages, resolveAssetSrc } from "./assets";
+import { decorateImages, resolveAssetSrc, toVaultMarkdown } from "./assets";
 import { sanitizeEditorHtml } from "./html";
 
 describe("sanitizeEditorHtml", () => {
@@ -34,5 +34,32 @@ describe("resolveAssetSrc / decorateImages", () => {
     const once = decorateImages('<img src="x.png" loading="lazy" decoding="async">');
     expect(once.match(/loading=/g)?.length).toBe(1);
     expect(decorateImages("<image href='x'>")).toBe("<image href='x'>");
+  });
+
+  it("rewrites vault-relative attachment links to served asset URLs", () => {
+    const out = resolveAssetSrc('<a href="assets/2026/10/x.pdf">x</a>');
+    expect(out).toContain('href="/assets/2026/10/x.pdf"');
+    expect(out).not.toContain('href="assets/');
+  });
+
+  it("rewrites served asset link prefixes and leaves other links alone", () => {
+    const out = resolveAssetSrc(
+      '<a href="/api/v1/assets/2026/10/x.pdf">a</a>' +
+        '<a href="https://example.com/x">b</a>',
+    );
+    expect(out).toContain('href="/assets/2026/10/x.pdf"');
+    expect(out).toContain('href="https://example.com/x"');
+  });
+});
+
+describe("toVaultMarkdown", () => {
+  it("rewrites served asset links back to vault-relative paths before saving", () => {
+    const out = toVaultMarkdown(
+      "see [x](/assets/2026/10/x.pdf) and [y](/api/v1/assets/old.pdf)",
+    );
+    expect(out).toContain("](assets/2026/10/x.pdf)");
+    expect(out).toContain("](assets/old.pdf)");
+    expect(out).not.toContain("](/assets/");
+    expect(out).not.toContain("](/api/");
   });
 });

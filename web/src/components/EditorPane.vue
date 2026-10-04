@@ -4,7 +4,7 @@ import { onBeforeRouteLeave, useRouter } from "vue-router";
 import { BubbleMenu, EditorContent, useEditor } from "@tiptap/vue-3";
 import { TableOfContents } from "@tiptap/extension-table-of-contents";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
-import { api, ApiError } from "../api";
+import { api, ApiError, type Asset } from "../api";
 import { baseExtensions } from "../editor/extensions";
 import { SlashCommand, slashItems, type SlashItem } from "../editor/slash";
 import { compressImage } from "../media/compress";
@@ -31,6 +31,7 @@ const router = useRouter();
 const status = ref<"idle" | "saving" | "saved">("idle");
 const dirty = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
+const attachmentInput = ref<HTMLInputElement | null>(null);
 const slashMenu = ref<InstanceType<typeof SlashMenu> | null>(null);
 const scrollEl = ref<HTMLElement | null>(null);
 const toc = ref<TocItem[]>([]);
@@ -55,19 +56,50 @@ let baseVersion = "";
 const turndown = createTurndown();
 
 async function uploadAndInsert(original: File) {
+  const isImage = original.type.startsWith("image/");
   try {
-    const file = settings.compressImages ? await compressImage(original) : original;
-    const asset = await api.uploadAsset(file);
-    editor.value?.chain().focus().setImage({ src: asset.url, alt: file.name }).run();
-    if (file !== original && original.size > 0) {
-      const saved = Math.round((1 - file.size / original.size) * 100);
-      if (saved >= 10) {
-        flashStatus(t("editor.compressed", { percent: saved }));
-      }
+    let file = original;
+    if (isImage && settings.compressImages) {
+      file = await compressImage(original);
     }
+    const asset = await api.uploadAsset(file);
+    if (isImage) {
+      editor.value?.chain().focus().setImage({ src: asset.url, alt: file.name }).run();
+      if (file !== original && original.size > 0) {
+        const saved = Math.round((1 - file.size / original.size) * 100);
+        if (saved >= 10) {
+          flashStatus(t("editor.compressed", { percent: saved }));
+        }
+      }
+      return;
+    }
+    insertAttachment(asset);
   } catch (e) {
     await dialogs.askConfirm(t("editor.uploadFailed"), (e as Error).message, false);
   }
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function insertAttachment(asset: Asset) {
+  // Keep the served "/assets/..." href so Tiptap's Link mark accepts it; the
+  // save pipeline (toVaultMarkdown) rewrites it back to a vault-relative path.
+  const href = asset.url;
+  const title = `${asset.name} (${formatSize(asset.size)})`;
+  editor.value
+    ?.chain()
+    .focus()
+    .insertContent({
+      type: "text",
+      text: asset.name,
+      marks: [{ type: "link", attrs: { href, title } }],
+    })
+    .run();
+  flashStatus(t("editor.attachmentInserted", { name: asset.name }));
 }
 
 function flashStatus(message: string) {
@@ -399,6 +431,12 @@ function onPickImage(event: Event) {
   input.value = "";
 }
 
+function onPickAttachment(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (input.files) handleFiles(input.files);
+  input.value = "";
+}
+
 function onBeforeUnload(event: BeforeUnloadEvent) {
   if (dirty.value) {
     event.preventDefault();
@@ -647,6 +685,7 @@ onBeforeUnmount(() => {
               {{ t("editor.link") }}
             </button>
             <button @click="fileInput?.click()">{{ t("editor.image") }}</button>
+            <button @click="attachmentInput?.click()">{{ t("editor.attachment") }}</button>
             <button :class="{ on: isActive('table') }" @click="insertTable">
               {{ t("editor.table") }}
             </button>
@@ -737,6 +776,13 @@ onBeforeUnmount(() => {
       multiple
       hidden
       @change="onPickImage"
+    />
+    <input
+      ref="attachmentInput"
+      type="file"
+      multiple
+      hidden
+      @change="onPickAttachment"
     />
   </div>
 </template>
