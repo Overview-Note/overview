@@ -2,7 +2,7 @@
 # Requires: Go 1.26+, Node 22+, Docker (optional)
 
 BINARY := bin/overview
-VERSION ?= 0.11.3
+VERSION ?= 0.12.0
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .PHONY: help dev demo build build-web build-go test test-go test-web lint fmt vet clean docker site site-export
