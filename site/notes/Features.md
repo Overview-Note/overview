@@ -44,7 +44,8 @@ public: true
 - **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
 - **REST API** — versioned under `/api/v1`, OpenAPI at `/api/docs`
 - **PWA** — installable app shell
-- **Quick capture** — a bookmarklet saves a page's title, URL and selection as a note
+- **Quick capture** — paste a page URL in the top-bar dialog; the server fetches the title and body
+  (SSRF-guarded) and saves it as a note in the folder you pick
 
 ## Operations
 

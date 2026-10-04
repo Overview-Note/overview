@@ -76,7 +76,8 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
 - **REST API** — versioned under `/api/v1`, documented via OpenAPI at `/api/docs`
 - **PWA** — installable app shell
-- **Quick capture** — a bookmarklet that saves a page's title/URL/selection as a note
+- **Quick capture** — paste a page URL into the top-bar dialog; the server fetches the title/body
+  (SSRF-guarded) so you can save it as a note in the folder you pick
 
 ### 🛠 Operations
 - **Single binary** with the frontend embedded (`docker run` or `go run`)
@@ -322,7 +323,7 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] Version history, trash, incremental indexing + file watcher
 - [x] S3 assets, PWA, OpenAPI docs, settings center
 - [x] Code highlighting, task lists, math (KaTeX), Mermaid diagrams, footnotes
-- [x] Drag-and-drop tree, ZIP import/export, browser quick capture, focus mode
+- [x] Drag-and-drop tree, ZIP import/export, in-app quick capture, focus mode
 - [x] Sitemap/robots, public pages styled as a docs site
 - [x] Render-mode API whitelist, history retention, static-site search, incremental WebDAV,
   full OpenAPI spec, lossless table/wiki-link round-trip

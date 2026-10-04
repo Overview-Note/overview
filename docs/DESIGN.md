@@ -19,7 +19,7 @@
 | v0.7.0 | 规模化与运维 | 增量索引、文件监视器、版本历史、回收站、附件孤儿清理、S3 后端、PWA、OpenAPI |
 | v0.8.0 | 设置与设计系统 | 设置中心（外观/编辑器/AI）、运行时 AI 配置、顶栏搜索、Starlight 风格布局与统一排版 |
 | v0.9.0 | 可见性与开源 | 每篇私有/公开可见性选择器、独立公开页（globe）、开源文档与协作基建 |
-| v0.10.0 | 对标 memos 补齐 | 代码高亮 / 任务列表 / KaTeX / Mermaid / 脚注、拖拽移动、ZIP 导入导出、浏览器快速捕获、专注模式与快捷键面板、MCP 工具由 OpenAPI 生成、sitemap/robots、i18n 增繁中/日/德 |
+| v0.10.0 | 对标 memos 补齐 | 代码高亮 / 任务列表 / KaTeX / Mermaid / 脚注、拖拽移动、ZIP 导入导出、应用内快速捕获、专注模式与快捷键面板、MCP 工具由 OpenAPI 生成、sitemap/robots、i18n 增繁中/日/德 |
 | v0.10.2 | 已知问题修复 | render 模式白名单、历史保留策略、导出站搜索、WebDAV 增量重建、OpenAPI 补全、表格/wiki 往返修复 |
 | v0.11.0 | CLI 化 · MCP 升级 · 性能与品牌 | 离线 CLI（笔记/检索/历史/回收站/附件/归档）、`build` 静态站生成、MCP 升级到 `2026-07-28`（无状态 `_meta` + `server/discover` + `resultType`）并补齐到 22 个工具、前端路由切分 + 静态资源 gzip/immutable 缓存（Lighthouse 99）、可拖拽侧栏与对比度回归、笔记风格新 Logo 与暖色柔和主题、GHCR 多架构镜像 |
 | v0.11.1 | 图片性能与静态站主题 | 笔记图片 `loading=lazy`/`decoding=async` + 切换时取消过期请求与在飞图片（修复图片密集页切换卡顿）；静态站可选主题 `--theme auto\|light\|dark`（`OVERVIEW_SITE_THEME`）并与 App 设计令牌对齐配色 |
@@ -314,7 +314,8 @@ Base：`/api/v1`
 ```
 main.ts → Pinia + Router
 router.ts        全部路由懒加载（import()）：/ → EmptyState ； /note/:path(.*) → EditorPane
-                 /public[/:path] → PublicHomeView / PublicNoteView ； /login /setup /trash /capture
+                 /public[/:path] → PublicHomeView / PublicNoteView ； /login /setup /trash
+                 /capture → 重定向首页（快速捕获改为顶栏弹窗）
 stores/
   workspace.ts   目录树、当前笔记、增删改查、搜索
   settings.ts    主题/字号/语言/压缩/专注/侧栏宽度（localStorage）
@@ -488,7 +489,7 @@ P1 — 表达与集成
 - [x] 数学公式（KaTeX）
 - [x] Mermaid 图表 / diagrams
 - [x] ZIP 导入 / 导出（笔记 + 附件 + 元数据）
-- [x] 浏览器快速捕获（Bookmarklet / 扩展）
+- [x] 应用内快速捕获（顶栏弹窗：服务端抓取网页标题/正文、选择目标文件夹、SSRF 防护，`POST /api/v1/capture/preview`）
 - [x] MCP 工具由 OpenAPI 生成，并补齐 spec 缺失端点
 
 P2 — 打磨与生态

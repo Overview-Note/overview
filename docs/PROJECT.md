@@ -80,7 +80,7 @@ store · index · s3store · watcher · mcp · server
 **编辑**：富文本（Tiptap）· 代码高亮 · 任务列表 · 数学公式（KaTeX）· Mermaid 图表 · GFM 脚注 · 图片粘贴/拖拽 + 压缩 · 表格 + 就近浮动工具条 · 斜杠命令 · 大纲 · 专注模式 + 快捷键面板
 **检索**：CJK 全文检索 · 全局搜索
 **AI**：AI 助手（对话/整理/补全）· MCP 服务端（工具由 OpenAPI 生成）
-**访问**：多用户认证（bcrypt/会话/角色）· WebDAV · REST + OpenAPI · PWA · 浏览器快速捕获（Bookmarklet）
+**访问**：多用户认证（bcrypt/会话/角色）· WebDAV · REST + OpenAPI · PWA · 应用内快速捕获（顶栏弹窗 · 服务端抓取标题/正文 · SSRF 防护）
 **运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · S3 附件后端 · 设置中心 · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
 
 ---

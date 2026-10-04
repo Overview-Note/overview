@@ -33,4 +33,9 @@ Then open <http://localhost:5230/public>.
 
 - `欢迎.md` — landing page with tables and wiki-links
 - `功能演示.md` — code highlighting, task lists, KaTeX math, Mermaid, footnotes
-- `指南/` — nested folders, search, backlinks, AI/MCP, deployment
+- `示例/功能总览.md` — index page that wiki-links every example below
+- `示例/` — table alignment, task lists, multi-language code (Go/Bash/TS/Python/Vue),
+  KaTeX math, Mermaid (flowchart / sequence / state / gantt), block quotes,
+  footnotes and external links, plus a long document for the TOC
+- `指南/` — nested folders, search, backlinks, AI/MCP, deployment, image mixing
+  (`图文混排.md`), and a non-image attachment example (`附件与下载.md`)
