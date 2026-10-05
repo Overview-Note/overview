@@ -317,9 +317,11 @@ func (e *Engine) SyncResolveConflict(ctx context.Context, id, keep string) error
 			if err != nil {
 				return err
 			}
-			e.state.Mutate(func(d *stateData) {
+			if err := e.state.Mutate(func(d *stateData) {
 				d.Notes[conflict.ID] = noteState{Path: conflict.OriginalPath, BaseVersion: res.Version, SyncedAt: time.Now().UTC()}
-			})
+			}); err != nil {
+				return err
+			}
 		}
 		e.removeLocal(ctx, conflict.ConflictPath)
 		if client != nil && canPush {

@@ -125,14 +125,6 @@ func getJSON(t *testing.T, url string) map[string]any {
 	return out
 }
 
-func readAll(r interface{ Read([]byte) (int, error) }) ([]byte, error) {
-	var buf bytes.Buffer
-	_, err := buf.ReadFrom(r.(interface {
-		Read([]byte) (int, error)
-	}))
-	return buf.Bytes(), err
-}
-
 func waitFor(t *testing.T, timeout time.Duration, cond func() bool, msg string) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
