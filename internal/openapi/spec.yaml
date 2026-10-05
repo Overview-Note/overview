@@ -10,7 +10,7 @@ info:
     (bearer token via `OVERVIEW_MCP_TOKEN`, a long-lived API token created in
     Settings, or a session token). Email-based account flows (invite, verification,
     password reset) and runtime AI/SMTP/site settings are also part of this API.
-  version: "0.13.1"
+  version: "0.13.2"
 servers:
   - url: /api/v1
 paths:
