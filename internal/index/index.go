@@ -7,11 +7,14 @@ package index
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,7 +31,8 @@ var migrationsFS embed.FS
 
 // Index is the SQLite-backed note index.
 type Index struct {
-	db *sql.DB
+	db     *sql.DB
+	logger *slog.Logger
 }
 
 var _ core.Index = (*Index)(nil)
@@ -40,7 +44,7 @@ func Open(path string) (*Index, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	ix := &Index{db: db}
+	ix := &Index{db: db, logger: slog.Default()}
 	if err := ix.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
@@ -170,7 +174,7 @@ func (ix *Index) Sync(ctx context.Context, notes []core.Note) error {
 		return err
 	}
 	for _, n := range notes {
-		if err := insert(ctx, tx, n); err != nil {
+		if err := insertGuarded(ctx, tx, ix.logger, n); err != nil {
 			return err
 		}
 	}
@@ -201,7 +205,7 @@ func (ix *Index) ReplacePrefix(ctx context.Context, prefix string, notes []core.
 		return err
 	}
 	for _, n := range notes {
-		if err := insert(ctx, tx, n); err != nil {
+		if err := insertGuarded(ctx, tx, ix.logger, n); err != nil {
 			return err
 		}
 	}
@@ -438,7 +442,47 @@ func upsert(ctx context.Context, tx *sql.Tx, n core.Note) error {
 	return insert(ctx, tx, n)
 }
 
+// insertSavepoint scopes a single note insert so one failure can be rolled
+// back without discarding the surrounding full-rebuild transaction.
+const insertSavepoint = "overview_note_insert"
+
+// ensureNoteID gives notes without frontmatter an id so they never collide on
+// the empty primary key. The id is derived deterministically from the note
+// path, which keeps repeated reindexes idempotent.
+func ensureNoteID(n core.Note) core.Note {
+	if n.ID != "" || n.Path == "" {
+		return n
+	}
+	sum := sha256.Sum256([]byte(n.Path))
+	n.ID = "auto-" + hex.EncodeToString(sum[:12])
+	return n
+}
+
+// insertGuarded inserts a single note inside a savepoint. A failure only
+// discards that note, logs a warning, and lets the caller's transaction and
+// the remaining notes commit.
+func insertGuarded(ctx context.Context, tx *sql.Tx, logger *slog.Logger, n core.Note) error {
+	if _, err := tx.ExecContext(ctx, "SAVEPOINT "+insertSavepoint); err != nil {
+		return err
+	}
+	if err := insert(ctx, tx, n); err != nil {
+		if _, rbErr := tx.ExecContext(ctx, "ROLLBACK TO "+insertSavepoint); rbErr != nil {
+			return err
+		}
+		if _, relErr := tx.ExecContext(ctx, "RELEASE "+insertSavepoint); relErr != nil {
+			return err
+		}
+		logger.Warn("skipped note while rebuilding index", "path", n.Path, "error", err)
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, "RELEASE "+insertSavepoint); err != nil {
+		return err
+	}
+	return nil
+}
+
 func insert(ctx context.Context, tx *sql.Tx, n core.Note) error {
+	n = ensureNoteID(n)
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO notes (id, path, name, title, tags, body, created, updated, size, version, public)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

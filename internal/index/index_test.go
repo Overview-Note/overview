@@ -49,6 +49,68 @@ func TestSyncAndTree(t *testing.T) {
 	}
 }
 
+func TestSyncAssignsStableIDs(t *testing.T) {
+	ctx := context.Background()
+	ix := openTestIndex(t)
+	notes := []core.Note{
+		note("", "a.md", "A", "alpha"),
+		note("", "dir/b.md", "B", "beta"),
+	}
+	if err := ix.Sync(ctx, notes); err != nil {
+		t.Fatalf("sync with empty ids: %v", err)
+	}
+	first := map[string]string{}
+	metas, err := ix.Tree(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metas) != 2 {
+		t.Fatalf("tree len = %d, want 2", len(metas))
+	}
+	for _, m := range metas {
+		if m.ID == "" {
+			t.Fatalf("note %q indexed with empty id", m.Path)
+		}
+		first[m.Path] = m.ID
+	}
+
+	if err := ix.Sync(ctx, notes); err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	metas, err = ix.Tree(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metas) != 2 {
+		t.Fatalf("tree len after re-sync = %d, want 2", len(metas))
+	}
+	for _, m := range metas {
+		if first[m.Path] != m.ID {
+			t.Errorf("id for %q changed across reindex: %q -> %q", m.Path, first[m.Path], m.ID)
+		}
+	}
+}
+
+func TestSyncSkipsDuplicateID(t *testing.T) {
+	ctx := context.Background()
+	ix := openTestIndex(t)
+	err := ix.Sync(ctx, []core.Note{
+		note("dup", "a.md", "A", "alpha"),
+		note("dup", "b.md", "B", "beta"),
+		note("ok", "c.md", "C", "gamma"),
+	})
+	if err != nil {
+		t.Fatalf("a single bad note must not fail the whole sync: %v", err)
+	}
+	metas, err := ix.Tree(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metas) != 2 {
+		t.Fatalf("tree len = %d, want 2 (one duplicate skipped)", len(metas))
+	}
+}
+
 func TestSearchCJKInfix(t *testing.T) {
 	ctx := context.Background()
 	ix := openTestIndex(t)

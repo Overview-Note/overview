@@ -255,6 +255,111 @@ func TestOrphanAssets(t *testing.T) {
 	}
 }
 
+func allTreeNodes(nodes []core.TreeNode) []core.TreeNode {
+	var out []core.TreeNode
+	for _, n := range nodes {
+		out = append(out, n)
+		out = append(out, allTreeNodes(n.Children)...)
+	}
+	return out
+}
+
+func newServiceWithNotes(t *testing.T) (*service.Service, string) {
+	t.Helper()
+	root := t.TempDir()
+	notes := filepath.Join(root, "notes")
+	assets := filepath.Join(root, "assets")
+	if err := os.MkdirAll(notes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(assets, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ix, err := index.Open(filepath.Join(root, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ix.Close() })
+	st := store.New(notes, assets)
+	return service.New(st, ix, st, nil, nil), notes
+}
+
+func TestReindexHandlesNotesWithoutFrontmatter(t *testing.T) {
+	ctx := context.Background()
+	svc, notes := newServiceWithNotes(t)
+	if err := os.MkdirAll(filepath.Join(notes, "dir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for rel, body := range map[string]string{
+		"plain.md":     "# Plain\n\nalpha body",
+		"dir/other.md": "no frontmatter here beta",
+	} {
+		if err := os.WriteFile(filepath.Join(notes, filepath.FromSlash(rel)), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ids := map[string]string{}
+	for pass := 0; pass < 2; pass++ {
+		if err := svc.Reindex(ctx); err != nil {
+			t.Fatalf("reindex pass %d: %v", pass, err)
+		}
+		tree, err := svc.Tree(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		for _, n := range allTreeNodes(tree) {
+			if n.Type != core.NodeNote {
+				continue
+			}
+			if n.ID == "" {
+				t.Errorf("note %q indexed with empty id", n.Path)
+			}
+			if pass == 0 {
+				ids[n.Path] = n.ID
+			} else if ids[n.Path] != n.ID {
+				t.Errorf("id for %q changed across reindex: %q -> %q", n.Path, ids[n.Path], n.ID)
+			}
+			count++
+		}
+		if count != 2 {
+			t.Fatalf("pass %d indexed %d notes, want 2", pass, count)
+		}
+	}
+}
+
+func TestReindexSkipsCorruptNote(t *testing.T) {
+	ctx := context.Background()
+	svc, notes := newServiceWithNotes(t)
+	files := map[string]string{
+		"a.md": "---\nid: dup\n---\n\nalpha",
+		"b.md": "---\nid: dup\n---\n\nbeta",
+		"c.md": "gamma",
+	}
+	for rel, body := range files {
+		if err := os.WriteFile(filepath.Join(notes, rel), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := svc.Reindex(ctx); err != nil {
+		t.Fatalf("a corrupt note must not fail the whole reindex: %v", err)
+	}
+	gamma, err := svc.Search(ctx, "gamma", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gamma) != 1 {
+		t.Errorf("healthy note lost from index: %d hits", len(gamma))
+	}
+	alpha, _ := svc.Search(ctx, "alpha", 10, 0)
+	beta, _ := svc.Search(ctx, "beta", 10, 0)
+	if len(alpha)+len(beta) != 1 {
+		t.Errorf("duplicate id not isolated: alpha=%d beta=%d", len(alpha), len(beta))
+	}
+}
+
 func TestConflictPropagates(t *testing.T) {
 	ctx := context.Background()
 	svc := newService(t)
