@@ -4,7 +4,7 @@
 BINARY := bin/overview
 DESKTOP_BINARY := bin/overview-desktop
 EXE := $(shell go env GOEXE)
-VERSION ?= 0.14.0
+VERSION ?= 0.15.0
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .PHONY: help dev demo build build-web build-go build-desktop package-desktop test test-go test-web lint fmt vet clean docker site site-export
