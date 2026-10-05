@@ -13,6 +13,9 @@ import {
 import { useWorkspaceStore } from "../stores/workspace";
 import TreeNodeItem from "./TreeNodeItem.vue";
 
+defineProps<{ open?: boolean }>();
+const emit = defineEmits<{ (e: "close"): void }>();
+
 const store = useWorkspaceStore();
 const dialogs = useDialogStore();
 const settings = useSettingsStore();
@@ -52,7 +55,8 @@ const activePath = computed(() =>
   route.name === "note" ? String(route.params.path ?? "") : null,
 );
 
-function open(path: string) {
+function openNote(path: string) {
+  emit("close");
   router.push({ name: "note", params: { path } });
 }
 
@@ -122,14 +126,18 @@ async function moveNode(node: TreeNode, target: string) {
 </script>
 
 <template>
-  <aside class="sidebar" :style="{ '--sidebar-w': `${sidebarWidth}px` }">
+  <aside
+    class="sidebar"
+    :class="{ open }"
+    :style="{ '--sidebar-w': `${sidebarWidth}px` }"
+  >
     <nav class="tree">
       <TreeNodeItem
         v-for="node in store.tree"
         :key="node.path"
         :node="node"
         :active-path="activePath"
-        @open="open"
+        @open="openNote"
         @create-note="createNote"
         @create-folder="createFolder"
         @rename="renameNode"
@@ -138,6 +146,7 @@ async function moveNode(node: TreeNode, target: string) {
       />
       <div v-if="store.tree.length === 0" class="muted">{{ t("sidebar.empty") }}</div>
     </nav>
+    <slot />
     <div class="sidebar-foot">
       <button
         class="foot-primary"

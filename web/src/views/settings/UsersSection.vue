@@ -188,49 +188,55 @@ async function addUser() {
       <section class="settings-card">
         <div class="user-list">
           <div v-for="user in users" :key="user.id" class="user-row">
-            <span class="user-name">{{ user.email || user.username }}</span>
-            <span
-              class="badge"
-              :class="user.status === 'active' ? 'ok' : 'warn'"
-              :title="t('users.status')"
-            >
-              {{
-                user.status === "invited"
-                  ? t("users.statusInvited")
-                  : t("users.statusActive")
-              }}
-            </span>
-            <span class="badge">
-              {{ user.role === "admin" ? t("users.admin") : t("users.member") }}
-            </span>
-            <span
-              v-if="user.email"
-              class="badge"
-              :class="user.emailVerified ? 'ok' : 'warn'"
-              :title="t('users.email')"
-            >
-              {{
-                user.emailVerified
-                  ? t("users.emailVerified")
-                  : t("users.emailUnverified")
-              }}
-            </span>
-            <button v-if="!user.email" class="small" @click="addEmail(user)">
-              {{ t("users.addEmail") }}
-            </button>
-            <button
-              v-else-if="!user.emailVerified && user.status === 'active'"
-              class="small"
-              @click="sendVerification(user)"
-            >
-              {{ t("users.sendVerification") }}
-            </button>
-            <button v-if="user.status === 'invited'" class="small" @click="resend(user)">
-              {{ t("users.resend") }}
-            </button>
-            <button class="danger-text" @click="removeUser(user)">
-              {{ t("users.delete") }}
-            </button>
+            <div class="user-meta">
+              <span class="user-name">{{ user.email || user.username }}</span>
+              <span class="user-badges">
+                <span
+                  class="badge"
+                  :class="user.status === 'active' ? 'ok' : 'warn'"
+                  :title="t('users.status')"
+                >
+                  {{
+                    user.status === "invited"
+                      ? t("users.statusInvited")
+                      : t("users.statusActive")
+                  }}
+                </span>
+                <span class="badge">
+                  {{ user.role === "admin" ? t("users.admin") : t("users.member") }}
+                </span>
+                <span
+                  v-if="user.email"
+                  class="badge"
+                  :class="user.emailVerified ? 'ok' : 'warn'"
+                  :title="t('users.email')"
+                >
+                  {{
+                    user.emailVerified
+                      ? t("users.emailVerified")
+                      : t("users.emailUnverified")
+                  }}
+                </span>
+              </span>
+            </div>
+            <div class="user-actions">
+              <button v-if="!user.email" class="small" @click="addEmail(user)">
+                {{ t("users.addEmail") }}
+              </button>
+              <button
+                v-else-if="!user.emailVerified && user.status === 'active'"
+                class="small"
+                @click="sendVerification(user)"
+              >
+                {{ t("users.sendVerification") }}
+              </button>
+              <button v-if="user.status === 'invited'" class="small" @click="resend(user)">
+                {{ t("users.resend") }}
+              </button>
+              <button class="danger-text" @click="removeUser(user)">
+                {{ t("users.delete") }}
+              </button>
+            </div>
           </div>
         </div>
         <p v-if="loading && users.length === 0" class="muted">{{ t("app.loading") }}</p>

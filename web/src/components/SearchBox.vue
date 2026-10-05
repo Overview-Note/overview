@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import type { SearchHit } from "../api";
 import { t } from "../i18n";
 import { useWorkspaceStore } from "../stores/workspace";
+
+const { autofocus = false } = defineProps<{ autofocus?: boolean }>();
 
 const store = useWorkspaceStore();
 const router = useRouter();
@@ -57,6 +59,10 @@ function onGlobalKey(event: KeyboardEvent) {
 }
 
 const input = ref<HTMLInputElement | null>(null);
+
+onMounted(() => {
+  if (autofocus) input.value?.focus();
+});
 
 watch(
   () => router.currentRoute.value,

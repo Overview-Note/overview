@@ -21,6 +21,8 @@ const route = useRoute();
 const router = useRouter();
 const shortcutsOpen = ref(false);
 const captureOpen = ref(false);
+const searchOpen = ref(false);
+const sidebarOpen = ref(false);
 const userMenuOpen = ref(false);
 const userMenu = ref<HTMLElement | null>(null);
 
@@ -99,6 +101,14 @@ watch(
   },
 );
 
+watch(
+  () => route.fullPath,
+  () => {
+    sidebarOpen.value = false;
+    searchOpen.value = false;
+  },
+);
+
 async function logout() {
   userMenuOpen.value = false;
   await auth.logout().catch(() => undefined);
@@ -114,6 +124,15 @@ async function logout() {
     <template v-else>
       <header class="topbar">
         <div class="topbar-left">
+          <button
+            v-if="!isSettings"
+            class="nav-toggle icon-btn"
+            :aria-label="t('sidebar.menu')"
+            :aria-expanded="sidebarOpen"
+            @click="sidebarOpen = !sidebarOpen"
+          >
+            ☰
+          </button>
           <RouterLink class="brand" :to="{ name: 'home' }">
             <BrandMark :size="30" />
             <span class="brand-name">Overview</span>
@@ -178,7 +197,63 @@ async function logout() {
         </nav>
       </header>
       <div class="layout">
-        <Sidebar v-if="!isSettings" />
+        <Sidebar v-if="!isSettings" :open="sidebarOpen" @close="sidebarOpen = false">
+          <div class="sidebar-drawer-nav">
+            <button
+              v-if="showSearch"
+              class="sidebar-drawer-item"
+              @click="sidebarOpen = false; searchOpen = true"
+            >
+              {{ t("sidebar.search") }}
+            </button>
+            <button
+              class="sidebar-drawer-item"
+              :class="{ on: settings.focusMode }"
+              @click="sidebarOpen = false; settings.toggleFocus()"
+            >
+              {{ t("settings.focus") }}
+            </button>
+            <button
+              class="sidebar-drawer-item"
+              @click="sidebarOpen = false; shortcutsOpen = true"
+            >
+              {{ t("shortcuts.title") }}
+            </button>
+            <button class="sidebar-drawer-item" @click="openSettings">
+              {{ t("settings.title") }}
+            </button>
+            <button
+              v-if="showSearch"
+              class="sidebar-drawer-item"
+              @click="sidebarOpen = false; captureOpen = true"
+            >
+              {{ t("capture.open") }}
+            </button>
+            <button
+              v-if="auth.user"
+              class="sidebar-drawer-item"
+              @click="router.push({ name: 'trash' })"
+            >
+              {{ t("trash.link") }}
+            </button>
+            <template v-if="auth.mode === 'multi' && auth.user">
+              <div class="sidebar-drawer-user">
+                <span class="avatar">{{
+                  auth.user.username.slice(0, 1).toUpperCase()
+                }}</span>
+                <span class="sidebar-drawer-name">{{ auth.user.username }}</span>
+              </div>
+              <button class="sidebar-drawer-item" @click="logout">
+                {{ t("topbar.logout") }}
+              </button>
+            </template>
+          </div>
+        </Sidebar>
+        <div
+          class="sidebar-backdrop"
+          v-if="sidebarOpen"
+          @click="sidebarOpen = false"
+        ></div>
         <main class="content">
           <RouterView />
         </main>
@@ -187,5 +262,19 @@ async function logout() {
     <DialogHost />
     <ShortcutsDialog :open="shortcutsOpen" @close="shortcutsOpen = false" />
     <CaptureDialog :open="captureOpen" @close="captureOpen = false" />
+    <div v-if="searchOpen" class="search-overlay" @click.self="searchOpen = false">
+      <div class="search-overlay-head">
+        <button
+          class="search-overlay-close"
+          :aria-label="t('tokens.close')"
+          @click="searchOpen = false"
+        >
+          ✕
+        </button>
+      </div>
+      <div class="search-overlay-body">
+        <SearchBox autofocus />
+      </div>
+    </div>
   </div>
 </template>

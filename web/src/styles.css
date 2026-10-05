@@ -153,6 +153,27 @@ body,
   margin: 0;
 }
 
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+button,
+a,
+[role="button"],
+.tappable {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tiptap-content,
+.tiptap-content a {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 body {
   font-family: var(--font-sans);
   color: var(--text);
@@ -182,9 +203,11 @@ body {
   border: 3px solid transparent;
   background-clip: content-box;
 }
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--text-faint);
-  background-clip: content-box;
+@media (hover: hover) and (pointer: fine) {
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+    background-clip: content-box;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -207,8 +230,10 @@ button {
     transform 0.12s ease;
 }
 
-button:hover {
-  background: var(--bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  button:hover {
+    background: var(--bg-hover);
+  }
 }
 
 /* Respond on press, not on release (Apple: feedback must be immediate). */
@@ -248,9 +273,11 @@ button:disabled {
   border-radius: var(--radius-sm);
 }
 
-.icon-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
 }
 
 .primary {
@@ -259,9 +286,11 @@ button:disabled {
   border: 1px solid var(--btn-primary-bg);
 }
 
-.primary:hover {
-  background: var(--btn-primary-hover);
-  border-color: var(--btn-primary-hover);
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover {
+    background: var(--btn-primary-hover);
+    border-color: var(--btn-primary-hover);
+  }
 }
 
 .danger-text {
@@ -275,6 +304,7 @@ button:disabled {
   border-radius: 999px;
   padding: 0 7px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .badge.ok {
@@ -307,7 +337,8 @@ button:disabled {
 .app {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
 }
 
 .topbar {
@@ -317,6 +348,8 @@ button:disabled {
   gap: var(--sp-3);
   height: var(--topbar-h);
   padding: 0 var(--sp-4);
+  padding-left: calc(var(--sp-4) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--sp-4) + env(safe-area-inset-right, 0px));
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 85%, transparent);
   -webkit-backdrop-filter: blur(12px) saturate(160%);
@@ -408,8 +441,10 @@ button:disabled {
   padding: 6px 10px;
 }
 
-.topbar-link:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .topbar-link:hover {
+    color: var(--text);
+  }
 }
 
 /* Search box (topbar) */
@@ -485,6 +520,43 @@ button:disabled {
   text-align: left;
 }
 
+/* Full-screen search surface opened from the mobile drawer. */
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--sp-3) + env(safe-area-inset-top, 0px))
+    calc(var(--sp-4) + env(safe-area-inset-right, 0px))
+    calc(var(--sp-3) + env(safe-area-inset-bottom, 0px))
+    calc(var(--sp-4) + env(safe-area-inset-left, 0px));
+}
+
+.search-overlay-head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--sp-2);
+}
+
+.search-overlay-close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 16px;
+}
+
+.search-overlay-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.search-overlay-body .searchbox-input {
+  font-size: 16px;
+}
+
 .user-menu {
   position: relative;
 }
@@ -497,8 +569,10 @@ button:disabled {
   border-radius: 999px;
 }
 
-.user-trigger:hover {
-  background: var(--bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .user-trigger:hover {
+    background: var(--bg-hover);
+  }
 }
 
 .avatar {
@@ -561,14 +635,16 @@ button:disabled {
   color: var(--text-muted);
 }
 
-.user-dropdown button:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
+@media (hover: hover) and (pointer: fine) {
+  .user-dropdown button:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
 
-.user-dropdown-logout:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
+  .user-dropdown-logout:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -609,10 +685,12 @@ button:disabled {
   position: relative;
 }
 
-.tree-row:hover {
-  --row-bg: var(--bg-hover);
-  background: var(--bg-hover);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .tree-row:hover {
+    --row-bg: var(--bg-hover);
+    background: var(--bg-hover);
+    color: var(--text);
+  }
 }
 
 .tree-row.active {
@@ -712,10 +790,12 @@ button:disabled {
   transition: opacity 0.12s ease;
 }
 
-.tree-row:hover .row-actions,
-.tree-row:focus-within .row-actions {
-  opacity: 1;
-  visibility: visible;
+@media (hover: hover) and (pointer: fine) {
+  .tree-row:hover .row-actions,
+  .tree-row:focus-within .row-actions {
+    opacity: 1;
+    visibility: visible;
+  }
 }
 
 .row-actions button {
@@ -725,8 +805,10 @@ button:disabled {
   text-transform: none;
 }
 
-.row-actions button:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .row-actions button:hover {
+    color: var(--text);
+  }
 }
 
 .children {
@@ -755,9 +837,11 @@ button:disabled {
   color: var(--btn-primary-fg);
 }
 
-.sidebar-foot .foot-primary:hover {
-  background: var(--btn-primary-hover);
-  border-color: var(--btn-primary-hover);
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-foot .foot-primary:hover {
+    background: var(--btn-primary-hover);
+    border-color: var(--btn-primary-hover);
+  }
 }
 
 .sidebar-foot .foot-secondary {
@@ -766,9 +850,11 @@ button:disabled {
   color: var(--text);
 }
 
-.sidebar-foot .foot-secondary:hover {
-  background: var(--bg-hover);
-  border-color: var(--text-faint);
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-foot .foot-secondary:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-faint);
+  }
 }
 
 .sidebar-resizer {
@@ -793,9 +879,14 @@ button:disabled {
   transition: background 0.12s ease;
 }
 
-.sidebar-resizer:hover::after,
 body.resizing .sidebar-resizer::after {
   background: var(--accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-resizer:hover::after {
+    background: var(--accent);
+  }
 }
 
 body.resizing {
@@ -808,8 +899,10 @@ body.resizing {
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.result:hover {
-  background: var(--bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .result:hover {
+    background: var(--bg-hover);
+  }
 }
 
 .result-title {
@@ -895,9 +988,11 @@ body.resizing {
   color: var(--text-muted);
 }
 
-.note-bar-actions button:hover {
-  border-color: var(--border-strong);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .note-bar-actions button:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
 }
 
 .note-bar-actions button.on {
@@ -952,8 +1047,10 @@ body.resizing {
   color: var(--text);
 }
 
-.vis-menu button:hover {
-  background: var(--bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .vis-menu button:hover {
+    background: var(--bg-hover);
+  }
 }
 
 .vis-menu button.on {
@@ -1037,9 +1134,11 @@ body.resizing {
   padding: 5px 9px;
 }
 
-.table-bubble button:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .table-bubble button:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
 }
 
 .editor-toolbar button.on {
@@ -1091,6 +1190,7 @@ body.resizing {
   font-size: var(--text-xs);
   color: var(--text-faint);
   font-family: var(--font-mono);
+  overflow-wrap: anywhere;
 }
 
 .tiptap-content {
@@ -1159,8 +1259,10 @@ body.resizing {
   text-decoration: none;
 }
 
-.tiptap-content a:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .tiptap-content a:hover {
+    text-decoration: underline;
+  }
 }
 
 .tiptap-content code {
@@ -1503,9 +1605,11 @@ mark {
     background 0.12s ease;
 }
 
-.toc-item:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .toc-item:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
 }
 
 .toc-item.scrolled {
@@ -1545,8 +1649,10 @@ mark {
   white-space: nowrap;
 }
 
-.link-item:hover {
-  background: var(--bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .link-item:hover {
+    background: var(--bg-hover);
+  }
 }
 
 .link-item.missing {
@@ -1755,8 +1861,10 @@ mark {
   border-radius: 0;
 }
 
-.tool-head:hover {
-  background: var(--bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .tool-head:hover {
+    background: var(--bg-hover);
+  }
 }
 
 .tool-caret {
@@ -1828,8 +1936,10 @@ mark {
   font-size: var(--text-xs);
 }
 
-.tool-path:hover {
-  background: var(--accent-ring);
+@media (hover: hover) and (pointer: fine) {
+  .tool-path:hover {
+    background: var(--accent-ring);
+  }
 }
 
 .tool-path-more {
@@ -2015,6 +2125,8 @@ mark {
   justify-content: center;
   z-index: 100;
   padding: var(--sp-4);
+  padding-top: calc(var(--sp-4) + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
 }
 
 /* DialogHost (prompt / confirm) always stacks above other dialogs. */
@@ -2079,9 +2191,11 @@ mark {
   color: var(--btn-primary-fg);
 }
 
-.dialog-actions button.primary:hover {
-  background: var(--btn-primary-hover);
-  border-color: var(--btn-primary-hover);
+@media (hover: hover) and (pointer: fine) {
+  .dialog-actions button.primary:hover {
+    background: var(--btn-primary-hover);
+    border-color: var(--btn-primary-hover);
+  }
 }
 
 .dialog-actions button.danger {
@@ -2316,8 +2430,10 @@ mark {
   transition: transform 0.12s ease;
 }
 
-.accent-swatch:hover {
-  transform: scale(1.08);
+@media (hover: hover) and (pointer: fine) {
+  .accent-swatch:hover {
+    transform: scale(1.08);
+  }
 }
 
 .accent-swatch.on {
@@ -2350,8 +2466,10 @@ mark {
   padding: 4px 8px;
 }
 
-.accent-reset:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .accent-reset:hover {
+    color: var(--text);
+  }
 }
 
 .switch {
@@ -2438,8 +2556,10 @@ mark {
   color: var(--text-muted);
 }
 
-.settings-back:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .settings-back:hover {
+    color: var(--text);
+  }
 }
 
 .settings-nav-list {
@@ -2460,10 +2580,12 @@ mark {
     color 0.12s ease;
 }
 
-.settings-nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  .settings-nav-item:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+    text-decoration: none;
+  }
 }
 
 .settings-nav-item.active {
@@ -2514,6 +2636,7 @@ mark {
     padding: var(--sp-3) var(--sp-4);
     overflow-x: auto;
     overflow-y: hidden;
+    scroll-padding-inline: var(--sp-4);
     flex-shrink: 0;
   }
 
@@ -2524,6 +2647,7 @@ mark {
   .settings-nav-list {
     flex-direction: row;
     gap: var(--sp-2);
+    padding-inline: var(--sp-1);
   }
 
   .settings-nav-item {
@@ -2550,6 +2674,7 @@ mark {
 
 .user-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
   padding: 8px 10px;
@@ -2557,9 +2682,65 @@ mark {
   background: var(--bg-soft);
 }
 
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .user-row .user-name {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-sm);
+}
+
+.user-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+.user-row button {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .user-meta {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .user-meta > .user-name {
+    flex: 1 1 100%;
+  }
+
+  .user-badges {
+    flex-wrap: wrap;
+  }
+
+  .user-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .user-actions button {
+    min-height: 40px;
+    padding: 6px 12px;
+  }
 }
 
 .token-secret {
@@ -2641,6 +2822,7 @@ mark {
 
 .auth-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2699,9 +2881,11 @@ mark {
   text-decoration: none;
 }
 
-.auth-foot a:hover {
-  color: var(--accent);
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .auth-foot a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
 }
 
 .auth-card label {
@@ -2751,9 +2935,11 @@ mark {
   text-decoration: none;
 }
 
-.auth-alt:hover {
-  color: var(--accent);
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .auth-alt:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
 }
 
 .auth-card > .auth-alt {
@@ -2854,6 +3040,7 @@ mark {
 
 .public-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
 }
 
@@ -2863,6 +3050,8 @@ mark {
   gap: 16px;
   height: 52px;
   padding: 0 20px;
+  padding-left: calc(20px + env(safe-area-inset-left, 0px));
+  padding-right: calc(20px + env(safe-area-inset-right, 0px));
   border-bottom: 1px solid var(--border);
   /* Translucent material: content scrolls under instead of a hard opaque bar. */
   background: color-mix(in srgb, var(--bg) 72%, transparent);
@@ -2902,9 +3091,11 @@ mark {
   cursor: pointer;
 }
 
-.public-action-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .public-action-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 }
 
 .public-home-link {
@@ -2914,9 +3105,11 @@ mark {
   text-decoration: none;
 }
 
-.public-home-link:hover {
-  color: var(--accent);
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  .public-home-link:hover {
+    color: var(--accent);
+    text-decoration: none;
+  }
 }
 
 .public-layout {
@@ -2933,6 +3126,7 @@ mark {
   flex-shrink: 0;
   padding: 24px 12px;
   max-height: calc(100vh - 52px);
+  max-height: calc(100dvh - 52px);
   overflow: auto;
 }
 
@@ -2954,9 +3148,11 @@ mark {
   cursor: pointer;
 }
 
-.public-nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .public-nav-item:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
 }
 
 .public-nav-item.active {
@@ -3004,8 +3200,10 @@ mark {
   cursor: pointer;
 }
 
-.public-note-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .public-note-link:hover {
+    text-decoration: underline;
+  }
 }
 
 .public-toc {
@@ -3015,6 +3213,7 @@ mark {
   flex-shrink: 0;
   padding: 40px 16px;
   max-height: calc(100vh - 52px);
+  max-height: calc(100dvh - 52px);
   overflow: auto;
 }
 
@@ -3039,9 +3238,11 @@ mark {
   text-decoration: none;
 }
 
-.public-toc-item:hover {
-  color: var(--text);
-  text-decoration: none;
+@media (hover: hover) and (pointer: fine) {
+  .public-toc-item:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
 }
 
 .public-toc-item.lvl-3 {
@@ -3053,6 +3254,11 @@ mark {
 }
 
 /* Document typography 鈥?align the shared editor styles with the docs site. */
+.public-doc,
+.public-doc .tiptap-content {
+  overflow-wrap: anywhere;
+}
+
 .public-doc > h1 {
   max-width: 760px;
   margin: 0.2em auto 0.5em;
@@ -3271,4 +3477,364 @@ html[data-focus="on"] .note-bar::after {
   margin: -6px 0 0;
   font-size: var(--text-xs);
   color: var(--text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   Mobile & touch
+   -------------------------------------------------------------------------- */
+
+.nav-toggle {
+  display: none;
+  flex-shrink: 0;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+.sidebar-drawer-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .topbar {
+    grid-template-columns: auto 1fr auto;
+    gap: var(--sp-2);
+    height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .topbar-left,
+  .topbar-center,
+  .topbar-right {
+    min-width: 0;
+  }
+
+  .topbar-center {
+    display: none;
+  }
+
+  .topbar-right .topbar-link {
+    display: none;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: min(var(--sidebar-w, 300px), 82vw);
+    z-index: 90;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: var(--shadow-3);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .sidebar.open {
+    transform: none;
+  }
+
+  .sidebar-resizer {
+    display: none;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.42);
+    z-index: 89;
+  }
+
+  .sidebar-drawer-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .sidebar-drawer-item {
+    width: 100%;
+    text-align: left;
+    padding: 10px;
+    font-size: var(--text-nav);
+    color: var(--text-muted);
+  }
+
+  .sidebar-drawer-user {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 8px 10px;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .sidebar-drawer-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-nav);
+  }
+
+  .editor-scroll {
+    padding: 20px 16px 120px;
+  }
+
+  .tiptap-content,
+  .editor-crumb {
+    max-width: none;
+  }
+
+  .editor-toolbar {
+    padding: 6px 10px;
+  }
+
+  .toolbar-group {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .toolbar-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .editor-toolbar .status {
+    display: none;
+  }
+
+  .note-bar {
+    flex-wrap: wrap;
+    gap: 6px var(--sp-2);
+    padding: 8px 12px;
+  }
+
+  .note-bar-title {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .note-bar-actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .note-bar-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .note-bar-actions > * {
+    flex-shrink: 0;
+  }
+
+  /* Right-side panels become a bottom sheet on phones. */
+  .editor-side {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    max-height: 78vh;
+    max-height: 78dvh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    z-index: 130;
+    transform: translateY(101%);
+    transition: transform 0.22s ease;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.28);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .editor-side.mobile-open {
+    transform: none;
+  }
+
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.42);
+    z-index: 129;
+  }
+
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    background: var(--bg-panel);
+    z-index: 1;
+  }
+
+  .sheet-tabs {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sheet-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sheet-tabs button {
+    flex-shrink: 0;
+    font-size: var(--text-sm);
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+  }
+
+  .sheet-tabs button.on {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 550;
+  }
+
+  .sheet-close {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    font-size: 16px;
+  }
+
+  .overlay {
+    overflow-y: auto;
+    align-items: flex-start;
+  }
+
+  .dialog,
+  .settings-dialog,
+  .capture-dialog,
+  .shortcuts-dialog {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+  }
+
+  .settings-page {
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+  }
+
+  .public-topbar {
+    height: auto;
+    min-height: 52px;
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding-top: calc(6px + env(safe-area-inset-top, 0px));
+    padding-bottom: 6px;
+  }
+
+  .public-actions {
+    gap: 8px;
+  }
+
+  .public-content {
+    padding-top: 20px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (hover: none) {
+  .row-actions {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  button {
+    min-height: 40px;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .row-actions button {
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+
+  .tree-row {
+    min-height: 40px;
+  }
+
+  .toc-item,
+  .link-item,
+  .settings-nav-item,
+  .user-dropdown button,
+  .vis-menu button,
+  .sidebar-drawer-item {
+    min-height: 40px;
+  }
+
+  .accent-swatch {
+    min-height: 0;
+    height: 26px;
+  }
+
+  .tree-row:active,
+  .result:active,
+  .toc-item:active,
+  .link-item:active,
+  .note-bar-actions button:active,
+  .sheet-tabs button:active,
+  .sidebar-drawer-item:active {
+    background: var(--bg-hover);
+  }
+
+  .tree-row.active:active {
+    background: var(--accent-soft);
+  }
 }

@@ -49,7 +49,11 @@ async function send() {
 }
 
 async function organize() {
-  if (busy.value || !props.content.trim()) return;
+  if (busy.value) return;
+  if (!props.content.trim()) {
+    error.value = t("ai.emptyContent");
+    return;
+  }
   busy.value = true;
   error.value = "";
   try {
@@ -63,7 +67,11 @@ async function organize() {
 }
 
 async function complete() {
-  if (busy.value || !props.content.trim()) return;
+  if (busy.value) return;
+  if (!props.content.trim()) {
+    error.value = t("ai.emptyContent");
+    return;
+  }
   busy.value = true;
   error.value = "";
   try {

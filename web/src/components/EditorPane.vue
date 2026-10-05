@@ -45,6 +45,10 @@ const aiSelection = ref("");
 const aiEnabled = computed(() => aiStatus.value?.enabled ?? false);
 const showHistory = ref(false);
 const visibilityMenuOpen = ref(false);
+const visSelect = ref<HTMLElement | null>(null);
+const isMobile = ref(false);
+const sideOpen = ref(false);
+const sideTab = ref<"toc" | "links" | "history" | "ai">("toc");
 const aiContent = ref("");
 const flashMessage = ref("");
 let flashTimer: number | undefined;
@@ -58,6 +62,65 @@ let currentPath = "";
 let baseVersion = "";
 
 const turndown = createTurndown();
+
+const tocVisible = computed(() =>
+  isMobile.value ? sideOpen.value && sideTab.value === "toc" : showToc.value,
+);
+const aiVisible = computed(() =>
+  isMobile.value ? sideOpen.value && sideTab.value === "ai" : showAI.value,
+);
+const historyVisible = computed(() =>
+  isMobile.value ? sideOpen.value && sideTab.value === "history" : showHistory.value,
+);
+const linksVisible = computed(() =>
+  isMobile.value ? sideOpen.value && sideTab.value === "links" : !!store.note,
+);
+
+let mobileQuery: MediaQueryList | undefined;
+
+function onMobileChange(event: MediaQueryListEvent) {
+  isMobile.value = event.matches;
+  if (!event.matches) sideOpen.value = false;
+}
+
+function openSide(tab: "toc" | "links" | "history" | "ai") {
+  if (!isMobile.value) return;
+  sideTab.value = tab;
+  sideOpen.value = true;
+}
+
+function onTocClick() {
+  if (isMobile.value) {
+    openSide("toc");
+    return;
+  }
+  showToc.value = !showToc.value;
+}
+
+function onHistoryClick() {
+  if (isMobile.value) {
+    if (store.note) openSide("history");
+    return;
+  }
+  showHistory.value = !showHistory.value;
+}
+
+function onAiClick() {
+  if (isMobile.value) {
+    openSide("ai");
+    if (!aiEnabled.value) {
+      void dialogs.askConfirm(t("ai.title"), t("ai.notConfiguredHint"), false);
+    }
+    return;
+  }
+  toggleAI();
+}
+
+function onMobileEscape(event: KeyboardEvent) {
+  if (event.key === "Escape" && sideOpen.value) {
+    sideOpen.value = false;
+  }
+}
 
 async function uploadAndInsert(original: File) {
   const isImage = original.type.startsWith("image/");
@@ -144,6 +207,10 @@ async function openWiki(target: string) {
   }
 }
 
+function syncAiContent() {
+  aiContent.value = editor.value?.getText() ?? "";
+}
+
 const editor = useEditor({
   content: "",
   extensions: [
@@ -189,7 +256,7 @@ const editor = useEditor({
     // note never marks it dirty or triggers a save.
     if (suppress || loading) return;
     dirty.value = true;
-    aiContent.value = editor.value?.getText() ?? "";
+    syncAiContent();
     scheduleSave();
   },
   onSelectionUpdate: () => {
@@ -212,6 +279,7 @@ function insertAI(payload: { text: string; replace: boolean }) {
   } else {
     editor.value.chain().focus("end").insertContent(`\n${payload.text}`).run();
   }
+  syncAiContent();
   dirty.value = true;
   scheduleSave();
 }
@@ -251,6 +319,10 @@ async function load(path: string) {
     cancelPendingImages();
     editor.value.commands.setContent(mdToHtml(loaded.body), false);
     suppress = false;
+    // setContent emits an update that onUpdate swallows while suppressing, so
+    // sync here too: otherwise the AI panel sees an empty note until the user
+    // edits it once.
+    syncAiContent();
     dirty.value = false;
     status.value = "idle";
     await nextTick();
@@ -294,6 +366,7 @@ watch(
     }
     await load(path);
     currentPath = path;
+    if (isMobile.value) sideOpen.value = false;
   },
   { immediate: true },
 );
@@ -349,6 +422,14 @@ function publicURL(): string {
   return `${location.origin}/public/${currentPath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+function onDocumentClick(event: MouseEvent) {
+  if (!visibilityMenuOpen.value) return;
+  const el = visSelect.value;
+  if (el && !el.contains(event.target as Node)) {
+    visibilityMenuOpen.value = false;
+  }
+}
+
 function setVisibility(next: boolean) {
   visibilityMenuOpen.value = false;
   if (isPublic.value === next) return;
@@ -398,6 +479,7 @@ function navigateHeading(item: TocItem) {
     container.scrollTop -
     16;
   container.scrollTo({ top, behavior: "smooth" });
+  if (isMobile.value) sideOpen.value = false;
 }
 
 function setLink() {
@@ -479,6 +561,13 @@ onBeforeRouteLeave(async () => {
 
 onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
+  window.addEventListener("click", onDocumentClick);
+  window.addEventListener("keydown", onMobileEscape);
+  mobileQuery = window.matchMedia?.("(max-width: 768px)");
+  if (mobileQuery) {
+    isMobile.value = mobileQuery.matches;
+    mobileQuery.addEventListener("change", onMobileChange);
+  }
   try {
     aiStatus.value = await api.aiStatus();
   } catch {
@@ -491,6 +580,9 @@ onBeforeUnmount(() => {
   window.clearTimeout(mermaidTimer);
   noteAbort?.abort();
   window.removeEventListener("beforeunload", onBeforeUnload);
+  window.removeEventListener("click", onDocumentClick);
+  window.removeEventListener("keydown", onMobileEscape);
+  mobileQuery?.removeEventListener("change", onMobileChange);
 });
 </script>
 
@@ -507,27 +599,35 @@ onBeforeUnmount(() => {
           {{ t("editor.publicPage") }}
         </button>
         <button
-          :class="{ on: showToc }"
+          :class="{ on: isMobile ? sideOpen && sideTab === 'toc' : showToc }"
           :title="t('editor.toc')"
-          @click="showToc = !showToc"
+          @click="onTocClick"
         >
           {{ t("editor.toc") }}
         </button>
         <button
-          :class="{ on: showHistory }"
+          :class="{ on: isMobile ? sideOpen && sideTab === 'history' : showHistory }"
           :title="t('history.title')"
-          @click="showHistory = !showHistory"
+          @click="onHistoryClick"
         >
           {{ t("history.title") }}
         </button>
         <button
-          :class="{ on: showAI }"
+          :class="{ on: isMobile ? sideOpen && sideTab === 'ai' : showAI }"
           :title="aiEnabled ? t('ai.title') : t('ai.notConfigured')"
-          @click="toggleAI"
+          @click="onAiClick"
         >
           {{ t("ai.title") }}
         </button>
-        <div class="vis-select">
+        <button
+          v-if="isMobile"
+          :class="{ on: sideOpen && sideTab === 'links' }"
+          :title="t('links.backlinks')"
+          @click="openSide('links')"
+        >
+          {{ t("links.backlinks") }}
+        </button>
+        <div ref="visSelect" class="vis-select">
           <button
             class="vis-trigger"
             :class="{ on: isPublic }"
@@ -562,11 +662,7 @@ onBeforeUnmount(() => {
             </svg>
             <span>{{ isPublic ? t("visibility.public") : t("visibility.private") }}</span>
           </button>
-          <div
-            v-if="visibilityMenuOpen"
-            class="vis-menu"
-            @mouseleave="visibilityMenuOpen = false"
-          >
+          <div v-if="visibilityMenuOpen" class="vis-menu">
             <button :class="{ on: !isPublic }" @click="setVisibility(false)">
               <span class="vis-icon">
                 <svg
@@ -774,9 +870,56 @@ onBeforeUnmount(() => {
         </BubbleMenu>
       </div>
 
-      <div class="editor-side" v-if="showToc || showAI || showHistory || store.note">
-        <TocPanel v-if="showToc" :items="toc" @navigate="navigateHeading" />
-        <div v-if="showAI" class="ai-section">
+      <div
+        v-if="isMobile && sideOpen"
+        class="sheet-backdrop"
+        @click="sideOpen = false"
+      ></div>
+
+      <div
+        class="editor-side"
+        :class="{ 'mobile-open': isMobile && sideOpen }"
+        v-if="showToc || showAI || showHistory || store.note"
+      >
+        <div v-if="isMobile" class="sheet-head">
+          <div class="sheet-tabs">
+            <button
+              :class="{ on: sideTab === 'toc' }"
+              @click="sideTab = 'toc'"
+            >
+              {{ t("toc.title") }}
+            </button>
+            <button
+              v-if="store.note"
+              :class="{ on: sideTab === 'links' }"
+              @click="sideTab = 'links'"
+            >
+              {{ t("links.backlinks") }}
+            </button>
+            <button
+              v-if="store.note"
+              :class="{ on: sideTab === 'history' }"
+              @click="sideTab = 'history'"
+            >
+              {{ t("history.title") }}
+            </button>
+            <button
+              :class="{ on: sideTab === 'ai' }"
+              @click="sideTab = 'ai'"
+            >
+              {{ t("ai.title") }}
+            </button>
+          </div>
+          <button
+            class="sheet-close"
+            :aria-label="t('tokens.close')"
+            @click="sideOpen = false"
+          >
+            ✕
+          </button>
+        </div>
+        <TocPanel v-if="tocVisible" :items="toc" @navigate="navigateHeading" />
+        <div v-if="aiVisible" class="ai-section">
           <div class="segmented ai-tabs">
             <button
               :class="{ on: aiTab === 'assistant' }"
@@ -804,12 +947,12 @@ onBeforeUnmount(() => {
           />
         </div>
         <HistoryPanel
-          v-if="showHistory && store.note"
+          v-if="historyVisible && store.note"
           :path="store.note.path"
           @restored="load(store.note!.path)"
         />
         <LinksPanel
-          v-if="store.note"
+          v-if="linksVisible && store.note"
           :path="store.note.path"
           @navigate="(p) => router.push({ name: 'note', params: { path: p } })"
           @create="openWiki"
