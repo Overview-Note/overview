@@ -7,6 +7,15 @@ EXE := $(shell go env GOEXE)
 VERSION ?= 0.15.0
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
+# Windows desktop builds must use the GUI PE subsystem or launching the .exe
+# opens a console window. The flag is Windows-only; other platforms reject it.
+GOOS ?= $(shell go env GOOS)
+ifeq ($(GOOS),windows)
+DESKTOP_LDFLAGS := $(LDFLAGS) -H=windowsgui
+else
+DESKTOP_LDFLAGS := $(LDFLAGS)
+endif
+
 .PHONY: help dev demo build build-web build-go build-desktop package-desktop test test-go test-web lint fmt vet clean docker site site-export
 
 help: ## Show available targets
@@ -33,7 +42,7 @@ build-go: ## Compile the Go binary (expects frontend built)
 # ADR-059. The installers (NSIS/DMG/AppImage) are produced by wails3 from the
 # same build/config.yml once those assets exist.
 build-desktop: build-web ## Build the desktop shell for the host platform (frontend + shell)
-	go build -trimpath -tags desktop -ldflags="$(LDFLAGS)" -o $(DESKTOP_BINARY)$(EXE) ./cmd/overview-desktop
+	go build -trimpath -tags desktop -ldflags="$(DESKTOP_LDFLAGS)" -o $(DESKTOP_BINARY)$(EXE) ./cmd/overview-desktop
 
 package-desktop: build-desktop ## Archive the desktop binary for the host platform
 	cd bin && tar -czf overview-desktop-$(VERSION)-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz overview-desktop$(EXE)

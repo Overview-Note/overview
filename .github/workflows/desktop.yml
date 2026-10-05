@@ -7,7 +7,8 @@ name: Desktop
 # generated Taskfile/build-assets tree is committed.
 #
 # Platform matrix:
-#   windows-latest  amd64, CGO disabled  (WebView2 needs no CGO)
+#   windows-latest  amd64, CGO disabled  (WebView2 needs no CGO; built with the
+#                   GUI PE subsystem so launching it shows no console window)
 #   macos-14        arm64, CGO enabled   (Xcode command line tools)
 #   macos-14        amd64, CGO enabled, cross-compiled from the arm64 runner.
 #                   The macos-13 (Intel) runner is no longer reliably available;
@@ -44,6 +45,8 @@ jobs:
             cgo: "0"
             tags: desktop
             ext: .exe
+            # GUI subsystem: without this the .exe opens a console window.
+            gui: "-H windowsgui"
           - name: macos-arm64
             os: macos-14
             goos: darwin
@@ -51,6 +54,7 @@ jobs:
             cgo: "1"
             tags: desktop
             ext: ""
+            gui: ""
           - name: macos-amd64
             os: macos-14
             goos: darwin
@@ -58,6 +62,7 @@ jobs:
             cgo: "1"
             tags: desktop
             ext: ""
+            gui: ""
           - name: linux-amd64-gtk4
             os: ubuntu-24.04
             goos: linux
@@ -65,6 +70,7 @@ jobs:
             cgo: "1"
             tags: desktop
             ext: ""
+            gui: ""
           - name: linux-amd64-gtk3
             os: ubuntu-22.04
             goos: linux
@@ -72,6 +78,7 @@ jobs:
             cgo: "1"
             tags: "desktop gtk3"
             ext: ""
+            gui: ""
     env:
       RAW_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
     steps:
@@ -126,9 +133,10 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: ${{ matrix.cgo }}
+          GUI_LDFLAGS: ${{ matrix.gui }}
         run: |
           go build -trimpath -tags "${{ matrix.tags }}" \
-            -ldflags="-s -w -X main.version=${VERSION}" \
+            -ldflags="-s -w ${GUI_LDFLAGS} -X main.version=${VERSION}" \
             -o "bin/overview-desktop${{ matrix.ext }}" ./cmd/overview-desktop
 
       - name: Archive (Windows)

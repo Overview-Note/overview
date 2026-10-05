@@ -27,6 +27,25 @@ type Logger struct {
 	closer io.Closer
 }
 
+// fanout attempts every writer even when one fails, so file logging survives an
+// unavailable stdout (a Windows GUI-subsystem binary has no console).
+type fanout []io.Writer
+
+func (f fanout) Write(p []byte) (int, error) {
+	var n int
+	var firstErr error
+	for _, w := range f {
+		written, err := w.Write(p)
+		if written > n {
+			n = written
+		}
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return n, firstErr
+}
+
 // New builds a Logger from options.
 func New(opts Options) (*Logger, error) {
 	level := ParseLevel(opts.Level)
@@ -44,7 +63,7 @@ func New(opts Options) (*Logger, error) {
 			return nil, err
 		}
 		closer = r
-		w = io.MultiWriter(os.Stdout, r)
+		w = fanout{os.Stdout, r}
 	}
 
 	slogOpts := &slog.HandlerOptions{Level: level}

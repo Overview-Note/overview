@@ -79,3 +79,23 @@ func TestTextFormat(t *testing.T) {
 		t.Fatalf("expected text handler output, got: %s", data)
 	}
 }
+
+type errorWriter struct{}
+
+func (errorWriter) Write(p []byte) (int, error) {
+	return 0, os.ErrClosed
+}
+
+func TestFanoutWritesPastFailedWriter(t *testing.T) {
+	var buf bytes.Buffer
+	n, err := fanout{errorWriter{}, &buf}.Write([]byte("hello"))
+	if err == nil {
+		t.Fatal("fanout should report the failed writer")
+	}
+	if buf.String() != "hello" {
+		t.Fatalf("healthy writer got %q, want hello", buf.String())
+	}
+	if n != len("hello") {
+		t.Fatalf("n = %d, want %d", n, len("hello"))
+	}
+}
