@@ -29,6 +29,37 @@ the headless server are the same program with a different front end.
   downloads or installs silently
 - **First-run folder picker** — choose which vault to open the first time
 
+## Vault sync (desktop ↔ server)
+
+The desktop app can keep its local vault in step with a self-hosted Overview server, using
+the same client ↔ server model as Trilium. Open **Settings → Sync** (desktop only) and enter
+the server URL and an API token; the status card, conflict list and *Sync now* button live
+there too.
+
+- **Identity by note `id`** — frontmatter `id` (ULID) is the stable cross-device identity;
+  paths are just locations, so moves and renames don't create duplicates. Notes without an
+  `id` get one on the first sync.
+- **Manifest + strong ETag** — the server exposes `GET /api/v1/sync/manifest`
+  (`vaultId`, every note with its content version, and every folder including empty ones)
+  behind a strong `ETag`, and answers `304` when nothing changed.
+- **Three-way reconciliation** — the engine compares the remote manifest with the local vault
+  and its last-synced state, then pulls, pushes, deletes and moves notes and attachments.
+  Writes go through a **faithful raw channel** (`PUT /api/v1/note` with `raw: true`) that
+  stores the exact Markdown bytes and carries a `baseVersion`, so a concurrent edit is never
+  silently overwritten.
+- **Direction** — `both` (default), `pull` (server → desktop) or `push` (desktop → server).
+- **Conflicts are kept, not merged** — if both sides edit the same note, the local copy is
+  saved as a sibling `<name> (conflict-<device>-<ts>).md` and the remote original stays put.
+  Resolve each conflict from the settings page with *keep local* or *keep remote*.
+- **Attachments** — synced by vault-relative path; pushes are de-duplicated by content hash
+  and pulls only fill in missing files.
+- **Polling, not streaming** — Phase 1 checks on an interval (default 60s) and is also woken
+  by the local file watcher; there is no SSE/push yet.
+
+The token is stored separately in `<DataDir>/.sync-token` (never in the exportable
+`sync.json` or logs), and plain HTTP is only accepted for loopback hosts — a remote server
+must use HTTPS.
+
 ## Local-first defaults
 
 On the desktop the app is a single-user, local-only tool:
@@ -76,6 +107,12 @@ Or build the shell directly:
 | Linux | `go build -tags desktop ./cmd/overview-desktop` | CGO + GTK4 + WebKitGTK 6.0 |
 | Linux (older) | `go build -tags "desktop gtk3" ./cmd/overview-desktop` | CGO + GTK3 + WebKit2GTK 4.1 |
 
+Windows builds are produced with the **GUI PE subsystem** (`-ldflags "-H=windowsgui"`), so
+launching the `.exe` does not open a console window. Because a GUI process has no stdout,
+the desktop shell logs to a file by default: `<DataDir>/logs/desktop.log` (set
+`OVERVIEW_LOG_FILE` to override). The logger writes through a fault-tolerant fanout, so one
+unavailable destination (such as stdout under the GUI subsystem) never stops the file log.
+
 The shell source is guarded by the build tag `windows || darwin || desktop`, so a plain
 `CGO_ENABLED=0 go build ./...` on a machine without GTK headers still works for the backend.
 
@@ -93,6 +130,9 @@ Tagged releases build the Windows/macOS/Linux shells in CI
 - Updates are only *notified* — there is no silent auto-update.
 - If the preferred port is taken, the app falls back to a random loopback port (written to
   `.overview-port`); the port is not guaranteed to be stable.
+- Sync Phase 1 polls the full manifest (default 60s, plus file-watcher triggers) rather than
+  streaming; a server is a single shared vault with no per-user ACL; and S3 asset backends
+  are skipped (`PUT /assets/{path}` returns `501`).
 
 See [[Architecture]] for how the shell fits into the codebase, and
 [`docs/DESIGN.md`](https://github.com/Overview-Note/overview/blob/main/docs/DESIGN.md)

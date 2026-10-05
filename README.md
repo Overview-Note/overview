@@ -132,6 +132,31 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Platform builds** — Windows (WebView2, no CGO) and macOS (CGO) build directly; Linux
   needs `-tags desktop` plus GTK/WebKitGTK. Tagged releases publish desktop binaries; signed
   Windows NSIS / macOS DMG installers are the next step
+- **No console window** — Windows desktop builds use the GUI PE subsystem (`-H=windowsgui`),
+  and desktop logs default to `<DataDir>/logs/desktop.log` (a GUI process has no stdout)
+
+### 🔁 Desktop ↔ server sync (Phase 1)
+
+Keep a desktop vault and a self-hosted Overview server in step, the way Trilium does
+client ↔ server synchronisation:
+
+- **Configure in the app** — open **Settings → Sync** (desktop only) and enter the server
+  URL plus an API token (create one under **Settings → API tokens** on the server). The
+  token is stored separately in `<DataDir>/.sync-token` (never in the exportable state file
+  or logs), and plain HTTP is only accepted for loopback hosts — remote servers must be HTTPS
+- **Three-way reconciliation by note `id`** — the server exposes `GET /api/v1/sync/manifest`
+  with a strong `ETag`; the client compares that inventory against its local vault and its
+  last-synced state, then pulls, pushes, deletes and moves notes and attachments. Notes
+  without a frontmatter `id` are assigned one on the first sync
+- **Direction** — `both` (default), `pull` (server → desktop) or `push` (desktop → server)
+- **Conflicts are never overwritten** — when both sides edit the same note, the local copy is
+  written to a sibling `<name> (conflict-<device>-<ts>).md` and the remote original is kept;
+  resolve each one in **Settings → Sync** with *keep local* or *keep remote*
+- **Faithful writes** — sync writes the exact Markdown bytes (frontmatter preserved) with a
+  `baseVersion`, so it never silently clobbers a concurrent edit
+- **Limits** — Phase 1 polls the full manifest (default 60s, plus file-watcher triggers; not
+  SSE), a server is a single shared vault (no per-user ACL), and S3 asset backends are skipped
+  (path-based asset writes return `501`)
 
 ---
 
@@ -225,7 +250,7 @@ Overview is configured entirely through environment variables.
 | `OVERVIEW_HISTORY_KEEP` | `50` | Revisions kept per note (`0` disables pruning) |
 | `OVERVIEW_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `OVERVIEW_LOG_FORMAT` | `json` | `json` or `text` |
-| `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset); rotates on size |
+| `OVERVIEW_LOG_FILE` | — | Log file path (stdout only when unset); rotates on size. Desktop defaults to `<DataDir>/logs/desktop.log` |
 | `OVERVIEW_LOG_MAX_MB` | `10` | Max log file size before rotation |
 | `OVERVIEW_LOG_BACKUPS` | `3` | Rotated files to keep (`0` truncates) |
 | `OVERVIEW_AUTH` | `multi` | `multi` (users + login) or `none` |
@@ -262,6 +287,11 @@ Overview is configured entirely through environment variables.
 > the initial value; once a configuration is saved it takes precedence across restarts.
 > Switching backends is immediate: new uploads and reads use the active backend, but
 > existing assets are **not** migrated between local storage and the bucket.
+>
+> Desktop vault sync is configured in the app under **Settings → Sync** (server URL + API
+> token, direction, interval) and adds **no** environment variables. The token is kept in
+> `<DataDir>/.sync-token`; the (secret-free) state and conflict list live in
+> `<DataDir>/sync.json`.
 
 `overview export` (static site) additionally reads `OVERVIEW_EXPORT_DIR` (default `_site`)
 and `OVERVIEW_EXPORT_BASE` (URL prefix, default `/`).
@@ -355,7 +385,10 @@ data/
 ├── assets/       # uploaded attachments (or S3 when configured)
 ├── .history/     # note revision snapshots
 ├── .trash/       # soft-deleted notes
-└── overview.db   # SQLite index (safe to delete; rebuilt on startup)
+├── overview.db   # SQLite index (safe to delete; rebuilt on startup)
+├── sync.json     # desktop sync state (no secrets)
+├── .sync-token   # desktop sync API token (owner-only permissions)
+└── logs/         # desktop shell logs (desktop.log by default)
 ```
 
 The path above is relative to the server's working directory for self-hosted/Docker use.
@@ -449,11 +482,19 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] Native desktop app (Wails v3): shared lifecycle, tray/single-instance, `.md` and
   `overview://` integration, drag-and-drop, launch at login, local-only security guard,
   update notification, per-user data dir, and a cross-platform CI build matrix
+- [x] Desktop ↔ server sync (Phase 1): manifest + strong ETag, three-way reconciliation by
+  note id, faithful `raw` writes with `baseVersion`, conflict copies with keep-local/remote
+  resolution, `both`/`pull`/`push` direction, path-based asset sync, and a desktop-only
+  **Settings → Sync** section
+- [x] Console-less Windows desktop build (`-H=windowsgui`) and desktop logging to
+  `<DataDir>/logs/desktop.log` via a fault-tolerant fanout writer
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 
 - [ ] Signed desktop installers (Windows NSIS, macOS DMG) and Linux AppImage/`.desktop`
 - [ ] Desktop verification on real macOS/Linux hardware (CI only compiles/archives today)
+- [ ] Sync Phase 2: incremental `changed_seq`/tombstone deltas and SSE instead of full-manifest
+  polling; S3 asset backends; real two-machine sync verification
 
 - [ ] Tags: management UI, tag tree, tag filtering, `#` autocomplete
 - [ ] Pin / favorites, saved filter views, timeline view

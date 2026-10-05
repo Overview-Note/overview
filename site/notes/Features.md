@@ -75,6 +75,22 @@ public: true
   **identically to the app's reading view** (shared `content.css` + aligned DOM) with
   highlight.js/KaTeX/Mermaid vendored at the same versions and loaded on demand
 
+## Desktop sync
+
+- **Desktop ↔ server vault sync** — keep a desktop vault and a self-hosted server in step
+  (Trilium-style client ↔ server). Identity is the frontmatter note `id`; a strong-ETag
+  `GET /api/v1/sync/manifest` drives three-way reconciliation, then notes and attachments are
+  pulled, pushed, deleted and moved
+- **Faithful writes** — sync stores the exact Markdown bytes (`raw`) with a `baseVersion`, so
+  a concurrent edit is reported, never silently overwritten
+- **No destructive merge** — both-edited notes produce a `<name> (conflict-<device>-<ts>).md`
+  copy that you resolve with *keep local* / *keep remote* in **Settings → Sync**
+- **Direction & cadence** — `both`/`pull`/`push`, on an interval (default 60s) with
+  file-watcher triggers; the token is kept in `.sync-token` (owner-only) and remote servers
+  must be HTTPS
+- **Console-less desktop build** — Windows uses the GUI PE subsystem (`-H=windowsgui`) and
+  logs to `<DataDir>/logs/desktop.log`
+
 ## Appearance & settings
 
 - **Gridea-style palette** — warm amber accent (`#D4870E`) with light and dark variants,

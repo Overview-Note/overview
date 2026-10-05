@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.14.0（桌面应用：Wails v3 原生壳 + 本地安全边界）
+> 版本：v0.15.0（桌面↔服务器同步 + 桌面隐藏控制台）
 > 更新日期：2026-10-05
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -31,6 +31,7 @@
 | v0.13.2 | 手机端适配 · 对象存储设置 · 修复 | 响应式手机端（P0+P1）：抽屉式侧栏（汉堡 + 遮罩，次要入口收进抽屉）、顶栏手机化、编辑器全宽、工具栏/note-bar 横向滚动、右侧面板改底部抽屉（大纲/反链/历史/AI）、移动端搜索浮层、触屏基础（tap-highlight、`touch-action`、`:active`、hover 门槛、16px 输入、≥40px 目标、`100dvh`/safe-area）、明暗 `theme-color`、PWA `orientation` + 192/512 PNG 图标；S3 对象存储可在设置页配置并运行时切换（新增 `internal/service/storage.go` 的 `SwitchableAssetStore`/`StorageService` 与 `internal/server/storage.go` 的 `GET/PUT /settings/storage`、`POST /settings/storage/test`，前端 `StorageSection.vue`；env 为初始值、secret 不回传、历史附件不迁移、保存失败不切换）；用户管理窄屏三行布局；AI「整理/补全」打开笔记后按钮失效与空笔记无提示修复 |
 | v0.13.3 | 静态文档站与应用阅读态一致 | 新增共享内容样式 `internal/sitegen/content.css`（设计令牌含 `--hl-*` + `.tiptap-content` 全部阅读态规则），App `web/src/styles.css` 以 `@import` 复用、静态站 `<link>` 同一文件（单一真源）；Go 侧 `internal/sitegen/render.go` 用 goldmark + `x/net/html` 后处理把静态站 DOM 对齐编辑器契约（`pre.code-block > code.language-*`、`ul[data-type=taskList]`/`li[data-type=taskItem][data-checked]`、`.fn-ref`/`.fn-defs`、`.math-inline`/`.math-block[data-tex]`、`.mermaid[data-source]`、表格 `th>p`/`td>p`、`a.wiki-link`（未命中 `wiki-missing`）、`img loading/decoding`、标题 slug 与 `doc.ts` 一致、搜索索引纳入代码/数学/图表源文本、`assets/` 递归拷贝）；运行期用 `internal/sitegen/vendor.go` + `readonly-enhance.js` **按需加载与应用同版本**的 highlight.js/KaTeX/Mermaid；公开页渲染对齐编辑器契约（`web/src/markdown/doc.ts`、`PublicNoteView.vue` 用 `public-doc tiptap-content`、删除 `.public-doc` 字号覆盖）；默认主题 accent 派生色直通（`accentRamp` 对默认色返回与 `content.css` 一致的值） |
 | v0.14.0 | 桌面应用 | 新增 Wails v3（`v3.0.0-beta.26`）原生桌面壳 `cmd/overview-desktop`：窗口指向本地服务、系统托盘、单实例、优雅退出、首启目录选择器、`.md` 文件关联、`overview://` 深链、文件拖拽、开机自启、更新提醒；抽取 `internal/app` 统一生命周期（进程内实例锁 `.overview.lock` + 端口文件 `.overview-port` + 监听失败回退随机 loopback 端口 + 优雅退出），headless 与桌面共用；`internal/config` 增加 `Desktop`/`DefaultDataDir()`/`EnableMCP`/`EnableDAV`（桌面默认 `127.0.0.1:5230`、`auth=none`、MCP/WebDAV 关闭，均可被环境变量覆盖）；`internal/server/local.go` 本地安全边界（Host 必须为回环名以抵御 DNS rebinding + 写请求同源校验替代 SameSite CSRF），`internal/server/desktop.go` 暴露 `/api/v1/desktop/settings|update`（headless 下一律 404，与不存在路径不可区分）；`internal/update` 只检测 GitHub Releases 版本、不下载不静默安装；前端新增 `web/src/views/settings/DesktopSection.vue`（仅桌面壳显示）；打包配置 `build/config.yml`（应用元数据/文件关联/URL scheme）；新增 `.github/workflows/desktop.yml` 跨平台构建矩阵（Windows/macOS arm64+amd64/Linux GTK4+GTK3）并在 `v*` tag 发布 Release 产物；`make build-desktop` / `package-desktop` 本机构建与归档 |
+| v0.15.0 | 桌面↔服务器同步 · 桌面打磨 | **Phase 1 增量同步（类 Trilium）**。服务端：迁移 `0010_sync`（`notes.changed_seq` + `note_tombstones` + `settings` 的 `vault_id`/`change_seq`）、`GET /api/v1/sync/manifest`（`vaultId` + 笔记版本 + 文件夹，**强 ETag + 304**）、`PUT /api/v1/note` 支持 `raw:true`（**字节保真写入**、保留 frontmatter id/created、`baseVersion` 乐观并发且禁止无条件写）、`PUT /api/v1/assets/{path}`（按路径写附件、防穿越、S3→501）、`GET /api/v1/note?raw=1`；`service` 新增 `Manifest`/`VaultID`/`SaveNoteRaw`/`RawNote`/`RestoreAsset`，删除/移动记录墓碑。客户端：新包 `internal/sync`（`RemoteClient` 仅 https 或 loopback http、令牌独立文件；`State` 持久化 `<DataDir>/sync.json` + `.sync-token`；`Engine` 三方比对、pull/push/delete/move、冲突副本 `<name> (conflict-<device>-<ts>).md`、首同步补 id、指数退避、方向 `both\|pull\|push`、附件按路径、watcher 近实时）。桌面：`internal/app` 以 `SyncFactory` 装配引擎生命周期；`internal/server/sync.go` 暴露 `/desktop/sync`、`/run`、`/conflicts`、`/conflicts/resolve`（仅桌面 LocalOnly，headless 404）；`cmd/overview-desktop` 注入。前端：`web/src/views/settings/SyncSection.vue`（服务器地址/令牌/开关/方向/间隔/立即同步/状态卡/冲突区，仅桌面显示）。**桌面隐藏控制台**：Windows 桌面构建加 `-H=windowsgui`（GUI PE 子系统）、桌面日志默认 `<DataDir>/logs/desktop.log`、`internal/logging` 改为容错 fanout（GUI 下无 stdout 也能写文件）；修复同步 `plan()` 的 `canPull`/`canPush` 守卫与显式「立即同步」绕过节流 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -115,6 +116,28 @@ Browser → POST /api/v1/ai/agent → server/agent.go → internal/agent.Run
   默认即可构建；Linux 需要 `-tags desktop`（GTK/WebKitGTK 依赖 CGO），因此
   `CGO_ENABLED=0 go build ./...` 在纯后端环境仍可用。
 
+**桌面↔服务器同步（v0.15.0，Phase 1）** 把桌面本地 vault 与一个自建服务器上的 vault
+做双向收敛。服务端是中心，桌面端是持有完整副本的客户端；两者用同名 Markdown 文件
+（frontmatter `id` 为身份）与内容版本做三方比对：
+
+```
+┌──────────────────────────┐        HTTPS(或回环 http)        ┌──────────────────────────┐
+│ overview-desktop vault   │  GET /sync/manifest (强 ETag)   │ 自建 Overview 服务端      │
+│  notes/ + assets/        │ ───────────────────────────────▶│  notes/ + overview.db    │
+│  internal/sync.Engine    │  PUT /note (raw, baseVersion)    │  changed_seq / tombstones │
+│  sync.json + .sync-token │  PUT /assets/{path}              │  /desktop/sync* (仅桌面)  │
+│  (本地 watcher 触发)      │ ◀─────────────────────────────── │  server.SyncHooks         │
+└──────────────────────────┘   三方比对 → pull/push/delete    └──────────────────────────┘
+```
+
+- **身份**：frontmatter `id`（ULID）跨设备稳定；路径仅作位置，移动/重命名不改变身份。
+- **变更检测**：Phase 1 拉取完整 manifest 并比对内容版本；服务端 `notes.changed_seq`
+  单调递增，为 Phase 2 的增量/墓碑同步预留（见 ADR-068）。
+- **写入**：pull/push 都走 `raw:true` 保真通道，PATCH 级别的 `baseVersion` 保证不会
+  静默覆盖（见 ADR-069）；冲突产生同级「冲突副本」交由用户裁决（见 ADR-070）。
+- **控制面**：引擎通过 `server.SyncHooks` 暴露给 HTTP；`/desktop/sync*` 仅在桌面
+  （`LocalOnly`）且挂载了引擎时注册，headless 服务器一律 404。
+
 ### 2.2 设计原则
 
 1. **文件即真相**：内容以 Markdown 文件为准，数据库仅是可重建的索引。
@@ -195,6 +218,16 @@ Browser → POST /api/v1/ai/agent → server/agent.go → internal/agent.Run
 | ADR-064 | 桌面默认关闭 MCP 与 WebDAV、`auth=none`、监听 loopback，可用 `OVERVIEW_ENABLE_MCP`/`OVERVIEW_ENABLE_DAV`/`OVERVIEW_AUTH`/`OVERVIEW_ADDR` 覆盖 | 桌面是单用户本地应用，默认暴露 MCP/WebDAV 会扩大攻击面；同时保留高级用户显式开启的能力 | `config.Load` 在 `OVERVIEW_DESKTOP=true` 时切换默认值；自部署默认值不变 |
 | ADR-065 | 单实例与 SQLite 多进程：进程内实例锁（`.overview.lock`）保证每个数据目录只有一个服务进程；Wails 单实例（UniqueID `com.overview.app`）保证只有一个窗口 | SQLite 与本地文件不适合多进程并发写；重复启动应聚焦已有窗口而非再起一个服务 | `internal/app.AcquireInstanceLock` 用 OS 文件锁（Windows `LockFileEx` / Unix `flock`）；第二次启动经 Wails 转发 argv（文件/深链）给首实例并聚焦窗口 |
 | ADR-066 | 更新只为「提醒」：`internal/update` 查 GitHub Releases 比较语义版本，发现新版本时发系统通知/托盘提示，并暴露 `/api/v1/desktop/update`；**不下载、不静默安装** | 静默自更新涉及签名、权限与失败回滚，风险高；桌面平台各自有安装器机制 | 启动后 5s 与每 24h 检查一次；只在版本变化时通知一次；用户点通知打开 Release 页面自行下载 |
+| ADR-067 | 同步拓扑为「整个 vault 的镜像」：桌面客户端 ↔ 自建服务端，服务端为中心，客户端持一个 API 令牌 | Phase 1 目标是让桌面端拥有一份可离线编辑、随后收敛的完整副本；单机客户端↔自建服务端模型最贴合本地优先定位，避免引入每篇笔记的共享/权限模型 | 令牌等价于对该 vault 的完整读写；**多用户部署下所有用户共享同一 vault、桌面端同步全部笔记（无按用户 ACL）**；不支持多服务器/多主拓扑 |
+| ADR-068 | 变更检测分两期：Phase 1 用完整 manifest（强 ETag + 304），`notes.changed_seq` 作为二期增量与删除追踪的地基 | 完整清单实现简单、正确性易验证；大库每次全量传输开销大，需要演进空间 | `notes.changed_seq` 单调递增（`settings.change_seq` 持久化计数器，全量重建时 id/path/version 未变的笔记沿用旧序号，子树替换/移动强制新序号）；`VaultManifest.ETag = sha256(vaultId:maxSeq:count)` 强校验；`note_tombstones` 记录删除供二期使用 |
+| ADR-069 | 同步写入走保真 raw 通道：`PUT /note {raw:true, content}` 原样落盘，且强制 `baseVersion` | 普通保存会重新序列化 frontmatter，可能改写 id/created/字段顺序，破坏「同一文件字节哈希一致」的同步基础 | 写入字节 = 客户端字节，`version = sha256(bytes)`；保留客户端 id 与 created；`baseVersion` 必填（`*` 新建 / 指定版本更新，缺失即 400），绝不无条件覆盖；不支持 raw 的存储返回 501 |
+| ADR-070 | 冲突不覆盖：本地版本另存为同级冲突副本，远端原件保留，交由用户裁决 | 自动合并 Markdown 易丢内容，静默覆盖更不可接受 | 冲突文件名 `<name> (conflict-<device8>-<ts>).md`、带新 ULID，作为独立笔记推送；`GET /desktop/sync/conflicts` 列出，`resolve` 可 `keep local`（本地版覆盖远端原件并删副本）或 `keep remote`（删本地副本） |
+| ADR-071 | 以 frontmatter `id` 作为跨设备身份；首同步为缺 id 的笔记补 ULID | 路径随移动/重命名变化，内容哈希随编辑变化，都不能作稳定身份 | 同步扫描时就地回写缺失的 id；同 id 多文件仅保留其一并告警；冲突副本重新生成 id、实体笔记保留原 id |
+| ADR-072 | 删除与移动记录墓碑（`note_tombstones`），三方比对区分「删除 vs 编辑」 | 仅凭「一方缺失」无法判断是删除还是尚未同步的新建；需要记录曾存在 | Delete/Move 对消失的笔记写墓碑（`id`/`path`/`deleted_at`/`device`）；本地未改而远端缺失 → 同步删除；远端缺失但本地已改 → 视为本地编辑并重建；本地删除而远端已改 → 拉回远端；本地删除且远端未改 → 推送删除 |
+| ADR-073 | 同步方向 `both`/`pull`/`push`，在 `plan()` 中以 `canPull`/`canPush` 守卫 | 用户可能只想单向镜像（桌面只读服务端，或只把本地备份到服务端）；无守卫会在禁止方向误写 | 守卫覆盖文件夹创建、pull/push、移动与删除：禁止方向的一侧永不被写；显式「立即同步」与轮询共享同一计划；单向下的冲突由后写侧直接胜出（pull-only 远端优先、push-only 本地优先），不生成冲突副本 |
+| ADR-074 | 令牌不落盘明文于状态文件/日志，且非回环必须 HTTPS | `sync.json` 可能被备份/导出；明文令牌一旦泄漏等于整库读写 | API 令牌单独存 `<DataDir>/.sync-token`（0600，原子写），`sync.json` 只存 serverURL/vaultId/deviceId 等；日志与错误不含令牌；`RemoteClient` 仅接受 `https://` 或回环（`localhost`/`127.0.0.1`/`::1`）`http://`，其余普通 HTTP 直接拒绝 |
+| ADR-075 | 附件按 vault 相对路径同步（`PUT /assets/{path}` / `GET /assets/{path}`） | 普通上传会生成带 ULID 的新名，无法与 Markdown 中的相对引用对应 | 服务端写路径前校验（拒绝空、绝对路径、`..`、反斜杠/NUL/冒号）并受上传体积限制；后端不支持显式路径恢复时（S3）返回 501，客户端跳过并告警；push 按内容哈希去重，pull 仅补本地缺失 |
+| ADR-076 | Windows 桌面壳以 GUI PE 子系统（`-H=windowsgui`）构建；桌面日志落 `<DataDir>/logs/desktop.log`；日志写出改为容错 fanout | GUI 子系统下进程没有控制台，stdout 不可写；旧 `io.MultiWriter` 遇到不可用 writer 会中断整条写出 | Makefile `DESKTOP_LDFLAGS` 与 CI 矩阵按平台附加 `-H windowsgui`；`OVERVIEW_LOG_FILE` 未设时桌面默认写 `logs/desktop.log`；`internal/logging` 的 `fanout` 逐个 writer 写出、某个失败不影响其它，保证无控制台时仍能落盘诊断 |
 
 ---
 
@@ -232,7 +265,7 @@ updated: "2026-10-01T16:54:09Z"
 
 - 迁移文件位于 `internal/index/migrations/*.sql`，通过 `go:embed` 内嵌
 - 迁移记录表 `schema_migrations(version, applied_at)`，启动时按序应用未执行项
-- 迁移清单（0001–0009）：
+- 迁移清单（0001–0010）：
 
 | 版本 | 内容 |
 | --- | --- |
@@ -245,6 +278,7 @@ updated: "2026-10-01T16:54:09Z"
 | `0007_api_tokens` | `api_tokens`（仅存 sha256 哈希 + 短前缀，明文一次性） |
 | `0008_email_users` | `users` 增加 `email/status/email_verified`；新增 `user_tokens`（一次性、带用途、可过期） |
 | `0009_ai_tool_audit` | `ai_tool_audit`（智能体工具调用审计：run/user/role/step/tool/args/result_summary/status/destructive + note_version/trash_id/revision_id） |
+| `0010_sync` | `notes.changed_seq`（单调变更序号）+ `note_tombstones`（删除墓碑，含 `deleted_at` 索引） |
 
 - `users`（迁移 0004 + 0008）：`id`、`username`（唯一）、`password_hash`、`role`（`admin`/`member`）、`created`、`updated`、`email`（唯一，非空时）、`status`（`active`/`invited`）、`email_verified`。受邀账号 `password_hash` 为空串（bcrypt 永不匹配），必须先接受邀请设置密码。
 - `user_tokens`（迁移 0008）：`id`、`user_id`、`purpose`（`invite`/`reset`/`verify`）、`token_hash`（sha256，唯一）、`created`、`expires`、`used`。令牌单次消费：读取-校验-写入在同一事务内完成（连接池限单连接以串行化）。
@@ -252,6 +286,10 @@ updated: "2026-10-01T16:54:09Z"
 - `api_tokens`（迁移 0007）：`id`、`name`、`prefix`、`token_hash`、`created`、`last_used`、`expires`。
 - `sessions`（迁移 0004）：`token`、`user_id`、`created`、`expires`。
 - `ai_tool_audit`（迁移 0009）：`id`、`run_id`、`user_id`、`username`、`role`、`step`、`tool`、`args`（脱敏后 JSON）、`result_summary`、`status`（`ok`/`error`/`denied`/`rejected`）、`destructive`、`note_version`、`trash_id`、`revision_id`、`created_at`；按 `run_id` 与 `(user_id, created_at)` 建索引。写入前由 `sanitizeAuditArgs` 脱敏：`key/token/password/secret/authorization` → `[redacted]`，`body/content` → `sha256:<hash> (len N)`，截断至 2 KB。
+- `notes.changed_seq`（迁移 0010）：索引内的单调变更序号。每次写入/新建分配递增序号；全量重建（`Sync`）时 id/path/version 未变的笔记沿用旧序号，子树替换（`ReplacePrefix`，含移动）强制分配新序号；计数器持久化在 `settings('change_seq')`，保证笔记删除后序号也不复用，manifest 的强 ETag 由 `vaultId + maxSeq + 笔记数` 派生（ADR-068）。
+- `note_tombstones`（迁移 0010）：`id`(PK)、`path`、`deleted_at`、`device`；按 `deleted_at` 建索引。`service.Delete`/`Move` 对消失的笔记调用 `Index.RecordTombstone` 记录墓碑（`service.recordTombstones`），供同步客户端协调删除；Phase 1 已记录，Phase 2 的增量同步使用（ADR-072）。
+- `settings` 另存同步库标识 `vault_id`（首次 `Index.VaultID` 生成并持久化的 ULID），随 `GET /sync/manifest` 返回，用于客户端校验连接的是同一个库（ADR-067）。
+- 领域模型新增 `NoteMeta.Version`（索引里的内容哈希）、`ManifestNote`、`VaultManifest`（`vaultId`/`generatedAt`/`etag`/`notes`/`folders`）、`Tombstone`（见 `internal/core/model.go`）。
 
 > 从旧版（v0.1，无迁移表且 `notes` 缺列）升级：索引可直接删除重建，内容文件不受影响。
 
@@ -277,6 +315,7 @@ updated: "2026-10-01T16:54:09Z"
 | `internal/mcp` | MCP JSON-RPC 适配器（薄） | `Server.ServeHTTP`（工具面委托 `internal/tools`） |
 | `internal/app` | 应用装配与生命周期（headless 与桌面壳共用） | `App` `New`/`NewWithOptions`/`Start`/`Stop`、`AcquireInstanceLock`、端口文件、`ResolveOrImport` |
 | `internal/update` | GitHub Releases 版本检测（只报告，不下载/安装） | `CheckLatest` `Compare` |
+| `internal/sync` | 桌面↔服务器同步引擎（Phase 1） | `RemoteClient`（https/回环校验、Bearer、令牌不落日志）、`State`（`sync.json` + `.sync-token`）、`Engine`（三方比对、pull/push/delete/move、冲突副本、方向、附件、指数退避、watcher）、`Direction`、`SyncHooks` 实现 |
 
 ### 5.2 关键读写路径
 
@@ -323,6 +362,20 @@ POST /api/v1/ai/agent {runId?, input, context{path,selection}}
   → /ai/agent/stop 丢弃会话
 ```
 
+**同步一次（桌面 → 服务器）**
+```
+Engine.SyncOnce
+  → scanLocal (repo.Walk；缺 id 的笔记就地回写 ULID)
+  → RemoteClient.Manifest(If-None-Match=上次 ETag)  → 304 复用缓存清单
+  → plan(三方比对：base=state / local / remote)
+      文件夹 mkdir → pulls → pushes → deletes（按深度父先子后）
+      冲突 → actConflict；方向守卫 canPull/canPush
+  → execute: pull=GetNoteRaw→WriteRaw；push=repo.Raw→PutNoteRaw(baseVersion)
+      delete=repo.Delete / client.DeleteNote；move=repo.Move / client.Rename
+      附件 push 按 sha256 去重 → PUT /assets/{path}
+  → state.Mutate(notes/folders/assets/lastSyncAt)；冲突副本写盘并登记
+```
+
 ### 5.3 版本与并发（ADR-007）
 
 | 客户端 `baseVersion` / `If-Match` | 语义 |
@@ -344,13 +397,16 @@ Base：`/api/v1`
 | GET | `/health` | 状态 + 版本 |
 | GET | `/tree` | 目录树 |
 | GET | `/note?path=` | 读取笔记（带 ETag） |
-| PUT | `/note` | 保存，body `{path, body, baseVersion}`，或 `If-Match` |
+| GET | `/note?path=&raw=1` | 返回笔记完整 Markdown 字节（含 frontmatter），`Content-Type: text/markdown`，ETag = 内容版本（render 模式仅公开笔记） |
+| PUT | `/note` | 保存，body `{path, body, baseVersion}`，或 `If-Match`；`{raw:true, content, baseVersion}` 走**保真写入**（字节原样落盘、保留 frontmatter id） |
 | DELETE | `/note?path=` | 删除笔记/文件夹 |
 | POST | `/folder` | 新建文件夹 `{path}` |
 | POST | `/rename` | 重命名 `{from, to}` |
 | GET | `/search?q=&limit=&offset=` | 全文检索 |
 | POST | `/assets` | 上传附件（multipart `file`，任意类型） |
+| PUT | `/assets/{path...}` | 按 vault 相对路径写附件（同步用：防穿越、受上传体积限制；后端不支持显式路径恢复时 501 `not_supported`） |
 | GET | `/assets/{path...}` | 访问附件（nosniff，非图片强制下载） |
+| GET | `/sync/manifest` | 同步清单：`vaultId` + 全部笔记（id/path/version/updated/size/public）+ 文件夹；强 `ETag`，`If-None-Match` 命中返回 304 |
 | POST | `/capture/preview` | 抓取网页并返回 `{title, text, url}`（SSRF 防护） |
 | POST | `/reindex` | 重建索引 |
 | GET | `/links?path=` | 出链与反链 |
@@ -405,6 +461,11 @@ Base：`/api/v1`
 | GET | `/desktop/settings` | 桌面壳设置 `{autostart, dataDir, version}`（仅桌面/LocalOnly；headless 返回 404） |
 | PUT | `/desktop/settings` | 更新桌面壳设置（目前仅 `autostart`，省略字段保持不变；仅桌面） |
 | GET | `/desktop/update` | 检查最新发布版本 `{current, latest, hasUpdate, url}`（只检测不下载；仅桌面） |
+| GET | `/desktop/sync` | 同步状态/配置/冲突 `{enabled, serverURL, vaultId, direction, intervalSec, lastSyncAt, status, progress, conflicts, lastError, connected}`（仅桌面且挂载引擎；headless 一律 404） |
+| PUT | `/desktop/sync` | 更新同步配置（**部分更新**：`serverURL`/`token`/`enabled`/`direction`/`intervalSec`；令牌只写不回传，保存前校验连通性） |
+| POST | `/desktop/sync/run` | 触发一次同步（后台执行，绕过节流） |
+| GET | `/desktop/sync/conflicts` | 未解决冲突列表 |
+| POST | `/desktop/sync/conflicts/resolve` | 解决冲突 `{id, keep: local\|remote}` |
 
 **其他端点**
 
@@ -582,6 +643,9 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | `agent` | 有界循环、`max_steps`、危险操作需确认（approve/reject/改参）、按角色拒绝、会话 TTL/淘汰、审计写入、上下文裁剪、能力探测降级 |
 | `mcp` | 初始化/发现、工具调用、认证、**协议版本协商**、`resultType`、工具面平铺（≥20 工具）、与 `internal/tools` 的一致性（parity） |
 | `cli` | 读写/检索、参数位置无关解析、list/move、归档往返、history/restore、`build`/`export` 别名、用法错误 |
+| `sync` | 三方比对、方向守卫（both/pull/push）、冲突副本生成与解决、首同步补 id、状态与令牌分离持久化、URL 校验（https/回环）、退避重试、watcher 触发 |
+| `server`（同步补充） | `/sync/manifest` 强 ETag/304、`raw` 写入的 `baseVersion` 契约、`PUT /assets/{path}` 防穿越与 501、`/desktop/sync*` 仅 LocalOnly（headless 404） |
+| `index`（同步补充） | `changed_seq` 单调与全量重建延续、`vault_id` 生成、墓碑记录/读取 |
 
 前端：`vue-tsc` 类型检查、**Vitest** 单元测试（`npm test`，覆盖 `markdown/html`、`markdown/doc`、`markdown/roundtrip`）、`vite build`。
 
@@ -624,6 +688,11 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | 桌面本地守卫 | `LocalOnly` 下 `localGuard` 要求 Host 为回环名（`127.0.0.1`/`localhost`/`::1`），拒绝 DNS rebinding；写请求（POST/PUT/PATCH/DELETE）要求 Origin/Referer 与 Host 同源，无 Origin 的非浏览器客户端（curl/CLI/MCP）放行；`auth=none` 时以此替代 SameSite Cookie 的 CSRF 保护 |
 | 桌面端点隔离 | `/api/v1/desktop/*` 仅在 `LocalOnly` 注册，headless 由 `desktopGuard` 在鉴权/路由前直接 404，与不存在路径不可区分 |
 | 更新检查 | `internal/update` 只读取 GitHub Releases 的 `tag_name`/`html_url` 并做语义版本比较；不下载、不执行、不静默安装；网络失败只记 debug 日志 |
+| 同步传输 | `internal/sync.RemoteClient` 仅接受 `https://` 或回环（`localhost`/`127.0.0.1`/`::1`）`http://`；服务端 `/sync/manifest`、`/note?raw=1`、`PUT /assets/{path}` 均走正常认证（多用户下需登录/令牌），raw 写入强制 `baseVersion` |
+| 同步令牌 | 令牌单独存 `<DataDir>/.sync-token`（0600、原子写），**不写入 `sync.json`（可导出的状态文件）**、日志与错误信息；`/desktop/sync` 只写不回传明文（ADR-074） |
+| 同步路径穿越 | `PUT /assets/{path}` 在落盘前校验每一段路径：拒绝空段、`.`/`..`、绝对路径、反斜杠、NUL 与冒号，并用 `http.MaxBytesReader` 限制体积（超限 413 `too_large`） |
+| 同步信任边界 | 同步令牌等价于对该 vault 的完整读写；多用户部署共享同一 vault（无按用户 ACL），桌面端会镜像全部笔记（ADR-067） |
+| 桌面无控制台 | GUI 子系统进程无 stdout；日志走 `fanout`（单 writer 失败不影响其它）并默认落 `<DataDir>/logs/desktop.log`，日志内容同样不含令牌与密钥（ADR-076） |
 
 > ✅ render 模式已收紧为**白名单**：`renderGuard` 仅放行 `health`、`auth/state`、
 > `tree`、`note`、`public/*`、`openapi.json`、`/api/docs` 与附件读取；其余 `/api/` 路径
@@ -666,6 +735,11 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 > `wails3` CLI 未接入仓库构建流水线（仓库缺少生成的 Taskfile/build-assets，见 ADR-059）；更新提醒依赖 GitHub Releases
 > 且**只提醒不静默安装**；桌面壳复用本地 HTTP 服务，固定端口被占时会回退随机 loopback 端口（由 `.overview-port` 发现），
 > 不保证端口恒定。
+>
+> v0.15.0 待权衡：同步 Phase 1 用**完整 manifest 轮询**（默认 60s，非 SSE/实时推送），大库每次比对要传输全部笔记元数据；
+> 多用户部署下**整个 vault 共享**（无按用户 ACL，令牌即可读写全部笔记）；**S3 附件后端不支持按路径写入**（`PUT /assets/{path}` 返回 501，push/pull 都会跳过该附件）；
+> 删除与编辑的判定依赖客户端状态（首次同步或状态丢失时，远端缺失可能被当作本地新建重建，反之亦然）；冲突副本会作为独立笔记出现在两侧（需用户裁决后清理）；
+> 桌面无控制台时若日志文件也不可写，启动失败只能靠系统事件或手动设置 `OVERVIEW_LOG_FILE` 诊断。
 
 ---
 
@@ -861,6 +935,27 @@ HTTP 与前端
 - [ ] Windows NSIS / macOS DMG / Linux AppImage 安装器（待接入 wails3 打包资产）
 - [ ] macOS/Linux 实机验证与签名/公证
 
+**Phase 14 — 桌面↔服务器同步 · 桌面打磨（v0.15.0）**
+
+服务端
+- [x] 迁移 `0010_sync`：`notes.changed_seq` + `note_tombstones`；`settings` 存 `vault_id`/`change_seq`
+- [x] `GET /api/v1/sync/manifest`（vaultId + 笔记版本 + 文件夹，强 ETag + 304）
+- [x] `PUT /api/v1/note` 支持 `raw:true`（字节保真 + 保留 id + `baseVersion` 乐观并发）
+- [x] `PUT /api/v1/assets/{path}`（按路径写附件、防穿越、体积限制、S3→501）
+- [x] `GET /api/v1/note?raw=1`；删除/移动记录墓碑
+
+客户端 `internal/sync`
+- [x] `RemoteClient`：仅 https 或回环 http；令牌独立 `.sync-token`，不落 `sync.json`/日志
+- [x] `Engine` 三方比对：pull/push/delete/move、首同步补 id、指数退避、幂等
+- [x] 冲突副本 `<name> (conflict-<device>-<ts>).md` + `keep local|remote` 解决
+- [x] 方向 `both|pull|push`（`plan()` 守卫）；显式「立即同步」绕过节流
+- [x] 附件按路径同步（push 哈希去重 / pull 补缺失，S3 跳过）；watcher 近实时
+
+桌面与前端
+- [x] `internal/app` 以 `SyncFactory` 装配引擎生命周期；`internal/server/sync.go` 暴露 `/desktop/sync*`（仅 LocalOnly）
+- [x] `SyncSection.vue`（服务器地址/令牌/开关/方向/间隔/立即同步/状态卡/冲突区，仅桌面）
+- [x] Windows 桌面构建 `-H=windowsgui`（无控制台）；桌面日志默认 `<DataDir>/logs/desktop.log`；`internal/logging` 容错 fanout
+
 ---
 
 ## 13. 附录
@@ -876,7 +971,7 @@ HTTP 与前端
 | `OVERVIEW_HISTORY_KEEP` | `50` | 每篇笔记保留的历史版本数（`0` 不裁剪） |
 | `OVERVIEW_LOG_LEVEL` | `info` | 日志级别：`debug`/`info`/`warn`/`error` |
 | `OVERVIEW_LOG_FORMAT` | `json` | 日志格式：`json` 或 `text` |
-| `OVERVIEW_LOG_FILE` | 空 | 日志文件路径；设置后同时写入文件（空则仅 stdout） |
+| `OVERVIEW_LOG_FILE` | 空 | 日志文件路径；设置后同时写入文件（空则仅 stdout）；桌面壳未设时默认 `<DataDir>/logs/desktop.log`（GUI 无控制台） |
 | `OVERVIEW_LOG_MAX_MB` | `10` | 单个日志文件大小上限，超过后轮转 |
 | `OVERVIEW_LOG_BACKUPS` | `3` | 轮转保留的历史文件数（`0` 表示截断不保留） |
 | `OVERVIEW_AUTH` | `multi` | 认证模式：`multi` 或 `none` |
@@ -1273,3 +1368,37 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - `.github/workflows/desktop.yml`、`ci.yml` 等 YAML 可解析（pyyaml）。
 - headless：`bin/overview.exe` 重编为 v0.14.0，以 `OVERVIEW_AUTH=multi`、`OVERVIEW_DATA_DIR=%TEMP%\opencode\uidemo`、`OVERVIEW_ADDR=0.0.0.0:5230` 启动；`/api/v1/health` 返回 `version: 0.14.0`，`/api/v1/auth/state` 返回 `mode: multi`。
 - **本机未验证**：macOS/Linux 桌面构建、NSIS/DMG/AppImage 安装器、真实安装注册。
+
+### 13.26 桌面↔服务器同步 · 桌面打磨（v0.15.0，ADR-067…076）
+
+**服务端（`internal/service`、`internal/index`、`internal/server`）**
+
+- 迁移 `0010_sync`：`notes.changed_seq`（`DEFAULT 0`）与 `note_tombstones(id, path, deleted_at, device)` + `deleted_at` 索引；`settings` 新增 `vault_id`、`change_seq` 键。
+- `service.Manifest`：合成 `{vaultId, generatedAt, etag, notes[], folders[]}`（笔记含 id/path/version/updated/size/public，文件夹含空目录）；`manifestETag = sha256(vaultId:maxSeq:count)[:16]`。
+- `handleSyncManifest`：返回强 `ETag` + `Cache-Control: no-cache`，`If-None-Match` 命中返回 304。
+- `handleGetNoteRaw`（`GET /note?raw=1`）：返回完整 Markdown 字节，ETag = 版本；render 模式仅公开笔记。
+- `Service.SaveNoteRaw`：`raw:true` 时字节原样写入（保留 frontmatter id/created），`baseVersion` 必填；`checkBaseVersion` 实现 `*` 新建 / 指定版本更新（缺失或不匹配 → 409）。`core.RawWriter` 未实现时 501。
+- `handleRestoreAsset`（`PUT /assets/{path}`）：`validateAssetPath` 拒绝空段/`.`/`..`/绝对/反斜杠/NUL/冒号；`MaxBytesReader` 限体积（超限 413 `too_large`）；`Service.RestoreAsset` 经 `core.AssetRestorer`，S3 返回 501 `not_supported`。
+- 删除/移动记录墓碑：`service.Delete`/`Move` 先收集 `deletionVictims`，索引更新后 `recordTombstones` 写入。
+- `handleSync*`（`internal/server/sync.go`）：`SyncHooks` 接口 + `/desktop/sync`、`/run`、`/conflicts`、`/conflicts/resolve`；`syncHooksAvailable()` 要求 `LocalOnly && SyncHooks != nil`，否则 404。`statusCode` 增加 `too_large`/`not_supported` 映射。
+
+**客户端（`internal/sync`）**
+
+- `RemoteClient`：`normalizeServerURL` 校验 scheme/host，普通 HTTP 仅允许回环；Bearer 令牌；`HTTPError` 映射到哨兵错误（401/403/409/404/501/413/5xx）。
+- `State`：`<DataDir>/sync.json`（0600，原子写）只存 serverURL/vaultId/deviceId/enabled/intervalSec/direction/lastSyncAt/notes/folders/assets/conflicts；令牌单独 `<DataDir>/.sync-token`（0600，`ReadToken`/`WriteToken`/`ClearToken`）。
+- `Engine`：`SyncOnce` 三方比对；首同步 `assignID` 为缺 id 笔记回写 ULID；`plan` 产出文件夹/拉/推/删（按深度父先子后）并以 `canPull`/`canPush` 守卫方向；冲突 `execConflict` 写 `<name> (conflict-<device8>-<ts>).md`（新 id）并推送；`SyncResolveConflict` 支持 `local`/`remote`；`retry` 指数退避（5 次，1s→8s 上限）；`NotifyDirty`（3s 自写抑制）+ `Start`/`Stop`/`Run` 后台轮询；`SyncRun` 置 `forcePending` 绕过 1s 节流。
+- 附件：`pushAssets` 按 sha256 去重后 `PutAsset`；`pullAssets` 仅补本地缺失，需 `core.AssetRestorer`，不支持则告警跳过。
+
+**桌面与前端**
+
+- `internal/app`：`SyncDeps`/`SyncEngine`/`SyncFactory`；`build()` 构造引擎并作为 `server.SyncHooks`；`Start`/`Stop` 管理引擎；watcher 用 `dirtyReindexer` 在增量重建前 `NotifyDirty`。
+- `cmd/overview-desktop` 注入 `desktopSyncFactory`；`SYNC` 引擎与本地 vault 共用 store/index。
+- 前端 `SyncSection.vue`：仅 `site.desktop` 渲染；服务器地址/令牌/开关/方向/间隔 + 保存（校验 https/回环）/立即同步（轮询状态）/状态卡/冲突区（keep local/remote）；`api.ts` 新增 `syncStatus`/`saveSync`/`runSync`/`resolveSyncConflict`。
+- 桌面隐藏控制台：`cmd/overview-desktop` 日志默认 `desktopLogFile(cfg)`（`<DataDir>/logs/desktop.log`，`OVERVIEW_LOG_FILE` 优先）；`Makefile` 的 `DESKTOP_LDFLAGS` 与 CI 矩阵在 Windows 附加 `-H windowsgui`；`internal/logging` 用 `fanout` 替换 `io.MultiWriter`。
+
+**验证记录**
+
+- `go build ./...`、`go test ./...` 全绿（新增 `internal/sync`、`internal/server/sync_test.go`、`internal/app/sync_test.go` 及 index tombstone/`changed_seq` 覆盖）。
+- `cd web && npm run build` 通过。
+- headless：`bin/overview.exe` 重编为 v0.15.0 并以 `OVERVIEW_AUTH=multi` 重启 demo；`/api/v1/sync/manifest` 可用且带 ETag/304。
+- **本轮未验证**：真实双机同步（同一 vault 的两端收敛）、S3 后端的附件同步（预期跳过）、macOS/Linux 桌面壳。
