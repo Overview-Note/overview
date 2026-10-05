@@ -68,13 +68,34 @@ public: true
 | `openapi` | OpenAPI spec (drives `tools` schemas) |
 | `sitegen` | Static documentation-site export: app-aligned DOM (`render.go`), shared `content.css`, on-demand same-version runtime enhancement (`vendor.go`), client-side search |
 | `ai` | OpenAI-compatible chat client (including function/tool calling) |
+| `app` | Application wiring and lifecycle shared by the headless and desktop binaries: instance lock, port file, listener, graceful shutdown, external-file import |
+| `update` | GitHub Releases version check (report only; never downloads or installs) |
 | `config`, `logging` | Environment config, structured logging |
 | `server`, `webui` | HTTP routing/middleware, static handler (gzip + caching), embedded frontend |
+
+## Desktop shell
+
+The native app (`cmd/overview-desktop`) is a **Wails v3** shell over the same `internal/app`
+server. It owns only the OS-facing concerns — native window, system tray, single instance,
+`.md` file associations, `overview://` deep links, drag-and-drop and launch-at-login — while
+every piece of business logic stays in the shared packages. The shell source is guarded by
+`//go:build windows || darwin || desktop`, so a plain `CGO_ENABLED=0 go build ./...` still
+works without GTK headers.
+
+Local-only mode tightens the server instead of forking it: it listens on loopback, defaults
+to `auth=none` and disables MCP/WebDAV, and adds a **Host/origin guard** (loopback Host plus
+same-origin state-changing requests) in place of cookie CSRF protection. The
+`/api/v1/desktop/*` endpoints exist only in local mode — a headless server answers `404`.
+The lifecycle is shared: both binaries call `app.New`/`Start`/`Stop`, and a data-directory
+instance lock plus Wails' single-instance channel keep one server and one window. See
+[[Desktop]].
 
 ## Testing
 
 - **Go:** `go test ./...` — unit tests per package plus `httptest` integration tests.
 - **Frontend:** `npm test` (Vitest) for pure logic, `vue-tsc` type-check, `vite build`.
 - **CI:** `.github/workflows/ci.yml` runs the backend race tests, frontend checks and
-  `golangci-lint` on every push/PR. Pushing a `v*` tag builds a multi-arch image to GHCR
-  (`.github/workflows/docker.yml`).
+  `golangci-lint` on every push/PR, plus a Windows desktop-shell compile smoke test. Pushing a
+  `v*` tag builds a multi-arch image to GHCR (`.github/workflows/docker.yml`) and builds the
+  desktop shells for Windows/macOS/Linux (`.github/workflows/desktop.yml`), publishing them as
+  release assets.

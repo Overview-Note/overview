@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.13.3（静态文档站与应用阅读态一致）
+> 版本：v0.14.0（桌面应用：Wails v3 原生壳 + 本地安全边界）
 > 更新日期：2026-10-05
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -30,6 +30,7 @@
 | v0.13.1 | 侧栏与标题栏排版 | 统一侧栏字号层级（笔记/文件夹）；放大顶栏与标题栏高度，改善可读性 |
 | v0.13.2 | 手机端适配 · 对象存储设置 · 修复 | 响应式手机端（P0+P1）：抽屉式侧栏（汉堡 + 遮罩，次要入口收进抽屉）、顶栏手机化、编辑器全宽、工具栏/note-bar 横向滚动、右侧面板改底部抽屉（大纲/反链/历史/AI）、移动端搜索浮层、触屏基础（tap-highlight、`touch-action`、`:active`、hover 门槛、16px 输入、≥40px 目标、`100dvh`/safe-area）、明暗 `theme-color`、PWA `orientation` + 192/512 PNG 图标；S3 对象存储可在设置页配置并运行时切换（新增 `internal/service/storage.go` 的 `SwitchableAssetStore`/`StorageService` 与 `internal/server/storage.go` 的 `GET/PUT /settings/storage`、`POST /settings/storage/test`，前端 `StorageSection.vue`；env 为初始值、secret 不回传、历史附件不迁移、保存失败不切换）；用户管理窄屏三行布局；AI「整理/补全」打开笔记后按钮失效与空笔记无提示修复 |
 | v0.13.3 | 静态文档站与应用阅读态一致 | 新增共享内容样式 `internal/sitegen/content.css`（设计令牌含 `--hl-*` + `.tiptap-content` 全部阅读态规则），App `web/src/styles.css` 以 `@import` 复用、静态站 `<link>` 同一文件（单一真源）；Go 侧 `internal/sitegen/render.go` 用 goldmark + `x/net/html` 后处理把静态站 DOM 对齐编辑器契约（`pre.code-block > code.language-*`、`ul[data-type=taskList]`/`li[data-type=taskItem][data-checked]`、`.fn-ref`/`.fn-defs`、`.math-inline`/`.math-block[data-tex]`、`.mermaid[data-source]`、表格 `th>p`/`td>p`、`a.wiki-link`（未命中 `wiki-missing`）、`img loading/decoding`、标题 slug 与 `doc.ts` 一致、搜索索引纳入代码/数学/图表源文本、`assets/` 递归拷贝）；运行期用 `internal/sitegen/vendor.go` + `readonly-enhance.js` **按需加载与应用同版本**的 highlight.js/KaTeX/Mermaid；公开页渲染对齐编辑器契约（`web/src/markdown/doc.ts`、`PublicNoteView.vue` 用 `public-doc tiptap-content`、删除 `.public-doc` 字号覆盖）；默认主题 accent 派生色直通（`accentRamp` 对默认色返回与 `content.css` 一致的值） |
+| v0.14.0 | 桌面应用 | 新增 Wails v3（`v3.0.0-beta.26`）原生桌面壳 `cmd/overview-desktop`：窗口指向本地服务、系统托盘、单实例、优雅退出、首启目录选择器、`.md` 文件关联、`overview://` 深链、文件拖拽、开机自启、更新提醒；抽取 `internal/app` 统一生命周期（进程内实例锁 `.overview.lock` + 端口文件 `.overview-port` + 监听失败回退随机 loopback 端口 + 优雅退出），headless 与桌面共用；`internal/config` 增加 `Desktop`/`DefaultDataDir()`/`EnableMCP`/`EnableDAV`（桌面默认 `127.0.0.1:5230`、`auth=none`、MCP/WebDAV 关闭，均可被环境变量覆盖）；`internal/server/local.go` 本地安全边界（Host 必须为回环名以抵御 DNS rebinding + 写请求同源校验替代 SameSite CSRF），`internal/server/desktop.go` 暴露 `/api/v1/desktop/settings|update`（headless 下一律 404，与不存在路径不可区分）；`internal/update` 只检测 GitHub Releases 版本、不下载不静默安装；前端新增 `web/src/views/settings/DesktopSection.vue`（仅桌面壳显示）；打包配置 `build/config.yml`（应用元数据/文件关联/URL scheme）；新增 `.github/workflows/desktop.yml` 跨平台构建矩阵（Windows/macOS arm64+amd64/Linux GTK4+GTK3）并在 `v*` tag 发布 Release 产物；`make build-desktop` / `package-desktop` 本机构建与归档 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -90,6 +91,29 @@ Browser → POST /api/v1/ai/agent → server/agent.go → internal/agent.Run
                 │
         data/ (notes/, assets/, overview.db)
 ```
+
+**桌面壳（v0.14.0）** 复用同一套 `internal/app` 与 `server`，只是把「浏览器 HTTP 客户端」
+换成一个内嵌 WebView 的原生窗口；业务逻辑仍只有一份：
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ overview-desktop (cmd/overview-desktop, Wails v3)           │
+│   窗口(WebView) · 托盘 · 单实例 · 深链/拖拽 · 自启 · 更新提醒   │
+│        │ 创建并驱动                                     │
+│        ▼                                                 │
+│ internal/app.App：实例锁 + 端口文件 + 监听 + 索引 + 优雅退出 │
+│        │ 监听 127.0.0.1:<port>（端口被占则回退随机 loopback）│
+│        ▼                                                 │
+│ server（LocalOnly）：Host 回环校验 + 同源/CSRF 守卫 + /desktop/* │
+└────────────────────────────────────────────────────────────┘
+```
+
+- **同一套生命周期**：`cmd/overview`（headless）与 `cmd/overview-desktop` 都调用
+  `app.New`/`app.Start`/`app.Stop`；桌面壳额外创建 Wails 应用、托盘与桌面端点，
+  headless 进程 `LocalOnly=false`，不注册 `/desktop/*`。
+- **构建标签**：桌面壳源码带 `//go:build windows || darwin || desktop`。Windows/macOS
+  默认即可构建；Linux 需要 `-tags desktop`（GTK/WebKitGTK 依赖 CGO），因此
+  `CGO_ENABLED=0 go build ./...` 在纯后端环境仍可用。
 
 ### 2.2 设计原则
 
@@ -163,6 +187,14 @@ Browser → POST /api/v1/ai/agent → server/agent.go → internal/agent.Run
 | ADR-056 | 静态站运行期增强：vendored 同版本 highlight.js/KaTeX/Mermaid，按需加载（`vendor.go` + `readonly-enhance.js`） | Go 侧无法完整复刻裸 JS 的渲染器；直接 CDN 又会引入版本漂移与离线依赖 | `vendor/*` 从 `web/node_modules` 原样拷贝，导出时仅写入页面需要的库；浏览器端渲染高亮/数学/图表/脚注跳转，`<body data-base>` 支持子路径；无数学/图表/代码的站不增加体积 |
 | ADR-057 | 公开页/编辑器/静态站三态统一：公开页渲染复用编辑器契约（`doc.ts` 的 `code-block`/表格 `<p>`/任务 `data-type`/`wikiToHtml`），`PublicNoteView` 用 `public-doc tiptap-content` | 公开页此前用独立后处理（wiki 降级纯文本、无 `code-block`）且 `.public-doc` 覆盖 h1/h2/h3 字号，与编辑器/静态站不一致 | 三处产出同一 `.tiptap-content` DOM 契约，由 `content.css` 统一渲染；删除 `.public-doc` 字号覆盖与旧的任务列表降级规则 |
 | ADR-058 | 默认主题 accent 派生色直通（`accentRamp` 对默认色返回与 `content.css` 一致的四元组） | 默认琥珀色经通用混色算法派生，与 `content.css` 里手写的 `--accent/-hover/-soft/-ring` 存在细微偏差，三态不一致 | 默认色直接返回常量色阶，自定义色仍走派生；应用与静态站默认外观完全一致 |
+| ADR-059 | 桌面壳选型 **Wails v3**（`v3.0.0-beta.26`），而非 Electron/Tauri 或 Wails v2 | 壳需要系统托盘、文件关联/深链、拖拽、自启、原生通知与单实例，且要复用现有 Go 服务；Electron 引入 Node/Chromium 运行时违背「单二进制」定位，Tauri 需 Rust 工具链与独立前端构建 | Wails v3 提供 Go 侧窗口/托盘/事件/单实例/自启/通知，复用 `internal/app`；**Wails v2 未采用**：其多窗口/托盘/单实例/事件 API 无法满足深链与并发窗口需求，且 v2 对 Go 1.26 与新版 WebKitGTK 支持有限。壳源码以构建标签隔离，不污染 headless 构建 |
+| ADR-060 | 抽取 `internal/app` 统一应用生命周期，headless 与桌面共用 | 桌面壳需要「先起服务拿到端口、再建窗口」，而旧 `cmd/overview` 把装配写在 `main`；两份实现会漂移 | `App` 负责装配 `store/index/service/server`、实例锁、端口文件、监听、初始索引、文件监视与优雅退出；`cmd/overview` 与 `cmd/overview-desktop` 只负责驱动 |
+| ADR-061 | 端口策略：桌面固定 `127.0.0.1:5230`，被占用则回退随机 loopback 端口；自部署仍失败即退出 | 桌面应用不能因为 5230 被占而无法启动；自部署需要端口确定的失败可诊断 | `App.listen` 仅在 `Desktop` 下回退 `127.0.0.1:0`；启动后把实际地址写入 `<data>/.overview-port` 供 MCP/WebDAV/工具发现 |
+| ADR-062 | 本地安全边界：`localGuard`（Host 必须为回环名 + 写请求同源校验）在两处守卫 | 桌面默认 `auth=none`，SameSite Cookie 不再提供 CSRF 保护；若监听 loopback 但 Host 可伪造，会被 DNS rebinding 攻击 | `isLocalHost` 拒绝非 `127.0.0.1`/`localhost`/`::1` 的 Host；`isStateChanging` 的请求要求 Origin/Referer 与 Host 同源（无 Origin 的非浏览器客户端放行）；`/desktop/*` 仅在 `LocalOnly` 下存在，headless 一律 404 |
+| ADR-063 | 平台数据目录：Windows/macOS `~/Documents/Overview`，Linux `~/Documents/Overview` 或 `$XDG_DATA_HOME/overview` / `~/.local/share/overview`，其他平台回退用户 config 目录 | 桌面用户期望数据落在「文档」而非当前工作目录；Linux 遵循 XDG 约定 | `config.DefaultDataDir()` 按 GOOS 实现；首启若目录缺失/为空则弹出原生目录选择器，取消则用默认值 |
+| ADR-064 | 桌面默认关闭 MCP 与 WebDAV、`auth=none`、监听 loopback，可用 `OVERVIEW_ENABLE_MCP`/`OVERVIEW_ENABLE_DAV`/`OVERVIEW_AUTH`/`OVERVIEW_ADDR` 覆盖 | 桌面是单用户本地应用，默认暴露 MCP/WebDAV 会扩大攻击面；同时保留高级用户显式开启的能力 | `config.Load` 在 `OVERVIEW_DESKTOP=true` 时切换默认值；自部署默认值不变 |
+| ADR-065 | 单实例与 SQLite 多进程：进程内实例锁（`.overview.lock`）保证每个数据目录只有一个服务进程；Wails 单实例（UniqueID `com.overview.app`）保证只有一个窗口 | SQLite 与本地文件不适合多进程并发写；重复启动应聚焦已有窗口而非再起一个服务 | `internal/app.AcquireInstanceLock` 用 OS 文件锁（Windows `LockFileEx` / Unix `flock`）；第二次启动经 Wails 转发 argv（文件/深链）给首实例并聚焦窗口 |
+| ADR-066 | 更新只为「提醒」：`internal/update` 查 GitHub Releases 比较语义版本，发现新版本时发系统通知/托盘提示，并暴露 `/api/v1/desktop/update`；**不下载、不静默安装** | 静默自更新涉及签名、权限与失败回滚，风险高；桌面平台各自有安装器机制 | 启动后 5s 与每 24h 检查一次；只在版本变化时通知一次；用户点通知打开 Release 页面自行下载 |
 
 ---
 
@@ -243,6 +275,8 @@ updated: "2026-10-01T16:54:09Z"
 | `internal/agent` | AI 智能体：有界工具循环、会话、确认、审计 | `Agent` `Run` `Confirm` `Stop` `SystemPrompt`、`Session`/`Result`/`Step` |
 | `internal/ai` | OpenAI 兼容客户端（chat + tool calling） | `Chat` `ChatTools` `AgentMessage` `Tool` `ToolCall` `ErrToolsUnsupported` |
 | `internal/mcp` | MCP JSON-RPC 适配器（薄） | `Server.ServeHTTP`（工具面委托 `internal/tools`） |
+| `internal/app` | 应用装配与生命周期（headless 与桌面壳共用） | `App` `New`/`NewWithOptions`/`Start`/`Stop`、`AcquireInstanceLock`、端口文件、`ResolveOrImport` |
+| `internal/update` | GitHub Releases 版本检测（只报告，不下载/安装） | `CheckLatest` `Compare` |
 
 ### 5.2 关键读写路径
 
@@ -368,6 +402,9 @@ Base：`/api/v1`
 | POST | `/trash/restore` | 从回收站恢复 |
 | DELETE | `/trash?id=` | 彻底删除 |
 | GET | `/openapi.json` | OpenAPI 规范（公开） |
+| GET | `/desktop/settings` | 桌面壳设置 `{autostart, dataDir, version}`（仅桌面/LocalOnly；headless 返回 404） |
+| PUT | `/desktop/settings` | 更新桌面壳设置（目前仅 `autostart`，省略字段保持不变；仅桌面） |
+| GET | `/desktop/update` | 检查最新发布版本 `{current, latest, hasUpdate, url}`（只检测不下载；仅桌面） |
 
 **其他端点**
 
@@ -510,12 +547,14 @@ PWA：`manifest.webmanifest` 增加 `orientation:"any"` 与 192/512 PNG 图标�
 ### 9.1 命令（Makefile）
 
 ```bash
-make dev          # 后端 :5230（内嵌前端）
-make build        # 前端 + 单二进制（bin/overview）
-make test         # Go 测试
-make test-web     # 前端类型检查
-make lint         # golangci-lint + vue-tsc
-make fmt          # gofmt + prettier
+make dev            # 后端 :5230（内嵌前端）
+make build          # 前端 + 单二进制（bin/overview）
+make build-desktop  # 前端 + 桌面壳（bin/overview-desktop，本机平台）
+make package-desktop # build-desktop + 归档 tar.gz
+make test           # Go 测试
+make test-web       # 前端类型检查
+make lint           # golangci-lint + vue-tsc
+make fmt            # gofmt + prettier
 make vet
 make docker
 ```
@@ -550,9 +589,10 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 
 ### 9.3 CI 与发布
 
-- `.github/workflows/ci.yml`：后端 `go vet` + `go test -race -cover`；前端 `npm ci` + `vue-tsc` + `npm test` + `vite build`；`golangci-lint`。
+- `.github/workflows/ci.yml`：后端 `go vet` + `go test -race -cover`；前端 `npm ci` + `vue-tsc` + `npm test` + `vite build`；`golangci-lint`；Windows 上 `go build ./cmd/overview-desktop` 编译冒烟。
 - `.github/workflows/docker.yml`：推送 `v*` 标签时构建 **多架构（amd64/arm64）** 镜像并发布到 **GHCR**（`ghcr.io/<owner>/<repo>`），使用内置 `GITHUB_TOKEN`，无需额外密钥。
 - `.github/workflows/pages.yml`：导出文档站（`overview export`）并部署到 GitHub Pages。
+- `.github/workflows/desktop.yml`：推送 `v*` 标签或手动触发时，矩阵构建桌面壳（`windows-latest` 无 CGO；`macos-14` arm64 / `macos-13` amd64 CGO；`ubuntu-24.04` GTK4+WebKitGTK 6.0；`ubuntu-22.04` `-tags "desktop gtk3"`），产物归档为 `.zip`/`.tar.gz` 上传 artifact，并在 tag 触发时作为 Release assets 发布；`fail-fast: false` 使单个平台失败不影响其它平台。
 
 ---
 
@@ -581,6 +621,9 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | 密钥 | AI/MCP/S3/SMTP 密钥仅存服务端，接口永不回传（`hasKey` / `hasPassword` / `hasSecret`）；对象存储 `secretKey` 留空表示沿用已存值 |
 | 对象存储配置 | `/settings/storage*` 仅管理员；保存前先构建后端，**失败不切换**且错误信息只含 endpoint/bucket（不含密钥）；「测试连接」用表单当前值且不改动活动后端 |
 | 日志 | 结构化 JSON，无敏感内容；邮件收件人/正文/令牌从不记录 |
+| 桌面本地守卫 | `LocalOnly` 下 `localGuard` 要求 Host 为回环名（`127.0.0.1`/`localhost`/`::1`），拒绝 DNS rebinding；写请求（POST/PUT/PATCH/DELETE）要求 Origin/Referer 与 Host 同源，无 Origin 的非浏览器客户端（curl/CLI/MCP）放行；`auth=none` 时以此替代 SameSite Cookie 的 CSRF 保护 |
+| 桌面端点隔离 | `/api/v1/desktop/*` 仅在 `LocalOnly` 注册，headless 由 `desktopGuard` 在鉴权/路由前直接 404，与不存在路径不可区分 |
+| 更新检查 | `internal/update` 只读取 GitHub Releases 的 `tag_name`/`html_url` 并做语义版本比较；不下载、不执行、不静默安装；网络失败只记 debug 日志 |
 
 > ✅ render 模式已收紧为**白名单**：`renderGuard` 仅放行 `health`、`auth/state`、
 > `tree`、`note`、`public/*`、`openapi.json`、`/api/docs` 与附件读取；其余 `/api/` 路径
@@ -617,6 +660,12 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 > v0.13.3 待权衡：静态站的高亮/数学/图表在**浏览器端运行期渲染**（首屏需下载对应库，Mermaid 单文件较大，
 > 无构建期预渲染）；共享 `content.css` 使应用与静态站强绑定，修改阅读样式需同时回归两侧；
 > 静态站为只读，不提供编辑器交互（selection/toolbar 等）。
+>
+> v0.14.0 待权衡：桌面壳**未在 macOS/Linux 实机验证**（CI 只做编译与归档，未跑通真实签名/公证/打包）；
+> Windows/macOS 安装器（NSIS/DMG）与 Linux `.desktop`/AppImage 尚未生成，桌面壳以 `go build` 产物 + 归档交付；
+> `wails3` CLI 未接入仓库构建流水线（仓库缺少生成的 Taskfile/build-assets，见 ADR-059）；更新提醒依赖 GitHub Releases
+> 且**只提醒不静默安装**；桌面壳复用本地 HTTP 服务，固定端口被占时会回退随机 loopback 端口（由 `.overview-port` 发现），
+> 不保证端口恒定。
 
 ---
 
@@ -793,6 +842,24 @@ HTTP 与前端
 - [x] 运行期增强**按需加载与应用同版本** highlight.js/KaTeX/Mermaid（`vendor.go` + `readonly-enhance.js`）
 - [x] 公开页渲染复用编辑器契约（`doc.ts`），`PublicNoteView` 三态统一（`public-doc tiptap-content`）
 - [x] 默认 accent 派生色直通（`accentRamp`），三态默认外观一致
+
+**Phase 13 — 桌面应用（v0.14.0）**
+
+桌面壳与生命周期
+- [x] Wails v3 原生壳 `cmd/overview-desktop`：窗口、系统托盘、单实例、优雅退出
+- [x] `internal/app` 统一生命周期（实例锁 + 端口文件 + 监听回退）供 headless/桌面共用
+- [x] 首启原生目录选择器；平台数据目录 `DefaultDataDir()`（Windows/macOS/Linux）
+- [x] 文件关联 `.md`、`overview://` 深链、文件拖拽；第二实例 argv 转发并聚焦窗口
+- [x] 开机自启（Wails Autostart）与设置页 `DesktopSection.vue`
+- [x] 更新提醒（`internal/update`，只检测不静默安装）
+
+安全与打包
+- [x] 本地安全边界 `localGuard`（Host 回环 + 同源/CSRF）；`/desktop/*` 仅 LocalOnly
+- [x] 桌面默认 loopback/`auth=none`/MCP+WebDAV 关闭，环境变量可覆盖
+- [x] `build/config.yml` 打包元数据（应用名/版本/标识/文件关联/协议）
+- [x] `.github/workflows/desktop.yml` 跨平台构建矩阵 + tag 发布 Release 产物
+- [ ] Windows NSIS / macOS DMG / Linux AppImage 安装器（待接入 wails3 打包资产）
+- [ ] macOS/Linux 实机验证与签名/公证
 
 ---
 
@@ -1176,3 +1243,33 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿（`markdown/doc` 覆盖公开页契约）
 - 端到端：导出站打开代码/数学/Mermaid/任务/脚注/表格/wiki 链接与 App 阅读态一致；wiki 命中为链接、未命中降级；
   搜索可命中代码与公式源文本；`--base` 子路径下 vendor/资源/搜索索引路径正确；无数学/图表站点不产生多余 vendor 文件；S3 后端导出资源指向 `S3PublicURL`
+
+### 13.25 桌面应用（v0.14.0，ADR-059…066）
+
+**选型与生命周期（ADR-059/060/061/065）**
+
+- 桌面壳 `cmd/overview-desktop` 采用 Wails v3 `v3.0.0-beta.26`：窗口、系统托盘、单实例、开机自启、原生通知由 Wails 提供，业务逻辑复用 `internal/app`。
+- `internal/app` 统一 headless 与桌面的装配与生命周期：`AcquireInstanceLock`（`<data>/.overview.lock`）、端口文件（`<data>/.overview-port`）、监听（桌面固定端口被占回退随机 loopback）、初始索引、文件监视、优雅退出。
+- `cmd/overview` 重构为调用 `app.New`/`app.Start`/`app.Stop`，对外命令行为不变。
+
+**本地默认与安全（ADR-062/063/064）**
+
+- `OVERVIEW_DESKTOP=true` 时 `config.Load` 默认 `127.0.0.1:5230`、`auth=none`、MCP/WebDAV 关闭、`DefaultDataDir()`；均可用环境变量覆盖。
+- `server.Handler` 在 `LocalOnly` 下包一层 `localGuard`（Host 必须为回环名 + 写请求同源）；`/api/v1/desktop/*` 只在 LocalOnly 注册，headless 由 `desktopGuard` 在鉴权前直接 404。
+- `internal/update.CheckLatest` 只读 GitHub Releases 的 `tag_name`/`html_url` 并做语义版本比较，**不下载、不静默安装**。
+
+**打包与 CI（ADR-066）**
+
+- `build/config.yml` 提供 Wails v3 打包元数据（`info`/`fileAssociations`/`protocols`）；`ext` 修正为无点 `md`（macOS `CFBundleTypeExtensions` 约定）。
+- 新增 `.github/workflows/desktop.yml`：`fail-fast: false` 矩阵 `windows-latest`（CGO 0）/`macos-14`（arm64）/`macos-13`（amd64）/`ubuntu-24.04`（GTK4 + WebKitGTK 6.0）/`ubuntu-22.04`（`-tags "desktop gtk3"`）；归档 `.zip`/`.tar.gz` 上传 artifact，tag 触发时作为 Release assets 发布。
+- `ci.yml` 新增 Windows 桌面壳编译冒烟（`go build ./cmd/overview-desktop`）。
+- `wails3` CLI（`v3.0.0-beta.26`）已安装并确认可执行，但仓库未采用其生成的 Taskfile/build-assets，`wails3 build`/`package` 无法直接作用于当前布局；本轮以 `go build` 产物 + 归档交付，安装器（NSIS/DMG/AppImage）留待接入。
+
+**验证记录**
+
+- `gofmt -l .` 无输出；`go build ./...`、`go vet ./...`、`go test ./...` 全绿。
+- `cd web && npm run build`（`overview-web@0.14.0`）通过。
+- 本机（Windows amd64）`make build-desktop` / `make package-desktop` 成功：`bin/overview-desktop.exe`（~27.5 MB）与 `bin/overview-desktop-0.14.0-windows-amd64.tar.gz`（~10.9 MB）。
+- `.github/workflows/desktop.yml`、`ci.yml` 等 YAML 可解析（pyyaml）。
+- headless：`bin/overview.exe` 重编为 v0.14.0，以 `OVERVIEW_AUTH=multi`、`OVERVIEW_DATA_DIR=%TEMP%\opencode\uidemo`、`OVERVIEW_ADDR=0.0.0.0:5230` 启动；`/api/v1/health` 返回 `version: 0.14.0`，`/api/v1/auth/state` 返回 `mode: multi`。
+- **本机未验证**：macOS/Linux 桌面构建、NSIS/DMG/AppImage 安装器、真实安装注册。

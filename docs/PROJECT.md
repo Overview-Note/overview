@@ -78,6 +78,15 @@ store · index · s3store · watcher · mcp · server
 Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色可在设置中自定义；
 设置从弹窗升级为**独立路由页**（外观 / 编辑器 / AI / 邮件 / 站点 / 数据 / 用户 / 令牌）。
 
+### 9. 原生桌面应用
+同一个 Go 服务也可以跑在**原生窗口**里：`cmd/overview-desktop` 用 **Wails v3** 打开一个
+内嵌 WebView 的窗口指向本地 `127.0.0.1` 服务，并补齐系统集成——系统托盘、单实例、
+文件关联（`.md`）、`overview://` 深链、文件拖拽、开机自启与更新提醒。桌面壳与 headless
+共享 `internal/app` 生命周期与全部业务逻辑，只是默认切换为**单用户本地形态**：监听回环、
+关闭认证、关闭 MCP/WebDAV；写请求由 `localGuard` 做 Host 回环与同源校验以替代 CSRF。
+更新只做**提醒**（查 GitHub Releases），不下载、不静默安装。Windows/macOS 默认构建；
+Linux 需 `-tags desktop` 与 GTK/WebKitGTK（CGO）。
+
 ---
 
 ## 功能清单（当前版本）
@@ -90,6 +99,7 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 **访问**：WebDAV · REST + OpenAPI · PWA · 应用内快速捕获（顶栏弹窗 · 服务端抓取标题/正文 · SSRF 防护）
 **移动端**：**响应式手机端**（抽屉式侧栏 · 顶栏手机化 · 编辑器全宽 · 工具栏横向滚动 · 右侧面板底部抽屉 · 搜索浮层 · 触屏基础 · 可安装 PWA）
 **外观**：Gridea 风格配色（琥珀主色 `#D4870E`）· 明暗主题 · **主题色自定义（预设 + 取色器）** · **独立设置页**（外观/编辑器/AI/邮件/站点/对象存储/数据/用户/令牌）
+**桌面**：**Wails v3 原生窗口** · 系统托盘 · 单实例 · `.md` 文件关联 · `overview://` 深链 · 文件拖拽 · 开机自启 · 更新提醒（只检测）· 首启目录选择 · 平台数据目录
 **运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · **S3 附件后端（设置页可运行时切换）** · **静态站导出（与应用阅读态一致：共享内容样式 + 运行期按需加载 KaTeX/Mermaid/高亮）** + sitemap/robots · 多语言（中/英/繁中/日/德）
 
 ---
@@ -104,6 +114,7 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 | 前端 | Vue 3 + TypeScript + Vite 6 + Pinia + vue-router |
 | 编辑器 | Tiptap 2（ProseMirror） |
 | AI/MCP | OpenAI 兼容客户端（无 SDK，含 function/tool calling）+ 自研 JSON-RPC MCP 服务端；`internal/tools` 统一能力源 + `internal/agent` 有界工具循环 |
+| 桌面 | Wails v3（`v3.0.0-beta.26`）：原生窗口/系统托盘/单实例/自启/通知；Windows WebView2（无 CGO），macOS WKWebView（CGO），Linux GTK4+WebKitGTK 6.0（或 `-tags gtk3`） |
 | 集成 | WebDAV（`x/net/webdav`）、S3（`minio-go`）、SMTP（标准库 `net/smtp`）、fsnotify |
 | 发布 | 前端 `go:embed` → 单二进制；Docker 三阶段构建 |
 
@@ -111,16 +122,17 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 
 ## 项目状态
 
-- **版本**：v0.13.3（静态文档站与应用阅读态一致；Phase 7 部分待排期）
+- **版本**：v0.14.0（桌面应用：Wails v3 原生壳 + 本地安全边界；Phase 7 部分待排期）
 - **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli/agent/tools
   以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试与 MCP↔tools parity）；前端 `vue-tsc` 类型检查、
   **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
-- **CI**：GitHub Actions（后端 race 测试、前端类型检查+测试+构建、golangci-lint）；
-  推送 `v*` 标签自动构建 **多架构镜像** 发布到 GHCR
-- **交付**：Docker / 单二进制（内嵌前端）/ GHCR 镜像，浏览器访问
-- **规模**：后端 ~9k 行 Go / 20 个 internal 包；前端 ~5k 行 TS/Vue
+- **CI**：GitHub Actions（后端 race 测试、前端类型检查+测试+构建、golangci-lint、Windows 桌面编译冒烟）；
+  推送 `v*` 标签自动构建 **多架构镜像** 发布到 GHCR，并构建 **桌面壳多平台产物** 发布到 Release
+- **交付**：Docker / 单二进制（内嵌前端）/ GHCR 镜像 / **桌面壳二进制（Windows/macOS/Linux）**；
+  浏览器访问或原生桌面窗口
+- **规模**：后端 ~10k 行 Go / 21 个 internal 包；前端 ~5k 行 TS/Vue
 - **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.13.0 待权衡的是智能体会话/限流的
-  单实例内存假设（确认需同实例）、审计无清理策略与工具调用为非流式；v0.13.2 待权衡的是运行时切换资产后端**不迁移历史附件**、移动端为响应式适配而非原生体验；v0.13.3 待权衡的是静态站高亮/数学/图表在浏览器端运行期渲染（首屏需下载对应库、Mermaid 单文件较大）、共享内容样式使应用与静态站强绑定、静态站只读无编辑器交互；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
+  单实例内存假设（确认需同实例）、审计无清理策略与工具调用为非流式；v0.13.2 待权衡的是运行时切换资产后端**不迁移历史附件**、移动端为响应式适配而非原生体验；v0.13.3 待权衡的是静态站高亮/数学/图表在浏览器端运行期渲染（首屏需下载对应库、Mermaid 单文件较大）、共享内容样式使应用与静态站强绑定、静态站只读无编辑器交互；**v0.14.0 待权衡的是桌面壳未在 macOS/Linux 实机验证（CI 只编译归档）**、NSIS/DMG/AppImage 安装器与 Linux `.desktop` 尚未生成、`wails3` 未接入仓库流水线、更新只提醒不静默安装、端口被占会回退随机 loopback 端口；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
 
 ---
 
@@ -149,6 +161,9 @@ v0.13 新增智能体端点：`POST /ai/agent`（运行一回合）、`POST /ai/
 `toolCalling`、`agentEnabled`、`confirmPolicy`、`maxSteps`、`allowedTools` 字段。
 v0.13.2 新增对象存储设置端点：`GET/PUT /settings/storage`（读取/保存并切换后端，仅管理员，
 `secretKey` 不回传）、`POST /settings/storage/test`（用表单当前值探测连接，不改动活动后端）。
+v0.14.0 新增桌面壳环境变量 `OVERVIEW_DESKTOP`（`true` 时切换单用户本地默认值）、
+`OVERVIEW_ENABLE_MCP` / `OVERVIEW_ENABLE_DAV`（桌面默认关闭、自部署默认开启），以及桌面端点
+`GET/PUT /desktop/settings`、`GET /desktop/update`（仅在桌面壳注册，headless 一律 404）。
 
 ---
 

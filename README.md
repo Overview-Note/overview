@@ -116,6 +116,23 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
   load **on demand**, so the export works offline and a site with no math/diagrams carries no
   extra weight
 
+### 🖥 Desktop app
+- **Native window** — the same Go service runs inside a **Wails v3** shell (an embedded
+  WebView pointing at `http://127.0.0.1`), sharing `internal/app` and every service with the
+  headless binary
+- **System integration** — system tray, single instance, `.md` **file association**,
+  `overview://` **deep links**, drag-and-drop, launch at login, and a first-run folder picker
+- **Local-first defaults** — loopback only, authentication off, MCP/WebDAV disabled; a
+  Host/origin guard replaces cookie CSRF protection. `OVERVIEW_DESKTOP=true` applies these
+  defaults and any of them can be overridden with the usual environment variables
+- **Update *notification* only** — checks GitHub Releases and links to the download page;
+  it never downloads or installs anything silently
+- **Per-user data** — Windows/macOS use `~/Documents/Overview`; Linux prefers
+  `~/Documents/Overview` and falls back to the XDG data directory
+- **Platform builds** — Windows (WebView2, no CGO) and macOS (CGO) build directly; Linux
+  needs `-tags desktop` plus GTK/WebKitGTK. Tagged releases publish desktop binaries; signed
+  Windows NSIS / macOS DMG installers are the next step
+
 ---
 
 ## Quick Start
@@ -151,6 +168,31 @@ OVERVIEW_DATA_DIR=./data overview
 ```
 
 Open http://localhost:5230 and complete the first-run admin setup.
+
+### Desktop app
+
+Build the native shell for your platform (the frontend is bundled first):
+
+```bash
+make build-desktop      # -> bin/overview-desktop
+make package-desktop    # + tar.gz archive for the host OS/arch
+```
+
+- **Windows** — WebView2 runtime must be installed; builds without CGO:
+  `go build ./cmd/overview-desktop`
+- **macOS** — CGO + Xcode command line tools:
+  `go build -tags desktop ./cmd/overview-desktop`
+- **Linux** — CGO + GTK/WebKitGTK (GTK4 + WebKitGTK 6.0 by default, GTK3 with `gtk3`):
+  ```bash
+  sudo apt install libgtk-4-dev libwebkitgtk-6.0-dev   # GTK4 (Ubuntu 24.04)
+  # or: sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev   # GTK3 (Ubuntu 22.04)
+  go build -tags desktop ./cmd/overview-desktop
+  go build -tags "desktop gtk3" ./cmd/overview-desktop
+  ```
+
+Tagged releases (`v*`) build the Windows/macOS/Linux shells in CI and attach them to the
+GitHub Release. See [`docs/DESIGN.md`](docs/DESIGN.md) (ADR-059…066) for the design, and
+[`docs/PROJECT.md`](docs/PROJECT.md) for the current desktop limitations.
 
 ### Local development
 
@@ -207,6 +249,9 @@ Overview is configured entirely through environment variables.
 | `OVERVIEW_S3_ACCESS_KEY` / `OVERVIEW_S3_SECRET_KEY` | — | S3 credentials |
 | `OVERVIEW_S3_USE_SSL` | `true` | Use HTTPS for S3 |
 | `OVERVIEW_S3_PUBLIC_URL` | — | Optional CDN / public URL prefix |
+| `OVERVIEW_DESKTOP` | `false` | `true` applies desktop defaults: loopback address, `auth=none`, MCP/WebDAV off, per-user data dir |
+| `OVERVIEW_ENABLE_MCP` | `true` (off on desktop) | Enable the `/mcp` endpoint |
+| `OVERVIEW_ENABLE_DAV` | `true` (off on desktop) | Enable the `/dav/` endpoint |
 
 > AI and mail can also be configured at runtime in the **Settings** page (admin only) —
 > **Settings → AI assistant** and **Settings → Mail server** — with no restart needed.
@@ -313,6 +358,11 @@ data/
 └── overview.db   # SQLite index (safe to delete; rebuilt on startup)
 ```
 
+The path above is relative to the server's working directory for self-hosted/Docker use.
+The **desktop app** defaults to a per-user vault — `~/Documents/Overview` on Windows/macOS,
+and `~/Documents/Overview` or the XDG data directory on Linux — and asks you to choose a
+folder on first run.
+
 ---
 
 ## Architecture
@@ -396,8 +446,14 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] Static docs site rendered identically to the app (shared `content.css`, aligned DOM
   contract, on-demand same-version highlight.js/KaTeX/Mermaid); public/editor/static three
   states unified on one contract
+- [x] Native desktop app (Wails v3): shared lifecycle, tray/single-instance, `.md` and
+  `overview://` integration, drag-and-drop, launch at login, local-only security guard,
+  update notification, per-user data dir, and a cross-platform CI build matrix
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
+
+- [ ] Signed desktop installers (Windows NSIS, macOS DMG) and Linux AppImage/`.desktop`
+- [ ] Desktop verification on real macOS/Linux hardware (CI only compiles/archives today)
 
 - [ ] Tags: management UI, tag tree, tag filtering, `#` autocomplete
 - [ ] Pin / favorites, saved filter views, timeline view

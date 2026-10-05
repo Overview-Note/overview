@@ -29,6 +29,7 @@ Content is stored as plain Markdown files; the SQLite index is fully rebuildable
 
 - [[Getting Started]]
 - [[Features]]
+- [[Desktop]]
 - [[CLI]]
 - [[Deployment]]
 - [[Architecture]]
