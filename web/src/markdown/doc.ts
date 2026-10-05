@@ -8,6 +8,9 @@ import { resolveAssetSrc } from "./assets";
 import { mermaidToDivs } from "./diagrams";
 import { footnotesToHtml } from "./footnotes";
 import { renderMathInMarkdown } from "./math";
+import { trimFencedCodeNewline } from "./pipeline";
+import { normalizeTaskLists } from "./tasks";
+import { wikiToHtml } from "./wiki";
 
 export interface DocHeading {
   level: number;
@@ -38,16 +41,50 @@ function slugify(text: string): string {
   return slug || "";
 }
 
+function addCodeBlockClass(html: string): string {
+  return html.replace(/<pre>/g, '<pre class="code-block">');
+}
+
+function postProcessDocument(html: string): string {
+  const hasTable = /<t[hd][\s>]/.test(html);
+  const hasTasks = html.includes('data-type="taskList"');
+  if (!hasTable && !hasTasks) return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  if (hasTable) {
+    for (const cell of Array.from(doc.querySelectorAll("th, td"))) {
+      const first = cell.firstChild;
+      if (
+        first &&
+        first === cell.lastChild &&
+        first.nodeType === 1 &&
+        (first as Element).tagName === "P"
+      ) {
+        continue;
+      }
+      const p = doc.createElement("p");
+      while (cell.firstChild) p.appendChild(cell.firstChild);
+      cell.appendChild(p);
+    }
+  }
+  if (hasTasks) {
+    for (const box of Array.from(
+      doc.querySelectorAll('ul[data-type="taskList"] input[type="checkbox"]'),
+    )) {
+      (box as HTMLInputElement).disabled = true;
+    }
+  }
+  return doc.body.innerHTML;
+}
+
 /** Renders public Markdown to HTML and extracts heading anchors. */
 export function renderPublicDoc(markdown: string): RenderedDoc {
-  // Wiki-links degrade to plain text for anonymous readers (no target leak).
-  const md = markdown.replace(/\[\[([^[\]]+?)\]\]/g, (_m, inner: string) => {
-    const [target, display] = inner.split("|");
-    return (display ?? target).trim() || target;
-  });
-  const prepared = renderMathInMarkdown(footnotesToHtml(md));
+  const prepared = renderMathInMarkdown(footnotesToHtml(wikiToHtml(markdown)));
   const parsed = marked.parse(prepared, { async: false }) as string;
-  const html = mermaidToDivs(resolveAssetSrc(parsed));
+  const html = postProcessDocument(
+    addCodeBlockClass(
+      normalizeTaskLists(mermaidToDivs(resolveAssetSrc(trimFencedCodeNewline(parsed)))),
+    ),
+  );
 
   const headings: DocHeading[] = [];
   const counts = new Map<string, number>();

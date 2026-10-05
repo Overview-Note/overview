@@ -51,7 +51,7 @@ export function mdToHtml(markdown: string): string {
 // Because code is rendered with `white-space: pre`, that newline shows up as an
 // extra blank line inside the block, so drop exactly one trailing newline per
 // <pre><code> while preserving any intentional blank lines in the source.
-function trimFencedCodeNewline(html: string): string {
+export function trimFencedCodeNewline(html: string): string {
   return html.replace(
     /(<pre><code\b[^>]*>)([\s\S]*?)\r?\n(<\/code><\/pre>)/gi,
     "$1$2$3",

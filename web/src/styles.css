@@ -4,143 +4,8 @@
    restrained neutral palette with a single accent, clear type hierarchy.
    ========================================================================== */
 
-:root {
-  /* Neutrals 鈥?warm, low-contrast "paper" greys instead of cold blue-greys */
-  --bg: #ffffff;
-  --bg-panel: #fafaf8;
-  --bg-soft: #f5f3f0;
-  --bg-hover: #f5f3f0;
-  --bg-active: #fdf4e3;
-  --border: #e8e8e6;
-  --border-strong: #d4d4d2;
+@import "../../internal/sitegen/content.css";
 
-  /* Text 鈥?warm charcoal, never pure black */
-  --text: #37352f;
-  --text-strong: #1a1a1a;
-  --text-muted: #6b6b6b;
-  --text-soft: #9b9b9b;
-  --text-faint: #b7b7b3;
-
-  /* Accent 鈥?calm periwinkle-indigo, softer than an electric blue */
-  --accent: #d4870e;
-  --accent-hover: #b87308;
-  --accent-soft: #fdf4e3;
-  --accent-ring: rgba(212, 135, 14, 0.24);
-  --danger: #d44c47;
-  --danger-soft: #fbebea;
-  --success: #448361;
-
-  /* Code */
-  --code-bg: #f7f6f3;
-  --code-border: #ecebe8;
-
-  /* Syntax highlighting 鈥?muted, editorial tones */
-  --hl-keyword: #9d6fb0;
-  --hl-string: #6a9b72;
-  --hl-number: #a8823f;
-  --hl-title: var(--accent);
-  --hl-attr: #cf7a6a;
-  --hl-deletion-bg: rgba(207, 122, 106, 0.12);
-
-  /* Type scale */
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono:
-    ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono",
-    monospace;
-  --base-size: 16px;
-
-  /* Spacing scale */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-5: 24px;
-  --sp-6: 32px;
-
-  /* Radius & shadow */
-  --radius-sm: 6px;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --shadow-1: 0 1px 2px rgba(15, 15, 15, 0.06);
-  --shadow-2: 0 8px 24px rgba(15, 15, 15, 0.1);
-  --shadow-3: 0 16px 48px rgba(15, 15, 15, 0.16);
-
-  --btn-primary-bg: #1a1a1a;
-  --btn-primary-fg: #ffffff;
-  --btn-primary-hover: #000000;
-
-  --topbar-h: 56px;
-}
-
-:root[data-theme="dark"] {
-  --bg: #1f1e1c;
-  --bg-panel: #262523;
-  --bg-soft: #2d2b28;
-  --bg-hover: #33312d;
-  --bg-active: #3a2f16;
-  --border: #33312d;
-  --border-strong: #454340;
-
-  --text: #e9e6e0;
-  --text-strong: #f7f5f0;
-  --text-muted: #b3afa8;
-  --text-soft: #918c85;
-  --text-faint: #75706a;
-
-  --accent: #e9a23b;
-  --accent-hover: #f2b658;
-  --accent-soft: #3a2f16;
-  --accent-ring: rgba(233, 162, 59, 0.3);
-  --danger: #e28b8b;
-  --danger-soft: #382626;
-  --success: #79bd93;
-
-  --code-bg: #26241f;
-  --code-border: #34322c;
-
-  --hl-keyword: #c9a2dd;
-  --hl-string: #9ed3a6;
-  --hl-number: #e0c48a;
-  --hl-title: var(--accent);
-  --hl-attr: #f0a99b;
-  --hl-deletion-bg: rgba(240, 169, 155, 0.14);
-
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.44);
-  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.56);
-
-  --btn-primary-bg: #e9e6e0;
-  --btn-primary-fg: #1f1e1c;
-  --btn-primary-hover: #ffffff;
-}
-
-/* --------------------------------------------------------------------------
-   Type scale 鈥?everything derives from --base-size so the whole UI stays
-   consistent with the editor body (which is --text-body).
-   -------------------------------------------------------------------------- */
-:root {
-  --text-xs: calc(var(--base-size) - 3px); /* 13px @16 鈥?captions */
-  --text-sm: calc(var(--base-size) - 1px); /* 15px @16 鈥?secondary UI */
-  --text-ui: var(--base-size); /* 16px @16 鈥?primary UI text */
-  --text-body: var(--base-size); /* editor matches the surrounding UI */
-  --text-nav: calc(var(--base-size) - 2px); /* 14px @16 - nav & tree */
-}
-
-/* Font size preference */
-:root[data-font="compact"] {
-  --base-size: 15px;
-}
-:root[data-font="default"] {
-  --base-size: 16px;
-}
-:root[data-font="relaxed"] {
-  --base-size: 17px;
-}
-:root[data-font="large"] {
-  --base-size: 18px;
-}
 
 * {
   box-sizing: border-box;
@@ -1193,15 +1058,6 @@ body.resizing {
   overflow-wrap: anywhere;
 }
 
-.tiptap-content {
-  max-width: 760px;
-  margin: 0 auto;
-  outline: none;
-  line-height: 1.7;
-  font-size: var(--text-body);
-  font-optical-sizing: auto;
-  text-rendering: optimizeLegibility;
-}
 
 /* ProseMirror draws a focus outline on the editable root; suppress it so the
    document never shows a bounding box while editing. */
@@ -1217,125 +1073,15 @@ body.resizing {
   outline: none;
 }
 
-/* First heading acts as the document title (Starlight-style). */
-.tiptap-content h1:first-child {
-  font-size: 2.15em;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 0;
-  padding-bottom: 0.28em;
-  border-bottom: 1px solid var(--border);
-}
 
-.tiptap-content > * + * {
-  margin-top: 0.9em;
-}
 
-.tiptap-content h1,
-.tiptap-content h2,
-.tiptap-content h3,
-.tiptap-content h4 {
-  line-height: 1.3;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  margin-top: 1.6em;
-  color: var(--text-strong);
-}
 
-.tiptap-content h1 {
-  font-size: 1.75em;
-}
-.tiptap-content h2 {
-  font-size: 1.45em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--border);
-}
-.tiptap-content h3 {
-  font-size: 1.16em;
-}
 
-.tiptap-content a {
-  color: var(--accent);
-  text-decoration: none;
-}
 
-@media (hover: hover) and (pointer: fine) {
-  .tiptap-content a:hover {
-    text-decoration: underline;
-  }
-}
 
-.tiptap-content code {
-  font-family: var(--font-mono);
-  font-size: 0.87em;
-  background: var(--code-bg);
-  border: 1px solid var(--code-border);
-  padding: 0.12em 0.36em;
-  border-radius: 5px;
-}
 
-.tiptap-content pre {
-  background: var(--code-bg);
-  border: 1px solid var(--code-border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  overflow: auto;
-}
 
-.tiptap-content pre code {
-  background: transparent;
-  border: none;
-  padding: 0;
-  font-size: 0.86em;
-}
 
-.tiptap-content blockquote {
-  border-left: 3px solid var(--border-strong);
-  padding-left: 14px;
-  color: var(--text-muted);
-  margin-left: 0;
-}
-
-.tiptap-content img {
-  max-width: 100%;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-}
-
-.tiptap-content table {
-  border-collapse: collapse;
-  width: 100%;
-  table-layout: fixed;
-  overflow: hidden;
-  /* Information-dense content gets tighter leading than body copy. */
-  font-size: 0.95em;
-  line-height: 1.4;
-}
-
-.tiptap-content th,
-.tiptap-content td {
-  border: 1px solid var(--border);
-  padding: 5px 10px;
-  vertical-align: top;
-}
-
-/* ProseMirror wraps every cell in a <p>; its default margins made rows far
-   taller than the text. Collapse them so a row hugs its content. */
-.tiptap-content th p,
-.tiptap-content td p {
-  margin: 0;
-}
-
-.tiptap-content th > p + p,
-.tiptap-content td > p + p {
-  margin-top: 0.4em;
-}
-
-.tiptap-content th {
-  background: var(--bg-soft);
-  font-weight: 600;
-  text-align: left;
-}
 
 .tiptap-content .selectedCell::after {
   background: var(--accent-soft);
@@ -1345,10 +1091,6 @@ body.resizing {
   pointer-events: none;
 }
 
-.tiptap-content ul,
-.tiptap-content ol {
-  padding-left: 1.4em;
-}
 
 .tiptap-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
@@ -1358,79 +1100,8 @@ body.resizing {
   height: 0;
 }
 
-.tiptap-content a.wiki-link {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: 4px;
-  padding: 0.05em 0.32em;
-  text-decoration: none;
-}
 
-/* Task lists ------------------------------------------------------------- */
-.tiptap-content ul[data-type="taskList"] {
-  list-style: none;
-  padding-left: 0.2em;
-}
 
-.tiptap-content ul[data-type="taskList"] li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55em;
-  /* Items are single-line rows; keep them tight. */
-  margin: 0.15em 0;
-}
-
-.tiptap-content ul[data-type="taskList"] li > label {
-  display: inline-flex;
-  align-items: center;
-  /* Vertically center the box on the first text line (line-height 1.7). */
-  min-height: calc(1.7 * 1em);
-  margin: 0;
-  user-select: none;
-}
-
-.tiptap-content ul[data-type="taskList"] li > div {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* ProseMirror wraps item text in a <p>; its default margins made rows tall. */
-.tiptap-content ul[data-type="taskList"] li > div > p {
-  margin: 0;
-}
-
-.tiptap-content ul[data-type="taskList"] li > div > p + p {
-  margin-top: 0.4em;
-}
-
-.tiptap-content ul[data-type="taskList"] input[type="checkbox"] {
-  width: 1em;
-  height: 1em;
-  margin: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.tiptap-content ul[data-type="taskList"] li[data-checked="true"] > div {
-  color: var(--text-faint);
-  text-decoration: line-through;
-}
-
-/* Nested task lists stay indented under their parent item. */
-.tiptap-content ul[data-type="taskList"] ul[data-type="taskList"] {
-  margin-top: 0.15em;
-}
-
-/* Math (KaTeX) ----------------------------------------------------------- */
-.tiptap-content .math-inline {
-  padding: 0 0.15em;
-}
-
-.tiptap-content .math-block {
-  overflow-x: auto;
-  padding: 0.4em 0;
-  text-align: center;
-}
 
 .tiptap-content .math-block.ProseMirror-selectednode,
 .tiptap-content .math-inline.ProseMirror-selectednode {
@@ -1438,117 +1109,17 @@ body.resizing {
   border-radius: 4px;
 }
 
-.math-error {
-  color: var(--danger);
-}
 
-/* Mermaid diagrams ------------------------------------------------------- */
-.tiptap-content .mermaid {
-  background: var(--bg-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px;
-  overflow-x: auto;
-  text-align: center;
-}
 
 .tiptap-content .mermaid.ProseMirror-selectednode {
   outline: 2px solid var(--accent);
 }
 
-.tiptap-content .mermaid svg {
-  max-width: 100%;
-  height: auto;
-}
 
-.tiptap-content .mermaid-source {
-  display: none;
-}
 
-.tiptap-content .mermaid.mermaid-error {
-  color: var(--danger);
-  text-align: left;
-  white-space: pre-wrap;
-  font-family: var(--font-mono);
-  font-size: 0.85em;
-}
 
-/* Code block syntax highlighting (lowlight / highlight.js tokens) -------- */
-.tiptap-content pre code .hljs-comment,
-.tiptap-content pre code .hljs-quote {
-  color: var(--text-faint);
-  font-style: italic;
-}
 
-.tiptap-content pre code .hljs-keyword,
-.tiptap-content pre code .hljs-selector-tag,
-.tiptap-content pre code .hljs-built_in,
-.tiptap-content pre code .hljs-name,
-.tiptap-content pre code .hljs-tag {
-  color: var(--hl-keyword);
-}
 
-.tiptap-content pre code .hljs-string,
-.tiptap-content pre code .hljs-attr,
-.tiptap-content pre code .hljs-template-tag,
-.tiptap-content pre code .hljs-addition {
-  color: var(--hl-string);
-}
-
-.tiptap-content pre code .hljs-number,
-.tiptap-content pre code .hljs-literal,
-.tiptap-content pre code .hljs-type,
-.tiptap-content pre code .hljs-params {
-  color: var(--hl-number);
-}
-
-.tiptap-content pre code .hljs-title,
-.tiptap-content pre code .hljs-section,
-.tiptap-content pre code .hljs-function .hljs-title,
-.tiptap-content pre code .hljs-title.function_ {
-  color: var(--hl-title);
-}
-
-.tiptap-content pre code .hljs-attribute,
-.tiptap-content pre code .hljs-variable,
-.tiptap-content pre code .hljs-template-variable {
-  color: var(--hl-attr);
-}
-
-.tiptap-content pre code .hljs-symbol,
-.tiptap-content pre code .hljs-bullet,
-.tiptap-content pre code .hljs-link,
-.tiptap-content pre code .hljs-meta {
-  color: var(--hl-title);
-}
-
-.tiptap-content pre code .hljs-deletion {
-  color: var(--hl-attr);
-  background: var(--hl-deletion-bg);
-}
-
-.tiptap-content pre code .hljs-emphasis {
-  font-style: italic;
-}
-
-.tiptap-content pre code .hljs-strong {
-  font-weight: 700;
-}
-
-/* Footnote footnotes (marked GFM) ---------------------------------------- */
-.tiptap-content sup a,
-.tiptap-content .footnote-ref a {
-  text-decoration: none;
-}
-
-mark {
-  background: #f6eaa0;
-  color: inherit;
-}
-
-:root[data-theme="dark"] mark {
-  background: #46401f;
-}
 
 /* --------------------------------------------------------------------------
    Right-side panels
@@ -3257,25 +2828,6 @@ mark {
 .public-doc,
 .public-doc .tiptap-content {
   overflow-wrap: anywhere;
-}
-
-.public-doc > h1 {
-  max-width: 760px;
-  margin: 0.2em auto 0.5em;
-  font-size: 2.05em;
-  letter-spacing: -0.02em;
-}
-
-.public-doc .tiptap-content h2 {
-  font-size: 1.4em;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.28em;
-  margin-top: 1.7em;
-}
-
-.public-doc .tiptap-content h3 {
-  font-size: 1.16em;
-  margin-top: 1.5em;
 }
 
 /* GFM task lists in read-only documents (marked output, no data-type). */

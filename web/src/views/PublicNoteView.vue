@@ -73,7 +73,7 @@ watch(
         {{ t("public.edit") }}
       </button>
     </template>
-    <article v-if="note" class="public-doc">
+    <article v-if="note" class="public-doc tiptap-content">
       <h1 v-if="showTitle">{{ note.title || note.path }}</h1>
       <div ref="docEl" class="doc-body tiptap-content" v-html="html"></div>
     </article>

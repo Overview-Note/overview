@@ -738,13 +738,25 @@ func cmdBuild(cfg config.Config, args []string, env Env) int {
 		notesDir = cfg.NotesDir
 	}
 
+	assetsDir := cfg.AssetsDir
+	assetURLPrefix := ""
+	if cfg.S3Enabled() {
+		// Assets live in S3; don't copy the (possibly stale) local mirror.
+		assetsDir = ""
+		if cfg.S3PublicURL != "" {
+			assetURLPrefix = strings.TrimRight(cfg.S3PublicURL, "/")
+		}
+	}
+
 	n, err := sitegen.Generate(sitegen.Options{
-		NotesDir:  notesDir,
-		OutDir:    outDir,
-		Base:      basePath,
-		SiteTitle: siteTitle,
-		All:       *all,
-		Theme:     envOr(*theme, "OVERVIEW_SITE_THEME", "auto"),
+		NotesDir:       notesDir,
+		OutDir:         outDir,
+		Base:           basePath,
+		SiteTitle:      siteTitle,
+		All:            *all,
+		Theme:          envOr(*theme, "OVERVIEW_SITE_THEME", "auto"),
+		AssetsDir:      assetsDir,
+		AssetURLPrefix: assetURLPrefix,
 	})
 	if err != nil {
 		return fail(env, err)

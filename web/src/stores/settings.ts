@@ -208,6 +208,21 @@ function rgba(hex: string, a: number): string {
 }
 
 function accentRamp(base: string, mode: "light" | "dark"): AccentRamp {
+  if (base === DEFAULT_ACCENT) {
+    return mode === "dark"
+      ? {
+          accent: "#e9a23b",
+          hover: "#f2b658",
+          soft: "#3a2f16",
+          ring: "rgba(233, 162, 59, 0.3)",
+        }
+      : {
+          accent: "#d4870e",
+          hover: "#b87308",
+          soft: "#fdf4e3",
+          ring: "rgba(212, 135, 14, 0.24)",
+        };
+  }
   if (mode === "dark") {
     const accent = mix(base, "#ffffff", 0.18);
     return {

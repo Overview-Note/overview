@@ -5,20 +5,16 @@ package sitegen
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
-	"fmt"
 	"html/template"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer/html"
 
 	"github.com/Overview-Note/overview/internal/markdown"
 )
@@ -30,6 +26,10 @@ type Page struct {
 	Path     string // vault-relative source path
 	HTML     template.HTML
 	Headings []Heading
+
+	HasCode    bool
+	HasMath    bool
+	HasMermaid bool
 }
 
 // Heading is an entry in a page's outline.
@@ -41,12 +41,14 @@ type Heading struct {
 
 // Options configures the export.
 type Options struct {
-	NotesDir  string
-	OutDir    string
-	Base      string // URL base path, e.g. "/overview/" for GitHub Pages
-	SiteTitle string
-	All       bool   // when true, export every note (not just public ones)
-	Theme     string // "auto" (follow system), "light" or "dark"; default auto
+	NotesDir       string
+	OutDir         string
+	Base           string // URL base path, e.g. "/overview/" for GitHub Pages
+	SiteTitle      string
+	All            bool   // when true, export every note (not just public ones)
+	Theme          string // "auto" (follow system), "light" or "dark"; default auto
+	AssetsDir      string // local asset root copied to <out>/assets (empty to skip)
+	AssetURLPrefix string // absolute asset base (e.g. an S3/CDN URL); when set, AssetsDir is not copied
 }
 
 // normalizeTheme maps arbitrary input to one of auto/light/dark.
@@ -61,7 +63,11 @@ func normalizeTheme(theme string) string {
 	}
 }
 
-var wikiRe = regexp.MustCompile(`\[\[([^[\]]+?)\]\]`)
+// contentCSS is the shared reading typography used by both the app and the
+// generated site. It lives next to this package so go:embed can pick it up.
+//
+//go:embed content.css
+var contentCSS string
 
 // Generate renders every public note in NotesDir to a static site in OutDir.
 func Generate(opts Options) (int, error) {
@@ -77,6 +83,11 @@ func Generate(opts Options) (int, error) {
 	}
 	theme := normalizeTheme(opts.Theme)
 
+	assetBase := base + "assets/"
+	if opts.AssetURLPrefix != "" {
+		assetBase = strings.TrimRight(opts.AssetURLPrefix, "/") + "/"
+	}
+
 	docs, err := loadNotes(opts.NotesDir, opts.All)
 	if err != nil {
 		return 0, err
@@ -89,30 +100,38 @@ func Generate(opts Options) (int, error) {
 		byTitle[strings.ToLower(d.Meta.Title)] = d.slug
 		byName[strings.ToLower(strings.TrimSuffix(filepath.Base(d.path), ".md"))] = d.slug
 	}
-
-	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
-		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
-		goldmark.WithRendererOptions(html.WithUnsafe()),
-	)
+	resolve := func(target string) (string, bool) {
+		key := strings.ToLower(target)
+		slug, ok := byTitle[key]
+		if !ok {
+			slug, ok = byName[key]
+		}
+		if !ok {
+			return "", false
+		}
+		return base + url.PathEscape(slug) + ".html", true
+	}
 
 	pages := make([]Page, 0, len(docs))
+	var anyCode, anyMath, anyMermaid bool
 	for _, d := range docs {
-		body := resolveWikiLinks(d.body, byTitle, byName, base)
-		var buf bytes.Buffer
-		if err := md.Convert([]byte(body), &buf); err != nil {
-			return 0, fmt.Errorf("render %s: %w", d.path, err)
-		}
+		rr := renderNote(d.body, resolve, assetBase)
 		title := d.Meta.Title
 		if title == "" {
 			title = strings.TrimSuffix(filepath.Base(d.path), ".md")
 		}
+		anyCode = anyCode || rr.HasCode
+		anyMath = anyMath || rr.HasMath
+		anyMermaid = anyMermaid || rr.HasMermaid
 		pages = append(pages, Page{
-			Title:    title,
-			Slug:     d.slug,
-			Path:     d.path,
-			HTML:     template.HTML(buf.String()),
-			Headings: extractHeadings(buf.String()),
+			Title:      title,
+			Slug:       d.slug,
+			Path:       d.path,
+			HTML:       template.HTML(rr.HTML),
+			Headings:   rr.Headings,
+			HasCode:    rr.HasCode,
+			HasMath:    rr.HasMath,
+			HasMermaid: rr.HasMermaid,
 		})
 	}
 
@@ -126,11 +145,22 @@ func Generate(opts Options) (int, error) {
 	if err := os.WriteFile(filepath.Join(opts.OutDir, "style.css"), []byte(siteCSS), 0o644); err != nil {
 		return 0, err
 	}
+	if err := os.WriteFile(filepath.Join(opts.OutDir, "content.css"), []byte(contentCSS), 0o644); err != nil {
+		return 0, err
+	}
 	if err := os.WriteFile(filepath.Join(opts.OutDir, "search.js"), []byte(siteJS), 0o644); err != nil {
 		return 0, err
 	}
 	if err := writeSearchIndex(opts.OutDir, pages, base); err != nil {
 		return 0, err
+	}
+	if err := writeVendor(opts.OutDir, anyCode, anyMath, anyMermaid); err != nil {
+		return 0, err
+	}
+	if opts.AssetsDir != "" {
+		if err := copyDir(opts.AssetsDir, filepath.Join(opts.OutDir, "assets")); err != nil {
+			return 0, err
+		}
 	}
 
 	nav := buildNav(pages, base)
@@ -138,14 +168,17 @@ func Generate(opts Options) (int, error) {
 		out := filepath.Join(opts.OutDir, p.Slug+".html")
 		var buf bytes.Buffer
 		if err := pageTmpl.Execute(&buf, map[string]any{
-			"SiteTitle": opts.SiteTitle,
-			"Theme":     theme,
-			"Title":     p.Title,
-			"Base":      base,
-			"Nav":       nav,
-			"Content":   p.HTML,
-			"Headings":  p.Headings,
-			"IsHome":    false,
+			"SiteTitle":  opts.SiteTitle,
+			"Theme":      theme,
+			"Title":      p.Title,
+			"Base":       base,
+			"Nav":        nav,
+			"Content":    p.HTML,
+			"Headings":   p.Headings,
+			"HasCode":    p.HasCode,
+			"HasMath":    p.HasMath,
+			"HasMermaid": p.HasMermaid,
+			"IsHome":     false,
 		}); err != nil {
 			return 0, err
 		}
@@ -219,29 +252,6 @@ func loadNotes(notesDir string, all bool) ([]doc, error) {
 	return docs, err
 }
 
-func resolveWikiLinks(body string, byTitle, byName map[string]string, base string) string {
-	return wikiRe.ReplaceAllStringFunc(body, func(m string) string {
-		inner := wikiRe.FindStringSubmatch(m)[1]
-		target := inner
-		display := inner
-		if i := strings.IndexByte(inner, '|'); i >= 0 {
-			target = inner[:i]
-			display = inner[i+1:]
-		}
-		target = strings.TrimSpace(target)
-		display = strings.TrimSpace(display)
-		key := strings.ToLower(target)
-		slug, ok := byTitle[key]
-		if !ok {
-			slug, ok = byName[key]
-		}
-		if !ok {
-			return display
-		}
-		return fmt.Sprintf("[%s](%s%s.html)", display, base, url.PathEscape(slug))
-	})
-}
-
 type navItem struct {
 	Title string
 	Href  string
@@ -271,24 +281,6 @@ func slugify(s string) string {
 	return s
 }
 
-var headingRe = regexp.MustCompile(`<h([1-4]) id="([^"]+)">(.*?)</h[1-4]>`)
-var tagRe = regexp.MustCompile(`<[^>]+>`)
-
-func extractHeadings(html string) []Heading {
-	var out []Heading
-	for _, m := range headingRe.FindAllStringSubmatch(html, -1) {
-		level := int(m[1][0] - '0')
-		text := tagRe.ReplaceAllString(m[3], "")
-		out = append(out, Heading{Level: level, ID: m[2], Text: htmlUnescape(text)})
-	}
-	return out
-}
-
-func htmlUnescape(s string) string {
-	r := strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">", "&#39;", "'", "&quot;", `"`)
-	return r.Replace(s)
-}
-
 // searchEntry is one page in the client-side search index.
 type searchEntry struct {
 	Title string `json:"title"`
@@ -296,13 +288,11 @@ type searchEntry struct {
 	Text  string `json:"text"`
 }
 
-var wsRe = regexp.MustCompile(`\s+`)
-
 // writeSearchIndex emits search-index.json used by search.js.
 func writeSearchIndex(outDir string, pages []Page, base string) error {
 	entries := make([]searchEntry, 0, len(pages))
 	for _, p := range pages {
-		text := strings.TrimSpace(wsRe.ReplaceAllString(htmlUnescape(tagRe.ReplaceAllString(string(p.HTML), " ")), " "))
+		text := searchText(string(p.HTML))
 		if len(text) > 4000 {
 			text = text[:4000]
 		}
@@ -317,4 +307,49 @@ func writeSearchIndex(outDir string, pages []Page, base string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(outDir, "search-index.json"), data, 0o644)
+}
+
+// copyDir recursively copies a directory tree into dst.
+func copyDir(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	return filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		in, err := os.Open(p)
+		if err != nil {
+			return err
+		}
+		out, err := os.Create(target)
+		if err != nil {
+			in.Close()
+			return err
+		}
+		_, copyErr := io.Copy(out, in)
+		in.Close()
+		if closeErr := out.Close(); copyErr == nil {
+			copyErr = closeErr
+		}
+		return copyErr
+	})
 }
