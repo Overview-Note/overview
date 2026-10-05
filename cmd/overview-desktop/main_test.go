@@ -177,3 +177,19 @@ func TestUnknownDeepLinkFeedbackIsNonBlocking(t *testing.T) {
 		t.Errorf("problemReporter calls = %d, want 1", calls)
 	}
 }
+
+func TestDesktopLogFileDefaultsToDataDir(t *testing.T) {
+	dir := filepath.Join("vault")
+	got := desktopLogFile(config.Config{DataDir: dir})
+	want := filepath.Join(dir, "logs", "desktop.log")
+	if got != want {
+		t.Errorf("desktopLogFile = %q, want %q", got, want)
+	}
+}
+
+func TestDesktopLogFileHonoursExplicitPath(t *testing.T) {
+	got := desktopLogFile(config.Config{DataDir: "vault", LogFile: "custom.log"})
+	if got != "custom.log" {
+		t.Errorf("desktopLogFile = %q, want custom.log", got)
+	}
+}

@@ -6,6 +6,9 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"path"
 	"regexp"
@@ -84,12 +87,71 @@ func (s *Service) Tree(ctx context.Context) ([]core.TreeNode, error) {
 	return buildTree(entries, byPath), nil
 }
 
+// Manifest builds the vault sync inventory: the persistent vault id, every note
+// with its content version, and every folder (including empty ones). The ETag
+// is derived from the highest change sequence and the note count.
+func (s *Service) Manifest(ctx context.Context) (core.VaultManifest, error) {
+	vaultID, err := s.index.VaultID(ctx)
+	if err != nil {
+		return core.VaultManifest{}, err
+	}
+	notes, maxSeq, err := s.index.Manifest(ctx)
+	if err != nil {
+		return core.VaultManifest{}, err
+	}
+	if notes == nil {
+		notes = []core.ManifestNote{}
+	}
+
+	entries, err := s.repo.List(ctx)
+	if err != nil {
+		return core.VaultManifest{}, err
+	}
+	folders := make([]string, 0, 8)
+	for _, e := range entries {
+		if e.IsDir {
+			folders = append(folders, e.Path)
+		}
+	}
+	sort.Strings(folders)
+
+	return core.VaultManifest{
+		VaultID:     vaultID,
+		GeneratedAt: time.Now().UTC(),
+		ETag:        manifestETag(vaultID, maxSeq, len(notes)),
+		Notes:       notes,
+		Folders:     folders,
+	}, nil
+}
+
+// VaultID returns the persistent vault identifier, generating it on first use.
+func (s *Service) VaultID(ctx context.Context) (string, error) {
+	return s.index.VaultID(ctx)
+}
+
+// manifestETag is a strong validator that changes whenever a note is written,
+// created or removed.
+func manifestETag(vaultID string, maxSeq int64, count int) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s:%d:%d", vaultID, maxSeq, count)))
+	return hex.EncodeToString(sum[:16])
+}
+
 // GetNote returns a single note.
 func (s *Service) GetNote(ctx context.Context, path string) (core.Note, error) {
 	if strings.TrimSpace(path) == "" {
 		return core.Note{}, core.Invalidf("path is required")
 	}
 	return s.repo.Read(ctx, path)
+}
+
+// RawNote returns the complete Markdown file bytes of a note (frontmatter
+// included). It is used by the desktop sync client to pull a note faithfully:
+// the bytes hash to the note version advertised by the manifest.
+func (s *Service) RawNote(ctx context.Context, path string) ([]byte, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, core.Invalidf("path is required")
+	}
+	return s.repo.Raw(ctx, path)
 }
 
 // SaveNote writes a note and updates the index.
@@ -108,6 +170,83 @@ func (s *Service) SaveNote(ctx context.Context, path, body, expectedVersion stri
 		return core.Note{}, err
 	}
 	return note, nil
+}
+
+// SaveNoteRaw writes a note from complete Markdown bytes (frontmatter
+// included) without rewriting the document. The client's id and created
+// timestamp are preserved and the stored version equals the hash of content.
+// baseVersion follows the create/update contract, but an empty value is
+// rejected: a sync engine must never write unconditionally.
+func (s *Service) SaveNoteRaw(ctx context.Context, path string, content []byte, expectedVersion string) (core.Note, error) {
+	if strings.TrimSpace(path) == "" {
+		return core.Note{}, core.Invalidf("path is required")
+	}
+	if !isMarkdownPath(path) {
+		return core.Note{}, core.Invalidf("path must be a markdown file")
+	}
+	if expectedVersion == "" {
+		return core.Note{}, core.Invalidf("baseVersion is required")
+	}
+	writer, ok := s.repo.(core.RawWriter)
+	if !ok {
+		return core.Note{}, fmt.Errorf("%w: raw note writes are not supported", core.ErrNotSupported)
+	}
+
+	if s.history != nil {
+		s.snapshot(ctx, path)
+	}
+	exists := false
+	current := ""
+	if existing, err := s.repo.Read(ctx, path); err == nil {
+		exists = true
+		current = existing.Version
+	}
+	if err := checkBaseVersion(expectedVersion, exists, current); err != nil {
+		return core.Note{}, err
+	}
+	if err := writer.WriteRaw(ctx, path, content); err != nil {
+		return core.Note{}, err
+	}
+	note, err := s.repo.Read(ctx, path)
+	if err != nil {
+		return core.Note{}, err
+	}
+	if err := s.index.Upsert(ctx, note); err != nil {
+		return core.Note{}, err
+	}
+	return note, nil
+}
+
+// checkBaseVersion implements the raw sync write version contract. Unlike the
+// repository contract it never allows an unconditional write.
+func checkBaseVersion(expected string, exists bool, current string) error {
+	switch expected {
+	case "*":
+		if exists {
+			return core.Conflictf("note already exists")
+		}
+		return nil
+	case "":
+		return core.Invalidf("baseVersion is required")
+	default:
+		if !exists {
+			return core.Conflictf("note no longer exists")
+		}
+		if expected != current {
+			return core.Conflictf("note was modified by another client")
+		}
+		return nil
+	}
+}
+
+// isMarkdownPath reports whether rel names a Markdown file.
+func isMarkdownPath(rel string) bool {
+	switch strings.ToLower(path.Ext(rel)) {
+	case ".md", ".markdown":
+		return true
+	default:
+		return false
+	}
 }
 
 // snapshot records the current on-disk revision of a note, if it exists.
@@ -217,13 +356,17 @@ func (s *Service) Delete(ctx context.Context, path string) error {
 	if strings.TrimSpace(path) == "" {
 		return core.Invalidf("path is required")
 	}
-	_, readErr := s.repo.Read(ctx, path)
+	existing, readErr := s.repo.Read(ctx, path)
 	isNote := readErr == nil
+	victims := s.deletionVictims(ctx, path, existing, isNote)
 
 	if s.trash != nil {
 		locator, ok := s.repo.(core.PathLocator)
 		if !ok {
-			return s.repo.Delete(ctx, path)
+			if err := s.repo.Delete(ctx, path); err != nil {
+				return err
+			}
+			return s.finishDelete(ctx, path, isNote, victims)
 		}
 		full, err := locator.AbsPath(path)
 		if err != nil {
@@ -235,11 +378,60 @@ func (s *Service) Delete(ctx context.Context, path string) error {
 	} else if err := s.repo.Delete(ctx, path); err != nil {
 		return err
 	}
+	return s.finishDelete(ctx, path, isNote, victims)
+}
 
+// deletionVictims gathers the notes removed by a delete so their tombstones can
+// be recorded after the index is updated. It must run before the files are
+// moved to the trash.
+func (s *Service) deletionVictims(ctx context.Context, path string, existing core.Note, isNote bool) []core.NoteMeta {
 	if isNote {
-		return s.index.DeleteByPath(ctx, path)
+		return []core.NoteMeta{{ID: existing.ID, Path: existing.Path}}
 	}
-	return s.index.ReplacePrefix(ctx, path, nil)
+	notes, err := s.repo.ListUnder(ctx, path)
+	if err != nil {
+		return nil
+	}
+	victims := make([]core.NoteMeta, 0, len(notes))
+	for _, n := range notes {
+		victims = append(victims, core.NoteMeta{ID: n.ID, Path: n.Path})
+	}
+	return victims
+}
+
+// finishDelete updates the index for a removed note or folder and records a
+// tombstone for every note that disappeared.
+func (s *Service) finishDelete(ctx context.Context, path string, isNote bool, victims []core.NoteMeta) error {
+	var err error
+	if isNote {
+		err = s.index.DeleteByPath(ctx, path)
+	} else {
+		err = s.index.ReplacePrefix(ctx, path, nil)
+	}
+	if err != nil {
+		return err
+	}
+	return s.recordTombstones(ctx, victims, "")
+}
+
+// recordTombstones persists deletion markers so a sync client can reconcile
+// removals. Notes without an id (not yet indexed) are skipped.
+func (s *Service) recordTombstones(ctx context.Context, victims []core.NoteMeta, device string) error {
+	now := time.Now().UTC()
+	for _, v := range victims {
+		if v.ID == "" {
+			continue
+		}
+		if err := s.index.RecordTombstone(ctx, core.Tombstone{
+			ID:        v.ID,
+			Path:      v.Path,
+			DeletedAt: now,
+			Device:    device,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Trash lists soft-deleted items.
@@ -288,6 +480,10 @@ func (s *Service) Move(ctx context.Context, from, to string) error {
 	if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
 		return core.Invalidf("from and to are required")
 	}
+	moved, err := s.repo.ListUnder(ctx, from)
+	if err != nil {
+		return err
+	}
 	if err := s.repo.Move(ctx, from, to); err != nil {
 		return err
 	}
@@ -298,7 +494,14 @@ func (s *Service) Move(ctx context.Context, from, to string) error {
 	if err != nil {
 		return err
 	}
-	return s.index.ReplacePrefix(ctx, to, notes)
+	if err := s.index.ReplacePrefix(ctx, to, notes); err != nil {
+		return err
+	}
+	victims := make([]core.NoteMeta, 0, len(moved))
+	for _, n := range moved {
+		victims = append(victims, core.NoteMeta{ID: n.ID, Path: n.Path})
+	}
+	return s.recordTombstones(ctx, victims, "")
 }
 
 // Mkdir creates a folder.
@@ -358,6 +561,16 @@ func (s *Service) ResolveLink(ctx context.Context, raw string) (core.NoteMeta, e
 // Upload stores an asset.
 func (s *Service) Upload(ctx context.Context, name string, r io.Reader) (core.Asset, error) {
 	return s.assets.Save(ctx, name, r)
+}
+
+// RestoreAsset writes an attachment body at an explicit vault-relative path.
+// Backends without explicit-path restore (for example S3) return ErrNotSupported.
+func (s *Service) RestoreAsset(ctx context.Context, rel string, r io.Reader) error {
+	restorer, ok := s.assets.(core.AssetRestorer)
+	if !ok {
+		return fmt.Errorf("%w: asset path restore is not supported by the active backend", core.ErrNotSupported)
+	}
+	return restorer.Restore(ctx, rel, r)
 }
 
 // OpenAsset returns a reader for an asset.

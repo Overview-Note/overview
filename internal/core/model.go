@@ -75,7 +75,8 @@ type Note struct {
 
 // NoteMeta is the lightweight projection of a note stored in the index. It
 // deliberately excludes the body so the directory tree can be built without
-// reading file contents.
+// reading file contents. Version carries the content hash used by the sync
+// manifest.
 type NoteMeta struct {
 	ID      string    `json:"id"`
 	Path    string    `json:"path"`
@@ -83,6 +84,36 @@ type NoteMeta struct {
 	Tags    []string  `json:"tags"`
 	Updated time.Time `json:"updated"`
 	Size    int64     `json:"size"`
+	Version string    `json:"version"`
+}
+
+// ManifestNote is a note inventory entry in the vault sync manifest.
+type ManifestNote struct {
+	ID      string    `json:"id"`
+	Path    string    `json:"path"`
+	Version string    `json:"version"`
+	Updated time.Time `json:"updated"`
+	Size    int64     `json:"size"`
+	Public  bool      `json:"public"`
+}
+
+// VaultManifest is the inventory a desktop client uses to plan a sync:
+// the persistent vault identifier, every note with its content version, and
+// every folder (including empty ones).
+type VaultManifest struct {
+	VaultID     string         `json:"vaultId"`
+	GeneratedAt time.Time      `json:"generatedAt"`
+	ETag        string         `json:"etag"`
+	Notes       []ManifestNote `json:"notes"`
+	Folders     []string       `json:"folders"`
+}
+
+// Tombstone records the deletion of a note so a client can reconcile a sync.
+type Tombstone struct {
+	ID        string    `json:"id"`
+	Path      string    `json:"path"`
+	DeletedAt time.Time `json:"deletedAt"`
+	Device    string    `json:"device"`
 }
 
 // Entry is a single filesystem entry (folder or note) without its content.

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oklog/ulid/v2"
 	_ "modernc.org/sqlite"
 
 	"github.com/Overview-Note/overview/internal/core"
@@ -164,6 +165,14 @@ func (ix *Index) Sync(ctx context.Context, notes []core.Note) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	// A full rebuild must not look like a change to sync clients, so carry the
+	// existing change sequence forward for notes whose id, path and version are
+	// unchanged. Everything else gets a fresh, higher sequence.
+	existing, err := readChangeState(ctx, tx)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM notes`); err != nil {
 		return err
 	}
@@ -174,7 +183,18 @@ func (ix *Index) Sync(ctx context.Context, notes []core.Note) error {
 		return err
 	}
 	for _, n := range notes {
-		if err := insertGuarded(ctx, tx, ix.logger, n); err != nil {
+		if prev, ok := existing[ensureNoteID(n).ID]; ok &&
+			prev.path == n.Path && prev.version == n.Version {
+			if err := insertGuarded(ctx, tx, ix.logger, n, prev.seq); err != nil {
+				return err
+			}
+			continue
+		}
+		seq, err := nextChangeSeq(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := insertGuarded(ctx, tx, ix.logger, n, seq); err != nil {
 			return err
 		}
 	}
@@ -204,8 +224,14 @@ func (ix *Index) ReplacePrefix(ctx context.Context, prefix string, notes []core.
 		`DELETE FROM notes WHERE path = ? OR path LIKE ? ESCAPE '\'`, prefix, like); err != nil {
 		return err
 	}
+	// A subtree replacement may be a move, so every reinserted note is treated
+	// as changed and receives a fresh sequence.
 	for _, n := range notes {
-		if err := insertGuarded(ctx, tx, ix.logger, n); err != nil {
+		seq, err := nextChangeSeq(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := insertGuarded(ctx, tx, ix.logger, n, seq); err != nil {
 			return err
 		}
 	}
@@ -220,7 +246,7 @@ func escapeLike(s string) string {
 // Tree returns metadata for every indexed note.
 func (ix *Index) Tree(ctx context.Context) ([]core.NoteMeta, error) {
 	rows, err := ix.db.QueryContext(ctx,
-		`SELECT id, path, title, tags, updated, size FROM notes ORDER BY path`)
+		`SELECT id, path, title, tags, updated, size, version FROM notes ORDER BY path`)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +258,7 @@ func (ix *Index) Tree(ctx context.Context) ([]core.NoteMeta, error) {
 			m        core.NoteMeta
 			tags, up string
 		)
-		if err := rows.Scan(&m.ID, &m.Path, &m.Title, &tags, &up, &m.Size); err != nil {
+		if err := rows.Scan(&m.ID, &m.Path, &m.Title, &tags, &up, &m.Size, &m.Version); err != nil {
 			return nil, err
 		}
 		m.Tags = splitTags(tags)
@@ -240,6 +266,43 @@ func (ix *Index) Tree(ctx context.Context) ([]core.NoteMeta, error) {
 		metas = append(metas, m)
 	}
 	return metas, rows.Err()
+}
+
+// Manifest returns the sync inventory of notes (ordered by path) together with
+// the highest change sequence. The sequence grows on every indexed write and
+// lets callers derive a manifest ETag.
+func (ix *Index) Manifest(ctx context.Context) ([]core.ManifestNote, int64, error) {
+	rows, err := ix.db.QueryContext(ctx,
+		`SELECT id, path, version, updated, size, public FROM notes ORDER BY path`)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	notes := make([]core.ManifestNote, 0, 64)
+	for rows.Next() {
+		var (
+			n        core.ManifestNote
+			up       string
+			isPublic int
+		)
+		if err := rows.Scan(&n.ID, &n.Path, &n.Version, &up, &n.Size, &isPublic); err != nil {
+			return nil, 0, err
+		}
+		n.Updated = parseTime(up)
+		n.Public = isPublic != 0
+		notes = append(notes, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	var seq int64
+	if err := ix.db.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(changed_seq), 0) FROM notes`).Scan(&seq); err != nil {
+		return nil, 0, err
+	}
+	return notes, seq, nil
 }
 
 // Search runs a full-text query and returns escaped snippets.
@@ -439,7 +502,11 @@ func upsert(ctx context.Context, tx *sql.Tx, n core.Note) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE id = ?`, n.ID); err != nil {
 		return err
 	}
-	return insert(ctx, tx, n)
+	seq, err := nextChangeSeq(ctx, tx)
+	if err != nil {
+		return err
+	}
+	return insert(ctx, tx, n, seq)
 }
 
 // insertSavepoint scopes a single note insert so one failure can be rolled
@@ -461,11 +528,11 @@ func ensureNoteID(n core.Note) core.Note {
 // insertGuarded inserts a single note inside a savepoint. A failure only
 // discards that note, logs a warning, and lets the caller's transaction and
 // the remaining notes commit.
-func insertGuarded(ctx context.Context, tx *sql.Tx, logger *slog.Logger, n core.Note) error {
+func insertGuarded(ctx context.Context, tx *sql.Tx, logger *slog.Logger, n core.Note, seq int64) error {
 	if _, err := tx.ExecContext(ctx, "SAVEPOINT "+insertSavepoint); err != nil {
 		return err
 	}
-	if err := insert(ctx, tx, n); err != nil {
+	if err := insert(ctx, tx, n, seq); err != nil {
 		if _, rbErr := tx.ExecContext(ctx, "ROLLBACK TO "+insertSavepoint); rbErr != nil {
 			return err
 		}
@@ -481,14 +548,14 @@ func insertGuarded(ctx context.Context, tx *sql.Tx, logger *slog.Logger, n core.
 	return nil
 }
 
-func insert(ctx context.Context, tx *sql.Tx, n core.Note) error {
+func insert(ctx context.Context, tx *sql.Tx, n core.Note, seq int64) error {
 	n = ensureNoteID(n)
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO notes (id, path, name, title, tags, body, created, updated, size, version, public)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO notes (id, path, name, title, tags, body, created, updated, size, version, public, changed_seq)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		n.ID, n.Path, noteName(n.Path), n.Title, strings.Join(n.Tags, ","), n.Body,
 		n.Created.UTC().Format(time.RFC3339), n.Updated.UTC().Format(time.RFC3339),
-		n.Size, n.Version, boolToInt(n.Public)); err != nil {
+		n.Size, n.Version, boolToInt(n.Public), seq); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx,
@@ -520,6 +587,75 @@ func deleteByPath(ctx context.Context, tx *sql.Tx, path string) error {
 	}
 	_, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE path = ?`, path)
 	return err
+}
+
+// changeState captures the fields needed to decide whether a full rebuild can
+// preserve a note's change sequence.
+type changeState struct {
+	path    string
+	version string
+	seq     int64
+}
+
+// readChangeState snapshots the current change sequences before a full rebuild
+// and returns them keyed by note id.
+func readChangeState(ctx context.Context, tx *sql.Tx) (map[string]changeState, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id, path, version, changed_seq FROM notes`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	states := map[string]changeState{}
+	for rows.Next() {
+		var (
+			id string
+			s  changeState
+		)
+		if err := rows.Scan(&id, &s.path, &s.version, &s.seq); err != nil {
+			return nil, err
+		}
+		states[id] = s
+	}
+	return states, rows.Err()
+}
+
+// settingChangeSeq is the settings key holding the monotonic change counter.
+const settingChangeSeq = "change_seq"
+
+// nextChangeSeq allocates the next change sequence. The counter is persisted so
+// a sequence is never reused after its note is deleted, which keeps the manifest
+// ETag strictly monotonic. On first use it is seeded from the highest indexed
+// sequence.
+func nextChangeSeq(ctx context.Context, tx *sql.Tx) (int64, error) {
+	var cur int64
+	var raw string
+	err := tx.QueryRowContext(ctx,
+		`SELECT value FROM settings WHERE key = ?`, settingChangeSeq).Scan(&raw)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COALESCE(MAX(changed_seq), 0) FROM notes`).Scan(&cur); err != nil {
+			return 0, err
+		}
+	case err != nil:
+		return 0, err
+	default:
+		v, perr := strconv.ParseInt(raw, 10, 64)
+		if perr != nil {
+			return 0, fmt.Errorf("invalid change_seq %q: %w", raw, perr)
+		}
+		cur = v
+	}
+
+	cur++
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO settings (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		settingChangeSeq, strconv.FormatInt(cur, 10)); err != nil {
+		return 0, err
+	}
+	return cur, nil
 }
 
 // matchExpr builds a safe FTS5 MATCH expression from pre-segmented tokens.
@@ -562,6 +698,61 @@ func (ix *Index) SetSetting(ctx context.Context, key, value string) error {
 		`INSERT INTO settings (key, value) VALUES (?, ?)
 		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
+}
+
+// settingVaultID is the settings key holding the persistent vault identifier.
+const settingVaultID = "vault_id"
+
+// VaultID returns the persistent vault identifier, generating and persisting a
+// new ULID the first time it is requested.
+func (ix *Index) VaultID(ctx context.Context) (string, error) {
+	id, err := ix.GetSetting(ctx, settingVaultID)
+	if err != nil {
+		return "", err
+	}
+	if id != "" {
+		return id, nil
+	}
+	id = ulid.Make().String()
+	if err := ix.SetSetting(ctx, settingVaultID, id); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// RecordTombstone upserts a deletion marker for a note. A note that is deleted
+// again (or moved) overwrites its earlier marker.
+func (ix *Index) RecordTombstone(ctx context.Context, t core.Tombstone) error {
+	_, err := ix.db.ExecContext(ctx, `
+		INSERT INTO note_tombstones (id, path, deleted_at, device) VALUES (?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			path = excluded.path, deleted_at = excluded.deleted_at, device = excluded.device`,
+		t.ID, t.Path, t.DeletedAt.UTC().Format(time.RFC3339), t.Device)
+	return err
+}
+
+// Tombstones returns every recorded deletion marker, oldest first.
+func (ix *Index) Tombstones(ctx context.Context) ([]core.Tombstone, error) {
+	rows, err := ix.db.QueryContext(ctx,
+		`SELECT id, path, deleted_at, device FROM note_tombstones ORDER BY deleted_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]core.Tombstone, 0, 16)
+	for rows.Next() {
+		var (
+			t  core.Tombstone
+			at string
+		)
+		if err := rows.Scan(&t.ID, &t.Path, &at, &t.Device); err != nil {
+			return nil, err
+		}
+		t.DeletedAt = parseTime(at)
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 // PublicNotes returns metadata for all notes marked public.

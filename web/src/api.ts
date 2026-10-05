@@ -112,6 +112,45 @@ export interface UpdateInfo {
   url: string;
 }
 
+export type SyncDirection = "both" | "pull" | "push";
+export type SyncState = "idle" | "syncing" | "error" | "paused";
+
+export interface SyncProgress {
+  done: number;
+  total: number;
+}
+
+export interface SyncConflict {
+  id: string;
+  originalPath: string;
+  conflictPath: string;
+  localVersion: string;
+  remoteVersion: string;
+  detectedAt: string;
+}
+
+export interface SyncStatus {
+  enabled: boolean;
+  serverURL: string;
+  vaultId: string;
+  direction: SyncDirection;
+  intervalSec: number;
+  lastSyncAt: string;
+  status: SyncState;
+  progress: SyncProgress;
+  conflicts: SyncConflict[];
+  lastError: string;
+  connected: boolean;
+}
+
+export interface SyncConfigInput {
+  serverURL: string;
+  token?: string;
+  enabled: boolean;
+  direction: SyncDirection;
+  intervalSec: number;
+}
+
 export interface TreeNode {
   name: string;
   path: string;
@@ -511,6 +550,40 @@ export const api = {
   async checkUpdate(): Promise<UpdateInfo> {
     const res = await fetch(`${BASE}/desktop/update`);
     return json<UpdateInfo>(res);
+  },
+
+  async syncStatus(): Promise<SyncStatus> {
+    const res = await fetch(`${BASE}/desktop/sync`);
+    return json<SyncStatus>(res);
+  },
+
+  async saveSync(cfg: SyncConfigInput): Promise<SyncStatus> {
+    const res = await fetch(`${BASE}/desktop/sync`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    return json<SyncStatus>(res);
+  },
+
+  async runSync(): Promise<{ started: boolean }> {
+    const res = await fetch(`${BASE}/desktop/sync/run`, { method: "POST" });
+    return json<{ started: boolean }>(res);
+  },
+
+  async syncConflicts(): Promise<SyncConflict[]> {
+    const res = await fetch(`${BASE}/desktop/sync/conflicts`);
+    const data = await json<{ conflicts?: SyncConflict[] } | SyncConflict[]>(res);
+    return Array.isArray(data) ? data : (data.conflicts ?? []);
+  },
+
+  async resolveSyncConflict(id: string, keep: "local" | "remote"): Promise<void> {
+    const res = await fetch(`${BASE}/desktop/sync/conflicts/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, keep }),
+    });
+    if (!res.ok) throw await parseError(res);
   },
 
   async aiChat(

@@ -2199,6 +2199,68 @@ body.resizing {
   margin-top: var(--sp-4);
 }
 
+.sync-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-3) var(--sp-4);
+}
+
+.sync-status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sync-status-label {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sync-status-item > span:not(.sync-status-label) {
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.sync-conflicts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.sync-conflict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+
+.sync-conflict-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.sync-conflict-info .settings-hint {
+  margin: 0;
+}
+
+.sync-conflict-arrow {
+  color: var(--text-soft);
+}
+
 @media (max-width: 860px) {
   .settings-view {
     flex-direction: column;

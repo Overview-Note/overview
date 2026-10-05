@@ -68,6 +68,11 @@ export const router = createRouter({
           component: () => import("./views/settings/DesktopSection.vue"),
         },
         {
+          path: "sync",
+          name: "settings-sync",
+          component: () => import("./views/settings/SyncSection.vue"),
+        },
+        {
           path: "users",
           name: "settings-users",
           component: () => import("./views/settings/UsersSection.vue"),

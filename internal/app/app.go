@@ -19,6 +19,7 @@ import (
 
 	"github.com/Overview-Note/overview/internal/agent"
 	"github.com/Overview-Note/overview/internal/config"
+	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/history"
 	"github.com/Overview-Note/overview/internal/index"
 	"github.com/Overview-Note/overview/internal/mcp"
@@ -56,6 +57,8 @@ type App struct {
 	watchCancel context.CancelFunc
 	watcherDone chan struct{}
 
+	syncEng SyncEngine
+
 	reindexCancel context.CancelFunc
 	reindexDone   chan struct{}
 
@@ -63,11 +66,38 @@ type App struct {
 	stopErr  error
 }
 
+// SyncDeps exposes the local vault resources a sync engine needs. The app
+// builds these and hands them to a SyncFactory.
+type SyncDeps struct {
+	DataDir  string
+	NotesDir string
+	Repo     core.NoteRepository
+	Raw      core.RawWriter
+	Assets   core.AssetStore
+	Logger   *slog.Logger
+}
+
+// SyncEngine is the desktop sync engine the app manages. It also satisfies the
+// server's SyncHooks, so the same value powers the desktop sync endpoints.
+type SyncEngine interface {
+	server.SyncHooks
+	Start(ctx context.Context)
+	Stop(ctx context.Context) error
+	NotifyDirty(path string)
+}
+
+// SyncFactory builds a sync engine from the app's local vault.
+type SyncFactory func(SyncDeps) (SyncEngine, error)
+
 // Options carries optional dependencies injected by a host process.
 type Options struct {
 	// DesktopHooks exposes desktop-shell capabilities to the HTTP API. It is
 	// nil for a headless server.
 	DesktopHooks server.DesktopHooks
+	// SyncFactory, when set, builds the desktop sync engine from the app's
+	// vault. The engine is started and stopped with the app and exposed to the
+	// desktop sync endpoints.
+	SyncFactory SyncFactory
 	// UpdateCheck overrides the GitHub release lookup used by the desktop
 	// update endpoint. It is nil in production, where update.CheckLatest is
 	// used.
@@ -195,6 +225,23 @@ func (a *App) build() error {
 	siteSvc := service.NewSite(idx)
 	siteSvc.Load(context.Background())
 
+	var syncHooks server.SyncHooks
+	if a.opts.SyncFactory != nil {
+		engine, err := a.opts.SyncFactory(SyncDeps{
+			DataDir:  cfg.DataDir,
+			NotesDir: cfg.NotesDir,
+			Repo:     st,
+			Raw:      st,
+			Assets:   assets,
+			Logger:   a.logger,
+		})
+		if err != nil {
+			return fmt.Errorf("build sync engine: %w", err)
+		}
+		a.syncEng = engine
+		syncHooks = engine
+	}
+
 	storageSvc := service.NewStorage(idx, st, assets)
 	storageSvc.SetDefaults(service.StorageConfig{
 		Endpoint:  cfg.S3Endpoint,
@@ -228,6 +275,7 @@ func (a *App) build() error {
 		SiteTitle:      cfg.SiteTitle,
 		LocalOnly:      cfg.Desktop,
 		DesktopHooks:   a.opts.DesktopHooks,
+		SyncHooks:      syncHooks,
 		UpdateCheck:    a.opts.UpdateCheck,
 	})
 	if cfg.Render {
@@ -287,6 +335,10 @@ func (a *App) Start(ctx context.Context) (string, error) {
 
 	a.watchCancel, a.watcherDone = a.startWatcher()
 
+	if a.syncEng != nil {
+		a.syncEng.Start(ctx)
+	}
+
 	reindexCtx, cancelReindex := context.WithTimeout(ctx, reindexTimeout)
 	a.reindexCancel = cancelReindex
 	a.reindexDone = make(chan struct{})
@@ -324,13 +376,30 @@ func (a *App) listen() (net.Listener, error) {
 func (a *App) startWatcher() (context.CancelFunc, chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
+	var reindexer watcher.Reindexer = a.svc
+	if a.syncEng != nil {
+		reindexer = dirtyReindexer{svc: a.svc, engine: a.syncEng}
+	}
 	go func() {
 		defer close(done)
-		if err := watcher.New(a.cfg.NotesDir, a.svc, a.logger).Run(ctx); err != nil {
+		if err := watcher.New(a.cfg.NotesDir, reindexer, a.logger).Run(ctx); err != nil {
 			a.logger.Warn("file watcher stopped", "error", err)
 		}
 	}()
 	return cancel, done
+}
+
+// dirtyReindexer reindexes a changed path and wakes the sync engine. It lets a
+// locally edited note propagate to the server shortly after the watcher
+// debounce fires.
+type dirtyReindexer struct {
+	svc    *service.Service
+	engine SyncEngine
+}
+
+func (d dirtyReindexer) ReindexPath(ctx context.Context, path string) error {
+	d.engine.NotifyDirty(path)
+	return d.svc.ReindexPath(ctx, path)
 }
 
 func (a *App) reindex(ctx context.Context) {
@@ -347,6 +416,11 @@ func (a *App) reindex(ctx context.Context) {
 func (a *App) Stop(ctx context.Context) error {
 	a.stopOnce.Do(func() {
 		// Stop background work and wait for it before closing the index.
+		if a.syncEng != nil {
+			if err := a.syncEng.Stop(ctx); err != nil && a.stopErr == nil {
+				a.stopErr = err
+			}
+		}
 		if a.reindexCancel != nil {
 			a.reindexCancel()
 		}

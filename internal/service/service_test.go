@@ -2,6 +2,8 @@ package service_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -372,5 +374,108 @@ func TestConflictPropagates(t *testing.T) {
 	}
 	if _, err := svc.SaveNote(ctx, "n.md", "v2", first.Version, false); err != nil {
 		t.Errorf("valid update failed: %v", err)
+	}
+}
+
+func TestDeleteAndMoveRecordTombstones(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	notes := filepath.Join(root, "notes")
+	assets := filepath.Join(root, "assets")
+	_ = os.MkdirAll(notes, 0o755)
+	_ = os.MkdirAll(assets, 0o755)
+	ix, err := index.Open(filepath.Join(root, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ix.Close() })
+	st := store.New(notes, assets)
+	tr := trash.New(filepath.Join(root, ".trash"))
+	svc := service.New(st, ix, st, nil, tr)
+
+	if _, err := svc.SaveNote(ctx, "a.md", "# A", "*", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Delete(ctx, "a.md"); err != nil {
+		t.Fatalf("delete note: %v", err)
+	}
+
+	if _, err := svc.SaveNote(ctx, "dir/b.md", "# B", "*", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Delete(ctx, "dir"); err != nil {
+		t.Fatalf("delete folder: %v", err)
+	}
+
+	if _, err := svc.SaveNote(ctx, "old/c.md", "# C", "*", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Move(ctx, "old", "new"); err != nil {
+		t.Fatalf("move folder: %v", err)
+	}
+
+	tombs, err := ix.Tombstones(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string]bool{}
+	for _, tb := range tombs {
+		paths[tb.Path] = true
+		if tb.ID == "" {
+			t.Errorf("tombstone without id: %+v", tb)
+		}
+	}
+	for _, want := range []string{"a.md", "dir/b.md", "old/c.md"} {
+		if !paths[want] {
+			t.Errorf("missing tombstone for %s: %+v", want, tombs)
+		}
+	}
+}
+
+func TestManifestFoldersAndRawWrite(t *testing.T) {
+	ctx := context.Background()
+	svc := newService(t)
+
+	if err := svc.Mkdir(ctx, "empty"); err != nil {
+		t.Fatal(err)
+	}
+	content := []byte("---\nid: sync-id\ncreated: \"2024-01-01T00:00:00Z\"\n---\n\n# T\n\nbody\n")
+	note, err := svc.SaveNoteRaw(ctx, "dir/raw.md", content, "*")
+	if err != nil {
+		t.Fatalf("raw save: %v", err)
+	}
+	sum := sha256.Sum256(content)
+	if note.Version != hex.EncodeToString(sum[:]) {
+		t.Errorf("version = %q, want hash of raw bytes", note.Version)
+	}
+	if note.ID != "sync-id" {
+		t.Errorf("id = %q, want sync-id", note.ID)
+	}
+
+	if _, err := svc.SaveNoteRaw(ctx, "dir/raw.md", content, ""); err == nil {
+		t.Error("empty baseVersion must be rejected")
+	}
+	if _, err := svc.SaveNoteRaw(ctx, "dir/raw.md", content, "stale"); err == nil {
+		t.Error("stale baseVersion must conflict")
+	}
+
+	m, err := svc.Manifest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.VaultID == "" || m.ETag == "" {
+		t.Fatalf("manifest missing ids: %+v", m)
+	}
+	if len(m.Notes) != 1 || m.Notes[0].Version != note.Version {
+		t.Errorf("manifest notes = %+v", m.Notes)
+	}
+	hasEmpty := false
+	for _, f := range m.Folders {
+		if f == "empty" {
+			hasEmpty = true
+		}
+	}
+	if !hasEmpty {
+		t.Errorf("empty folder missing from manifest: %v", m.Folders)
 	}
 }

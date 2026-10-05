@@ -28,6 +28,7 @@ const allItems: NavItem[] = [
   { name: "settings-storage", labelKey: "storage.title", admin: true },
   { name: "settings-data", labelKey: "settings.data", admin: true },
   { name: "settings-desktop", labelKey: "settings.desktop", desktop: true },
+  { name: "settings-sync", labelKey: "sync.title", desktop: true },
   { name: "settings-users", labelKey: "users.title", admin: true },
   { name: "settings-tokens", labelKey: "tokens.title", admin: true },
 ];

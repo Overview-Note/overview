@@ -2,11 +2,13 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"mime"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +45,10 @@ func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 	rel := r.URL.Query().Get("path")
+	if r.URL.Query().Get("raw") == "1" {
+		s.handleGetNoteRaw(w, r, rel)
+		return
+	}
 	note, err := s.svc.GetNote(r.Context(), rel)
 	if err != nil {
 		s.writeDomainError(w, err)
@@ -56,11 +62,40 @@ func (s *Server) handleGetNote(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, note)
 }
 
+// handleGetNoteRaw returns the complete Markdown file bytes of a note so a
+// sync client can reconstruct the exact file (and its version hash). The ETag
+// carries the note version.
+func (s *Server) handleGetNoteRaw(w http.ResponseWriter, r *http.Request, rel string) {
+	note, err := s.svc.GetNote(r.Context(), rel)
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	if s.opts.Render && !note.Public {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	raw, err := s.svc.RawNote(r.Context(), rel)
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	w.Header().Set("ETag", etag(note.Version))
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
+}
+
 type saveNoteRequest struct {
 	Path        string `json:"path"`
 	Body        string `json:"body"`
 	BaseVersion string `json:"baseVersion"`
 	Public      bool   `json:"public"`
+	// Raw requests a faithful write: Content holds the complete Markdown file
+	// bytes (frontmatter included) and is stored verbatim.
+	Raw     bool   `json:"raw"`
+	Content string `json:"content"`
 }
 
 func (s *Server) handleSaveNote(w http.ResponseWriter, r *http.Request) {
@@ -73,13 +108,80 @@ func (s *Server) handleSaveNote(w http.ResponseWriter, r *http.Request) {
 	if im := r.Header.Get("If-Match"); im != "" {
 		expected = trimETag(im)
 	}
-	note, err := s.svc.SaveNote(r.Context(), req.Path, req.Body, expected, req.Public)
+
+	var (
+		note core.Note
+		err  error
+	)
+	if req.Raw {
+		note, err = s.svc.SaveNoteRaw(r.Context(), req.Path, []byte(req.Content), expected)
+	} else {
+		note, err = s.svc.SaveNote(r.Context(), req.Path, req.Body, expected, req.Public)
+	}
 	if err != nil {
 		s.writeDomainError(w, err)
 		return
 	}
 	w.Header().Set("ETag", etag(note.Version))
 	writeJSON(w, http.StatusOK, note)
+}
+
+// handleSyncManifest returns the vault sync inventory. The response carries a
+// strong ETag derived from the index change sequence; a matching If-None-Match
+// yields 304.
+func (s *Server) handleSyncManifest(w http.ResponseWriter, r *http.Request) {
+	manifest, err := s.svc.Manifest(r.Context())
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	tag := etag(manifest.ETag)
+	w.Header().Set("ETag", tag)
+	w.Header().Set("Cache-Control", "no-cache")
+	if match := r.Header.Get("If-None-Match"); match != "" && trimETag(match) == manifest.ETag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	writeJSON(w, http.StatusOK, manifest)
+}
+
+// handleRestoreAsset writes a request body to an explicit vault-relative asset
+// path. Backends that cannot restore an explicit path (S3) return 501.
+func (s *Server) handleRestoreAsset(w http.ResponseWriter, r *http.Request) {
+	rel := r.PathValue("path")
+	if err := validateAssetPath(rel); err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, s.opts.MaxUploadBytes)
+	if err := s.svc.RestoreAsset(r.Context(), rel, r.Body); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "asset exceeds the maximum upload size")
+			return
+		}
+		s.writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": rel, "url": "/assets/" + rel})
+}
+
+// validateAssetPath rejects empty, absolute, traversal and malformed asset
+// paths before they reach the asset store.
+func validateAssetPath(rel string) error {
+	rel = strings.TrimSpace(rel)
+	if rel == "" {
+		return core.Invalidf("path is required")
+	}
+	if strings.ContainsAny(rel, "\\\x00:") || strings.HasPrefix(rel, "/") || filepath.IsAbs(rel) {
+		return core.Invalidf("invalid asset path %q", rel)
+	}
+	for _, seg := range strings.Split(rel, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return core.Invalidf("invalid asset path %q", rel)
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {

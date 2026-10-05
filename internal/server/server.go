@@ -46,6 +46,9 @@ type Options struct {
 	// DesktopHooks supplies desktop-shell state to the settings endpoint. It is
 	// nil for a headless server, which hides the desktop endpoints.
 	DesktopHooks DesktopHooks
+	// SyncHooks supplies vault-sync state and control to the desktop sync
+	// endpoints. It is nil for a headless server, which hides them.
+	SyncHooks SyncHooks
 	// UpdateCheck overrides the release lookup used by the desktop update
 	// endpoint. When nil, update.CheckLatest is used.
 	UpdateCheck UpdateChecker
@@ -205,8 +208,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/resolve", s.handleResolve)
 	s.mux.HandleFunc("POST "+base+"/assets", s.handleUploadAsset)
 	s.mux.HandleFunc("GET "+base+"/assets/{path...}", s.handleAsset)
+	s.mux.HandleFunc("PUT "+base+"/assets/{path...}", s.handleRestoreAsset)
 	s.mux.HandleFunc("POST "+base+"/capture/preview", s.handleCapturePreview)
 	s.mux.HandleFunc("POST "+base+"/reindex", s.handleReindex)
+
+	// Desktop/server synchronization.
+	s.mux.HandleFunc("GET "+base+"/sync/manifest", s.handleSyncManifest)
 
 	// API documentation (public).
 	s.mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPI)
@@ -260,6 +267,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/desktop/settings", s.handleDesktopSettingsGet)
 	s.mux.HandleFunc("PUT "+base+"/desktop/settings", s.handleDesktopSettingsPut)
 	s.mux.HandleFunc("GET "+base+"/desktop/update", s.handleDesktopUpdate)
+
+	// Desktop vault synchronization (available only when running under
+	// LocalOnly with a sync engine attached).
+	s.mux.HandleFunc("GET "+base+"/desktop/sync", s.handleSyncGet)
+	s.mux.HandleFunc("PUT "+base+"/desktop/sync", s.handleSyncPut)
+	s.mux.HandleFunc("POST "+base+"/desktop/sync/run", s.handleSyncRun)
+	s.mux.HandleFunc("GET "+base+"/desktop/sync/conflicts", s.handleSyncConflicts)
+	s.mux.HandleFunc("POST "+base+"/desktop/sync/conflicts/resolve", s.handleSyncResolve)
 
 	// Public (anonymous) read-only access to shared notes.
 	s.mux.HandleFunc("GET "+base+"/public/notes", s.handlePublicNotes)
@@ -507,8 +522,12 @@ func statusCode(status int) string {
 		return "not_found"
 	case http.StatusConflict:
 		return "conflict"
+	case http.StatusRequestEntityTooLarge:
+		return "too_large"
 	case http.StatusTooManyRequests:
 		return "rate_limited"
+	case http.StatusNotImplemented:
+		return "not_supported"
 	case http.StatusServiceUnavailable:
 		return "unavailable"
 	default:
@@ -525,6 +544,8 @@ func (s *Server) writeDomainError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, core.ErrInvalid):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, core.ErrNotSupported):
+		writeError(w, http.StatusNotImplemented, err.Error())
 	case errors.Is(err, core.ErrUnauthorized):
 		writeError(w, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, core.ErrForbidden):

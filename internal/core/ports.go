@@ -54,6 +54,17 @@ type Index interface {
 	ReplacePrefix(ctx context.Context, prefix string, notes []Note) error
 	// Tree returns metadata for every indexed note.
 	Tree(ctx context.Context) ([]NoteMeta, error)
+	// Manifest returns the sync inventory of notes together with the highest
+	// change sequence, used to build the manifest ETag. Notes are ordered by
+	// path.
+	Manifest(ctx context.Context) ([]ManifestNote, int64, error)
+	// VaultID returns the persistent vault identifier, generating and storing
+	// one on first use.
+	VaultID(ctx context.Context) (string, error)
+	// RecordTombstone upserts a deletion marker for a note.
+	RecordTombstone(ctx context.Context, t Tombstone) error
+	// Tombstones returns all recorded deletion markers, oldest first.
+	Tombstones(ctx context.Context) ([]Tombstone, error)
 	// Search runs a full-text query and returns escaped snippets.
 	Search(ctx context.Context, query string, limit, offset int) ([]SearchHit, error)
 	// OutgoingLinks returns the wiki-links originating from the note at path,

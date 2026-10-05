@@ -3,6 +3,8 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -16,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/index"
 	"github.com/Overview-Note/overview/internal/server"
 	"github.com/Overview-Note/overview/internal/service"
@@ -608,6 +611,220 @@ func TestAssetAttachmentDisposition(t *testing.T) {
 	cd := got.Header.Get("Content-Disposition")
 	if !strings.HasPrefix(cd, "attachment; filename=") || !strings.Contains(cd, "spec.pdf") {
 		t.Errorf("pdf content-disposition = %q", cd)
+	}
+}
+
+func TestSyncManifest(t *testing.T) {
+	ts := newTestServer(t)
+	if resp, b := doJSON(t, http.MethodPost, ts.URL+"/api/v1/folder",
+		map[string]string{"path": "空文件夹"}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("create folder: %d %v", resp.StatusCode, b)
+	}
+	if resp, b := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]string{
+		"path": "docs/a.md", "body": "# A\n\nhello", "baseVersion": "*",
+	}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("create note: %d %v", resp.StatusCode, b)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/sync/manifest", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("manifest status = %d", resp.StatusCode)
+	}
+	etagHeader := resp.Header.Get("ETag")
+	if etagHeader == "" {
+		t.Fatal("manifest is missing an ETag header")
+	}
+	var manifest struct {
+		VaultID string           `json:"vaultId"`
+		ETag    string           `json:"etag"`
+		Notes   []map[string]any `json:"notes"`
+		Folders []string         `json:"folders"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		t.Fatal(err)
+	}
+	if manifest.VaultID == "" || manifest.ETag == "" {
+		t.Fatalf("manifest missing vaultId/etag: %+v", manifest)
+	}
+	if len(manifest.Notes) != 1 || manifest.Notes[0]["version"] == "" {
+		t.Fatalf("manifest notes missing version: %+v", manifest.Notes)
+	}
+	hasEmpty := false
+	for _, f := range manifest.Folders {
+		if f == "空文件夹" {
+			hasEmpty = true
+		}
+	}
+	if !hasEmpty {
+		t.Errorf("empty folder missing from manifest folders: %v", manifest.Folders)
+	}
+
+	// A matching If-None-Match yields 304.
+	req2, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/sync/manifest", nil)
+	req2.Header.Set("If-None-Match", etagHeader)
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusNotModified {
+		t.Errorf("conditional manifest = %d, want 304", resp2.StatusCode)
+	}
+
+	// A write invalidates the stale validator.
+	if resp, b := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]string{
+		"path": "docs/a.md", "body": "# A\n\nchanged", "baseVersion": "",
+	}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("update note: %d %v", resp.StatusCode, b)
+	}
+	req3, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/sync/manifest", nil)
+	req3.Header.Set("If-None-Match", etagHeader)
+	resp3, err := http.DefaultClient.Do(req3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp3.Body.Close()
+	if resp3.StatusCode != http.StatusOK {
+		t.Errorf("stale conditional manifest = %d, want 200", resp3.StatusCode)
+	}
+}
+
+func TestSyncRawWrite(t *testing.T) {
+	ts := newTestServer(t)
+	content := "---\nid: client-abc\ntitle: 原始\ncreated: \"2024-01-01T00:00:00Z\"\n---\n\n# 正文\n\nraw body\n"
+	sum := sha256.Sum256([]byte(content))
+	want := hex.EncodeToString(sum[:])
+
+	// An empty baseVersion is forbidden for sync writes.
+	if resp, _ := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]any{
+		"path": "raw.md", "raw": true, "content": content, "baseVersion": "",
+	}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("empty baseVersion = %d, want 400", resp.StatusCode)
+	}
+
+	resp, created := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]any{
+		"path": "raw.md", "raw": true, "content": content, "baseVersion": "*",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("raw create = %d %v", resp.StatusCode, created)
+	}
+	if created["id"] != "client-abc" {
+		t.Errorf("frontmatter id not preserved: %v", created["id"])
+	}
+	if created["version"] != want {
+		t.Errorf("version = %v, want %v", created["version"], want)
+	}
+
+	_, note := doJSON(t, http.MethodGet, ts.URL+"/api/v1/note?path="+url.QueryEscape("raw.md"), nil)
+	if note["version"] != want {
+		t.Errorf("GET version = %v, want %v", note["version"], want)
+	}
+	if note["id"] != "client-abc" {
+		t.Errorf("GET id = %v", note["id"])
+	}
+
+	// Creating over an existing note conflicts.
+	if resp, _ := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]any{
+		"path": "raw.md", "raw": true, "content": content, "baseVersion": "*",
+	}); resp.StatusCode != http.StatusConflict {
+		t.Errorf("create over existing = %d, want 409", resp.StatusCode)
+	}
+	// A stale baseVersion conflicts.
+	if resp, _ := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]any{
+		"path": "raw.md", "raw": true, "content": content, "baseVersion": "stale",
+	}); resp.StatusCode != http.StatusConflict {
+		t.Errorf("stale raw write = %d, want 409", resp.StatusCode)
+	}
+	// A matching baseVersion succeeds.
+	if resp, _ := doJSON(t, http.MethodPut, ts.URL+"/api/v1/note", map[string]any{
+		"path": "raw.md", "raw": true, "content": content, "baseVersion": want,
+	}); resp.StatusCode != http.StatusOK {
+		t.Errorf("matching raw write = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestAssetPathWrite(t *testing.T) {
+	ts := newTestServer(t)
+	body := []byte("PNGDATA2")
+
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/assets/attachments/pic.png", bytes.NewReader(body))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("asset path write = %d", resp.StatusCode)
+	}
+
+	got, err := http.Get(ts.URL + "/assets/attachments/pic.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Body.Close()
+	if got.StatusCode != http.StatusOK {
+		t.Fatalf("get restored asset = %d", got.StatusCode)
+	}
+	raw, _ := io.ReadAll(got.Body)
+	if string(raw) != string(body) {
+		t.Errorf("asset body = %q, want %q", raw, body)
+	}
+
+	// Traversal is rejected before it reaches the store.
+	req2, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/assets/..%2fescape.png", bytes.NewReader(body))
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Errorf("traversal write = %d, want 400", resp2.StatusCode)
+	}
+}
+
+// bareAssetStore implements only core.AssetStore, so it does not support
+// explicit-path restore.
+type bareAssetStore struct{}
+
+func (bareAssetStore) Save(context.Context, string, io.Reader) (core.Asset, error) {
+	return core.Asset{}, nil
+}
+func (bareAssetStore) Open(context.Context, string) (io.ReadSeekCloser, error) {
+	return nil, core.ErrNotFound
+}
+func (bareAssetStore) ListAssets(context.Context) ([]core.Asset, error) { return nil, nil }
+func (bareAssetStore) DeleteAsset(context.Context, string) error        { return nil }
+
+func TestAssetPathWriteUnsupportedBackend(t *testing.T) {
+	root := t.TempDir()
+	notes := filepath.Join(root, "notes")
+	assets := filepath.Join(root, "assets")
+	_ = os.MkdirAll(notes, 0o755)
+	_ = os.MkdirAll(assets, 0o755)
+	ix, err := index.Open(filepath.Join(root, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ix.Close() })
+	st := store.New(notes, assets)
+	sw := service.NewSwitchableAssetStore(bareAssetStore{})
+	svc := service.New(st, ix, sw, nil, nil)
+	ts := httptest.NewServer(server.New(svc, server.Options{MaxUploadBytes: 1 << 20}).Handler())
+	t.Cleanup(ts.Close)
+
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/assets/x.png", strings.NewReader("data"))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotImplemented {
+		t.Errorf("unsupported restore = %d, want 501", resp.StatusCode)
 	}
 }
 

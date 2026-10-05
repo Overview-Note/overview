@@ -39,6 +39,7 @@ import (
 	"github.com/Overview-Note/overview/internal/app"
 	"github.com/Overview-Note/overview/internal/config"
 	"github.com/Overview-Note/overview/internal/logging"
+	overviewsync "github.com/Overview-Note/overview/internal/sync"
 	"github.com/Overview-Note/overview/internal/update"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -64,6 +65,7 @@ func main() {
 	lg := setupLogger(flags.cfg)
 	defer lg.Close()
 	app.Version = version
+	lg.Info("desktop shell starting", "version", version, "dataDir", flags.cfg.DataDir)
 
 	d := &desktop{
 		cfg:             flags.cfg,
@@ -174,6 +176,7 @@ func (d *desktop) start() {
 
 	server, err := app.NewWithOptions(cfg, d.logger, app.Options{
 		DesktopHooks: &desktopHooks{desktop: d},
+		SyncFactory:  desktopSyncFactory,
 	})
 	if err != nil {
 		d.fatal("无法启动 Overview", err)
@@ -194,6 +197,7 @@ func (d *desktop) start() {
 		d.fatal("无法确定本地地址", err)
 		return
 	}
+	d.logger.Info("local server listening", "addr", addr, "url", base)
 	d.mu.Lock()
 	d.baseURL = base
 	d.mu.Unlock()
@@ -277,6 +281,19 @@ func (h *desktopHooks) SetAutostart(on bool) error {
 }
 
 func (h *desktopHooks) DataDir() string { return h.desktop.cfg.DataDir }
+
+// desktopSyncFactory builds the vault sync engine from the app's local vault.
+// The engine also serves the desktop sync endpoints through app.Options.
+func desktopSyncFactory(deps app.SyncDeps) (app.SyncEngine, error) {
+	return overviewsync.NewEngine(overviewsync.Options{
+		DataDir:   deps.DataDir,
+		Repo:      deps.Repo,
+		Raw:       deps.Raw,
+		Assets:    deps.Assets,
+		Logger:    deps.Logger,
+		UserAgent: "Overview-Desktop/" + version,
+	})
+}
 
 // forwardArgs routes a second instance's command line, which carries a file
 // path or an overview:// URL when the OS opens a document or deep link.
@@ -642,7 +659,7 @@ func setupLogger(cfg config.Config) *logging.Logger {
 	lg, err := logging.New(logging.Options{
 		Level:   cfg.LogLevel,
 		Format:  cfg.LogFormat,
-		File:    cfg.LogFile,
+		File:    desktopLogFile(cfg),
 		MaxMB:   cfg.LogMaxMB,
 		Backups: cfg.LogBackups,
 	})
@@ -651,4 +668,15 @@ func setupLogger(cfg config.Config) *logging.Logger {
 	}
 	slog.SetDefault(lg.Logger)
 	return lg
+}
+
+// desktopLogFile returns the file the desktop shell logs to. An explicit
+// OVERVIEW_LOG_FILE (surfaced through cfg.LogFile) always wins; otherwise logs
+// go to <DataDir>/logs/desktop.log. The GUI build has no console, so a file is
+// the only place to diagnose a failed launch.
+func desktopLogFile(cfg config.Config) string {
+	if cfg.LogFile != "" {
+		return cfg.LogFile
+	}
+	return filepath.Join(cfg.DataDir, "logs", "desktop.log")
 }
