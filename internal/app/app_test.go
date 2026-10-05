@@ -203,10 +203,13 @@ func TestStartFallsBackToRandomPort(t *testing.T) {
 		t.Fatalf("health status = %d, want 200", resp.StatusCode)
 	}
 
-	// MCP and WebDAV are disabled by default on desktop: requests fall through
-	// to the SPA shell instead of a protocol handler.
-	if got := postContentType(t, "http://"+addr+"/mcp"); !strings.HasPrefix(got, "text/html") {
-		t.Errorf("disabled /mcp content-type = %q, want the SPA shell", got)
+	// MCP and WebDAV are disabled by default on desktop, so neither endpoint is
+	// mounted. Assert on the absence of a protocol response rather than the SPA
+	// fallback: the embedded frontend is not built in CI, where /mcp falls
+	// through to a plain 404 instead of index.html.
+	status, contentType, body := postResponse(t, "http://"+addr+"/mcp")
+	if strings.HasPrefix(contentType, "application/json") || status == http.StatusAccepted || strings.Contains(body, "jsonrpc") {
+		t.Errorf("disabled /mcp answered as MCP: status = %d, content-type = %q, body = %q", status, contentType, body)
 	}
 	if code := propfindStatus(t, "http://"+addr+"/dav/"); code == 207 {
 		t.Error("disabled /dav/ answered a WebDAV PROPFIND")
@@ -269,15 +272,16 @@ func postStatus(t *testing.T, url, authorization string) int {
 	return resp.StatusCode
 }
 
-func postContentType(t *testing.T, url string) string {
+func postResponse(t *testing.T, url string) (int, string, string) {
 	t.Helper()
 	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader("{}"))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
-	return resp.Header.Get("Content-Type")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, resp.Header.Get("Content-Type"), string(body)
 }
 
 func propfindStatus(t *testing.T, url string) int {

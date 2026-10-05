@@ -9,7 +9,10 @@ name: Desktop
 # Platform matrix:
 #   windows-latest  amd64, CGO disabled  (WebView2 needs no CGO)
 #   macos-14        arm64, CGO enabled   (Xcode command line tools)
-#   macos-13        amd64, CGO enabled
+#   macos-14        amd64, CGO enabled, cross-compiled from the arm64 runner.
+#                   The macos-13 (Intel) runner is no longer reliably available;
+#                   the macOS SDK is universal, so Go passes clang -arch x86_64
+#                   and produces a native Intel binary from Apple Silicon.
 #   ubuntu-24.04    amd64, CGO enabled, GTK4 + WebKitGTK 6.0
 #   ubuntu-22.04    amd64, CGO enabled, -tags "desktop gtk3" (GTK3 + WebKit2GTK 4.1)
 # A failing platform does not cancel the others (fail-fast: false).
@@ -49,7 +52,7 @@ jobs:
             tags: desktop
             ext: ""
           - name: macos-amd64
-            os: macos-13
+            os: macos-14
             goos: darwin
             goarch: amd64
             cgo: "1"

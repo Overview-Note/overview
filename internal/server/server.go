@@ -107,7 +107,7 @@ func (s *Server) publicBaseURL(r *http.Request) string {
 
 // Handler returns the composed handler (middleware + routes).
 func (s *Server) Handler() http.Handler {
-	var h http.Handler = s.authMiddleware(s.mux)
+	h := s.authMiddleware(s.mux)
 	if s.opts.LocalOnly {
 		h = localGuard(h)
 	}
