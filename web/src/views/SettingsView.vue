@@ -22,6 +22,7 @@ const allItems: NavItem[] = [
   { name: "settings-ai", labelKey: "ai.title" },
   { name: "settings-mail", labelKey: "mail.title", admin: true },
   { name: "settings-site", labelKey: "site.title", admin: true },
+  { name: "settings-storage", labelKey: "storage.title", admin: true },
   { name: "settings-data", labelKey: "settings.data", admin: true },
   { name: "settings-users", labelKey: "users.title", admin: true },
   { name: "settings-tokens", labelKey: "tokens.title", admin: true },

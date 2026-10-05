@@ -32,6 +32,7 @@ type Options struct {
 	Agent          *agent.Agent
 	Mail           *service.MailService
 	Site           *service.SiteService
+	Storage        *service.StorageService
 	// BaseURL is the externally reachable origin used to build links in
 	// outbound email. When empty it is derived from each request.
 	BaseURL string
@@ -235,6 +236,11 @@ func (s *Server) routes() {
 	// Public site configuration (login page presentation).
 	s.mux.HandleFunc("GET "+base+"/settings/site", s.handleGetSiteSettings)
 	s.mux.HandleFunc("PUT "+base+"/settings/site", s.handleSaveSiteSettings)
+
+	// Asset backend (local filesystem or S3-compatible object storage).
+	s.mux.HandleFunc("GET "+base+"/settings/storage", s.handleGetStorageSettings)
+	s.mux.HandleFunc("PUT "+base+"/settings/storage", s.handleSaveStorageSettings)
+	s.mux.HandleFunc("POST "+base+"/settings/storage/test", s.handleTestStorage)
 
 	// Public (anonymous) read-only access to shared notes.
 	s.mux.HandleFunc("GET "+base+"/public/notes", s.handlePublicNotes)

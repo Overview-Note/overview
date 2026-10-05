@@ -73,6 +73,32 @@ export interface MailSettingsInput {
   starttls: boolean;
 }
 
+export interface StorageSettings {
+  endpoint: string;
+  region: string;
+  accessKey: string;
+  bucket: string;
+  useSSL: boolean;
+  publicURL: string;
+  hasSecret: boolean;
+  enabled: boolean;
+}
+
+export interface StorageSettingsInput {
+  endpoint: string;
+  region: string;
+  accessKey: string;
+  secretKey: string;
+  bucket: string;
+  useSSL: boolean;
+  publicURL: string;
+}
+
+export interface StorageTestResult {
+  ok: boolean;
+  message: string;
+}
+
 export interface TreeNode {
   name: string;
   path: string;
@@ -426,6 +452,33 @@ export const api = {
       body: JSON.stringify(cfg),
     });
     return json<MailSettings>(res);
+  },
+
+  async storageSettings(): Promise<StorageSettings> {
+    const res = await fetch(`${BASE}/settings/storage`);
+    return json<StorageSettings>(res);
+  },
+
+  async saveStorageSettings(cfg: StorageSettingsInput): Promise<StorageSettings> {
+    const res = await fetch(`${BASE}/settings/storage`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    return json<StorageSettings>(res);
+  },
+
+  async testStorage(cfg?: StorageSettingsInput): Promise<StorageTestResult> {
+    const res = await fetch(`${BASE}/settings/storage/test`, {
+      method: "POST",
+      ...(cfg
+        ? {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cfg),
+          }
+        : {}),
+    });
+    return json<StorageTestResult>(res);
   },
 
   async aiChat(

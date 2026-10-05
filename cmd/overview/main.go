@@ -15,7 +15,6 @@ import (
 	"github.com/Overview-Note/overview/internal/agent"
 	"github.com/Overview-Note/overview/internal/cli"
 	"github.com/Overview-Note/overview/internal/config"
-	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/history"
 	"github.com/Overview-Note/overview/internal/index"
 	"github.com/Overview-Note/overview/internal/logging"
@@ -80,7 +79,7 @@ func serve() {
 	hist := history.New(cfg.HistoryDir, cfg.HistoryKeep)
 	tr := trash.New(cfg.TrashDir)
 
-	var assets core.AssetStore = st
+	assets := service.NewSwitchableAssetStore(st)
 	if cfg.S3Enabled() {
 		s3, err := s3store.New(context.Background(), s3store.Options{
 			Endpoint:  cfg.S3Endpoint,
@@ -95,7 +94,7 @@ func serve() {
 			logger.Error("init s3 asset store", "error", err)
 			os.Exit(1)
 		}
-		assets = s3
+		assets.Set(s3)
 		logger.Info("using s3 asset backend", "bucket", cfg.S3Bucket)
 	}
 
@@ -165,6 +164,20 @@ func serve() {
 	siteSvc := service.NewSite(idx)
 	siteSvc.Load(context.Background())
 
+	storageSvc := service.NewStorage(idx, st, assets)
+	storageSvc.SetDefaults(service.StorageConfig{
+		Endpoint:  cfg.S3Endpoint,
+		Region:    cfg.S3Region,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		Bucket:    cfg.S3Bucket,
+		UseSSL:    cfg.S3UseSSL,
+		PublicURL: cfg.S3PublicURL,
+	})
+	if err := storageSvc.Load(context.Background()); err != nil {
+		logger.Warn("load storage settings", "error", err)
+	}
+
 	srv := server.New(svc, server.Options{
 		MaxUploadBytes: cfg.MaxUploadMB << 20,
 		Static:         staticFS,
@@ -178,6 +191,7 @@ func serve() {
 		Agent:          agt,
 		Mail:           mailSvc,
 		Site:           siteSvc,
+		Storage:        storageSvc,
 		BaseURL:        cfg.BaseURL,
 		Render:         cfg.Render,
 		SiteTitle:      cfg.SiteTitle,

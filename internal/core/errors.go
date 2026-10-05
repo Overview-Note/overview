@@ -17,6 +17,9 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 	// ErrForbidden indicates the authenticated user lacks permission.
 	ErrForbidden = errors.New("forbidden")
+	// ErrNotSupported indicates an optional capability is unavailable on the
+	// active backend (for example archive asset restore on an S3 store).
+	ErrNotSupported = errors.New("not supported")
 )
 
 // Invalidf wraps ErrInvalid with a formatted message.

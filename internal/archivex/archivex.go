@@ -15,6 +15,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -190,6 +191,10 @@ func (i *Importer) Import(ctx context.Context, r io.ReaderAt, size int64) (Resul
 				continue
 			}
 			if err := i.importAsset(ctx, file, rel, restorer); err != nil {
+				if errors.Is(err, core.ErrNotSupported) {
+					res.Skipped++
+					continue
+				}
 				return res, fmt.Errorf("import asset %s: %w", rel, err)
 			}
 			res.Assets++

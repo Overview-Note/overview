@@ -53,6 +53,11 @@ export const router = createRouter({
           component: () => import("./views/settings/SiteSection.vue"),
         },
         {
+          path: "storage",
+          name: "settings-storage",
+          component: () => import("./views/settings/StorageSection.vue"),
+        },
+        {
           path: "data",
           name: "settings-data",
           component: () => import("./views/settings/DataSection.vue"),
