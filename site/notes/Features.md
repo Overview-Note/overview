@@ -71,7 +71,9 @@ public: true
 - **Live sync** — a file watcher reindexes external edits
 - **Pluggable assets** — local filesystem or any S3-compatible store, switchable at runtime
   under **Settings → Object storage** (no restart; existing assets are not migrated)
-- **Static export** with a client-side search and `sitemap.xml` / `robots.txt`
+- **Static export** with a client-side search and `sitemap.xml` / `robots.txt`, rendered
+  **identically to the app's reading view** (shared `content.css` + aligned DOM) with
+  highlight.js/KaTeX/Mermaid vendored at the same versions and loaded on demand
 
 ## Appearance & settings
 

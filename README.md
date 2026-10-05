@@ -109,8 +109,12 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Settings page** — standalone `/settings` route: appearance (theme, font, language,
   **accent color**), editor, AI, mail server, site, object storage, data, user management,
   API tokens
-- **Static export & sitemap/robots** — publish public notes as a read-only site, with the
-  same palette as the app
+- **Static export & sitemap/robots** — publish public notes as a read-only site that renders
+  **exactly like the app's reading view**: a single shared stylesheet (`content.css`) and the
+  same DOM contract for code, tasks, footnotes, math, diagrams, tables, images and wiki-links.
+  Heavy renderers (highlight.js, KaTeX, Mermaid) ship at the **same versions as the app** and
+  load **on demand**, so the export works offline and a site with no math/diagrams carries no
+  extra weight
 
 ---
 
@@ -287,6 +291,14 @@ under [`site/notes`](site) and are rendered two ways:
   make site-export     # outputs ./_site
   ```
 
+The static export is **rendering-identical to the app's reading view** and works fully
+offline. The app, the public pages and the export all share one stylesheet
+(`internal/sitegen/content.css`) and one content DOM contract, so a note looks the same in
+the editor, on a public page and in the published site. Syntax highlighting, math (KaTeX)
+and Mermaid diagrams are produced in the browser by libraries vendored at the **same
+versions the app uses**, loaded **on demand** — a page with no math, diagrams or code pulls
+none of them.
+
 The export is deployed automatically to GitHub Pages by
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml).
 
@@ -381,6 +393,9 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
   (single capability source `internal/tools`, shared with MCP)
 - [x] Responsive mobile layout (drawer sidebar, bottom-sheet panels, touch basics) and
   runtime-switchable S3 object storage under **Settings → Object storage**
+- [x] Static docs site rendered identically to the app (shared `content.css`, aligned DOM
+  contract, on-demand same-version highlight.js/KaTeX/Mermaid); public/editor/static three
+  states unified on one contract
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

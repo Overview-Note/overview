@@ -98,6 +98,12 @@ overview -C ./data build ./public --all           # include private notes
 overview -C ./data build ./public --theme dark     # force light|dark|auto
 ```
 
+The exported site renders like the app's reading view: it links the shared `content.css`
+and uses the same DOM contract, with highlight.js/KaTeX/Mermaid vendored at the app's
+versions and loaded on demand (offline-capable; no extra weight for pages without math,
+diagrams or code). Under an S3 asset backend it copies no local `assets/` and points at
+`OVERVIEW_S3_PUBLIC_URL` instead.
+
 The exported site follows the visitor's system preference by default (`--theme auto`);
 pass `--theme light` or `--theme dark` (or set `OVERVIEW_SITE_THEME`) to pin it. The
 palette matches the app (warm amber accent).

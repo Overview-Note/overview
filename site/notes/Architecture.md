@@ -41,6 +41,10 @@ public: true
    bottom-sheet panels, touch basics) rather than shipping a separate mobile build.
 5. **Safe writes.** Atomic writes (temp → fsync → rename) and optimistic concurrency
    (content hash / ETag → 409).
+6. **One rendering contract.** The editor reading state, public pages and the exported
+   static site share a single stylesheet (`internal/sitegen/content.css`) and the same DOM
+   contract; heavy renderers (highlight.js/KaTeX/Mermaid) are vendored at the app's versions
+   and loaded on demand, so the export renders like the app and works offline.
 
 ## Packages
 
@@ -62,7 +66,7 @@ public: true
 | `mcp` | MCP server (protocol `2026-07-28`, dual-era); thin JSON-RPC adapter over `tools` |
 | `cli` | Offline command-line adapter (notes, history, trash, assets, static site) |
 | `openapi` | OpenAPI spec (drives `tools` schemas) |
-| `sitegen` | Static documentation-site export (HTML + client-side search) |
+| `sitegen` | Static documentation-site export: app-aligned DOM (`render.go`), shared `content.css`, on-demand same-version runtime enhancement (`vendor.go`), client-side search |
 | `ai` | OpenAI-compatible chat client (including function/tool calling) |
 | `config`, `logging` | Environment config, structured logging |
 | `server`, `webui` | HTTP routing/middleware, static handler (gzip + caching), embedded frontend |

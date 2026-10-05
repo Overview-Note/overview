@@ -87,10 +87,21 @@ overview build ./public --title "My Docs"
 overview build ./public --theme dark    # auto (default) | light | dark
 ```
 
-Output contains one `.html` per note, `index.html`, `style.css`, `search.js` and
-`search-index.json`. The theme defaults to `auto` (the visitor's system preference);
-`--theme light|dark` (or `OVERVIEW_SITE_THEME`) pins it. `export` is an alias of
-`build`, so the older `overview export` command keeps working.
+Output contains one `.html` per note, `index.html`, `style.css`, the shared reading
+stylesheet `content.css`, `search.js`, `search-index.json`, the runtime enhancer
+`readonly-enhance.js` and — only for the features a page actually uses — a `vendor/`
+folder (`vendor/highlight`, `vendor/katex`, `vendor/mermaid`). Local `assets/` are copied
+recursively; when assets live in S3 the export points at `OVERVIEW_S3_PUBLIC_URL` instead
+and copies nothing.
+
+The generated site renders **exactly like the app's reading view**: the same
+`content.css` and the same DOM contract for code blocks, task lists, footnotes, math,
+Mermaid diagrams, tables, images and wiki-links. Highlighting, math and diagrams are
+rendered in the browser by libraries vendored at the **same versions the app uses** and
+loaded **on demand**, so the export is self-contained and offline-capable. The theme
+defaults to `auto` (the visitor's system preference); `--theme light|dark` (or
+`OVERVIEW_SITE_THEME`) pins it. `export` is an alias of `build`, so the older
+`overview export` command keeps working.
 
 ## Relationship to the server
 

@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.13.2（手机端适配 · 对象存储设置 · AI 面板与用户管理修复）
+> 版本：v0.13.3（静态文档站与应用阅读态一致）
 > 更新日期：2026-10-05
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -29,6 +29,7 @@
 | v0.13.0 | AI 智能体（工具调用） | 内置助手从纯文本聊天升级为**可执行应用内操作的智能体**：抽取 `internal/tools` 为唯一能力源（原 `internal/mcp/generate.go`+`tools.go` 的 `toolBindings`/`runTool`/schema 迁入，MCP 变薄适配器），新增 `Defs()/DefsOpenAI()/Exec()/Risk()/Allows()/Preview()`；`internal/ai` 支持 OpenAI 兼容 function/tool calling（`ChatTools`/`AgentMessage`/`ToolCall`/`ErrToolsUnsupported` + 能力探测）；新增 `internal/agent` 有界循环（默认 8 步）、进程内会话 registry（TTL/容量）、危险操作「预览→确认→执行」（`/ai/agent/confirm`）、`Stop` 与审计；迁移 `0009_ai_tool_audit` + `internal/index/audit.go`（args 脱敏）；HTTP 新增 `/ai/agent`、`/ai/agent/confirm`、`/ai/agent/stop`，`/ai/status` 与 `/settings/ai` 扩展 agent 字段；前端新增 `AgentPanel/ToolCallCard/ConfirmBar` + `stores/agent.ts` + 编辑器「助手 / 智能体」分段；安全模型含按角色裁剪工具、危险必确认、防提示注入、按用户限流与能力探测降级 |
 | v0.13.1 | 侧栏与标题栏排版 | 统一侧栏字号层级（笔记/文件夹）；放大顶栏与标题栏高度，改善可读性 |
 | v0.13.2 | 手机端适配 · 对象存储设置 · 修复 | 响应式手机端（P0+P1）：抽屉式侧栏（汉堡 + 遮罩，次要入口收进抽屉）、顶栏手机化、编辑器全宽、工具栏/note-bar 横向滚动、右侧面板改底部抽屉（大纲/反链/历史/AI）、移动端搜索浮层、触屏基础（tap-highlight、`touch-action`、`:active`、hover 门槛、16px 输入、≥40px 目标、`100dvh`/safe-area）、明暗 `theme-color`、PWA `orientation` + 192/512 PNG 图标；S3 对象存储可在设置页配置并运行时切换（新增 `internal/service/storage.go` 的 `SwitchableAssetStore`/`StorageService` 与 `internal/server/storage.go` 的 `GET/PUT /settings/storage`、`POST /settings/storage/test`，前端 `StorageSection.vue`；env 为初始值、secret 不回传、历史附件不迁移、保存失败不切换）；用户管理窄屏三行布局；AI「整理/补全」打开笔记后按钮失效与空笔记无提示修复 |
+| v0.13.3 | 静态文档站与应用阅读态一致 | 新增共享内容样式 `internal/sitegen/content.css`（设计令牌含 `--hl-*` + `.tiptap-content` 全部阅读态规则），App `web/src/styles.css` 以 `@import` 复用、静态站 `<link>` 同一文件（单一真源）；Go 侧 `internal/sitegen/render.go` 用 goldmark + `x/net/html` 后处理把静态站 DOM 对齐编辑器契约（`pre.code-block > code.language-*`、`ul[data-type=taskList]`/`li[data-type=taskItem][data-checked]`、`.fn-ref`/`.fn-defs`、`.math-inline`/`.math-block[data-tex]`、`.mermaid[data-source]`、表格 `th>p`/`td>p`、`a.wiki-link`（未命中 `wiki-missing`）、`img loading/decoding`、标题 slug 与 `doc.ts` 一致、搜索索引纳入代码/数学/图表源文本、`assets/` 递归拷贝）；运行期用 `internal/sitegen/vendor.go` + `readonly-enhance.js` **按需加载与应用同版本**的 highlight.js/KaTeX/Mermaid；公开页渲染对齐编辑器契约（`web/src/markdown/doc.ts`、`PublicNoteView.vue` 用 `public-doc tiptap-content`、删除 `.public-doc` 字号覆盖）；默认主题 accent 派生色直通（`accentRamp` 对默认色返回与 `content.css` 一致的值） |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -157,6 +158,11 @@ Browser → POST /api/v1/ai/agent → server/agent.go → internal/agent.Run
 | ADR-051 | 移动端适配采用「能力查询 + 抽屉/底部面板」，不维护独立移动版 | 复用同一套组件、路由与状态，成本最低；窄屏按断点重排而非重写 | ≤768px 侧栏变抽屉（汉堡开合 + 遮罩，次要入口收进抽屉），右侧面板变底部抽屉（大纲/反链/历史/AI），顶栏手机化、编辑器全宽、工具栏横向滚动、移动端搜索浮层；触屏基础：`:active` 反馈、`:hover` gate 到 `(hover:hover) and (pointer:fine)`、`touch-action:manipulation`、输入 16px、可点目标 ≥40px、`100dvh` 与 `env(safe-area-inset-*)`；明暗 `theme-color` 与 PWA 图标/朝向 |
 | ADR-052 | 资产存储运行时可切换（`SwitchableAssetStore` + `StorageService`，持久化到 `settings` 表） | S3 原先只能靠环境变量且需重启，运维门槛高；运行时切换让管理员可在设置页自助配置 | 新增 `internal/service/storage.go`（`SwitchableAssetStore` 代理当前后端、`StorageService` 校验/持久化/切换）与 `internal/server/storage.go`；`OVERVIEW_S3_*` 作为初始值，设置页保存后以其为准（`s3_configured`）；切换即时生效但**不迁移历史附件**；`secretKey` 不回传、构建失败不切换 |
 | ADR-053 | AI 面板内容随编辑器状态显式同步（`syncAiContent`） | 打开笔记时 `setContent` 触发的 update 被 `suppress` 吞掉，`aiContent` 未更新，导致「整理/补全」静默无反应 | `load()` 完成、编辑器内容变化、插入 AI 结果后均同步 `aiContent`；空笔记点「整理/补全」给出明确提示（`ai.emptyContent`）而非无反应 |
+| ADR-054 | 阅读态样式单一真源 `internal/sitegen/content.css`（令牌 + `.tiptap-content` 规则），App `@import`、静态站 `<link>` 同一文件 | 应用/公开页/静态站曾各自维护同一套排版，任何一处改动都要人工同步，必然漂移；把「静态站 = 应用阅读态」变成构建保证 | `web/src/styles.css` 只保留应用外壳/组件/编辑器交互样式；阅读态规则增删只改 `content.css`；静态站样式随二进制 `go:embed` 分发，不再单独维护 |
+| ADR-055 | 静态站 Go 侧结构对齐编辑器 DOM（`internal/sitegen/render.go`：GFM + `x/net/html` 后处理） | 此前 goldmark 默认输出（`AutoHeadingID`、无任务/脚注/数学结构）与编辑器契约不同，共享 CSS 无法命中 | 代码 `pre.code-block > code.language-*`、任务 `data-type`/`data-checked`、`.fn-ref`/`.fn-defs`、`.math-inline`/`.math-block[data-tex]`、`.mermaid[data-source]`、表格 `<p>` 包裹、`a.wiki-link`（未命中 `wiki-missing`）、`img loading/decoding`；标题 id 按 `doc.ts` 的 slug 生成，TOC 锚点一致；搜索索引纳入代码/TeX/Mermaid 源文本、`assets/` 递归拷贝 |
+| ADR-056 | 静态站运行期增强：vendored 同版本 highlight.js/KaTeX/Mermaid，按需加载（`vendor.go` + `readonly-enhance.js`） | Go 侧无法完整复刻裸 JS 的渲染器；直接 CDN 又会引入版本漂移与离线依赖 | `vendor/*` 从 `web/node_modules` 原样拷贝，导出时仅写入页面需要的库；浏览器端渲染高亮/数学/图表/脚注跳转，`<body data-base>` 支持子路径；无数学/图表/代码的站不增加体积 |
+| ADR-057 | 公开页/编辑器/静态站三态统一：公开页渲染复用编辑器契约（`doc.ts` 的 `code-block`/表格 `<p>`/任务 `data-type`/`wikiToHtml`），`PublicNoteView` 用 `public-doc tiptap-content` | 公开页此前用独立后处理（wiki 降级纯文本、无 `code-block`）且 `.public-doc` 覆盖 h1/h2/h3 字号，与编辑器/静态站不一致 | 三处产出同一 `.tiptap-content` DOM 契约，由 `content.css` 统一渲染；删除 `.public-doc` 字号覆盖与旧的任务列表降级规则 |
+| ADR-058 | 默认主题 accent 派生色直通（`accentRamp` 对默认色返回与 `content.css` 一致的四元组） | 默认琥珀色经通用混色算法派生，与 `content.css` 里手写的 `--accent/-hover/-soft/-ring` 存在细微偏差，三态不一致 | 默认色直接返回常量色阶，自定义色仍走派生；应用与静态站默认外观完全一致 |
 
 ---
 
@@ -232,6 +238,7 @@ updated: "2026-10-01T16:54:09Z"
 | `internal/textproc` | 文本处理 | `Tokens` `Segment` `Snippet` |
 | `internal/server` | HTTP 适配 | 路由、中间件、错误映射、ETag、`agent.go`（`/ai/agent*`）、`storage.go`（`/settings/storage*`） |
 | `internal/markdown` | frontmatter 解析/序列化 | `Parse` `Document.String` |
+| `internal/sitegen` | 静态文档站生成（HTML + 客户端搜索） | `Generate`、`render.go`（结构对齐编辑器的 DOM）、`vendor.go`（按需内置运行期增强）、`content.css`（共享阅读样式） |
 | `internal/tools` | **唯一能力源**（原 MCP 工具实现迁入） | `Defs` `DefsOpenAI` `Exec` `Risk` `Allows` `Preview` `Known`、`Set` |
 | `internal/agent` | AI 智能体：有界工具循环、会话、确认、审计 | `Agent` `Run` `Confirm` `Stop` `SystemPrompt`、`Session`/`Result`/`Step` |
 | `internal/ai` | OpenAI 兼容客户端（chat + tool calling） | `Chat` `ChatTools` `AgentMessage` `Tool` `ToolCall` `ErrToolsUnsupported` |
@@ -432,7 +439,7 @@ components/
 editor/          extensions.ts / nodes.ts / lowlight.ts / slash.ts / link.ts
 markdown/        pipeline.ts / tasks.ts / math.ts / diagrams.ts / doc.ts / rules.ts / footnotes.ts / assets.ts
 api.ts           类型化客户端（/api/v1，ApiError）
-styles.css       Gridea 风格设计令牌（暖白/深色 + 主题色变量）+ 组件样式
+styles.css       @import 共享阅读样式（internal/sitegen/content.css）；应用外壳/组件/编辑器交互样式
 ```
 
 **构建分包**：路由懒加载使编辑器重依赖（TipTap / KaTeX / lowlight / Mermaid）不进首屏；
@@ -477,6 +484,24 @@ Vite 自动按需拆分（不使用 `manualChunks`，避免把预加载 helper �
 - 列表/树/标签等提供 `:active` 按下反馈；`prefers-reduced-motion` 下关闭过渡
 
 PWA：`manifest.webmanifest` 增加 `orientation:"any"` 与 192/512 PNG 图标（`purpose:any`/`maskable`）；`index.html` 提供明暗两套 `theme-color`、`apple-touch-icon` 与 `viewport-fit=cover`。
+
+### 8.5 公开页与静态站的阅读渲染契约（v0.13.3，ADR-054…058）
+
+应用内阅读、公开页、静态导出站三态共享同一份 `.tiptap-content` DOM 契约与同一份
+`internal/sitegen/content.css`（由 `docs/DESIGN.md` 所指的 `web/src/styles.css` `@import` 复用），
+保证「同一篇 Markdown 在三处排版/组件/配色/代码高亮/数学/图表/任务/脚注/表格/图片/链接一致」，
+差异仅在可编辑性：
+
+- **共享样式**：`content.css` = 设计令牌（明暗 + `--hl-*`）+ `.tiptap-content` 全部阅读态规则
+  （标题/列表/引用/代码/表格/图片/链接/wiki 链接/任务列表/KaTeX/Mermaid/脚注）。新增阅读样式
+  只改此文件，应用与静态站自动同步（ADR-054）。
+- **公开页契约**：`web/src/markdown/doc.ts` 的 `renderPublicDoc` 复用编辑器契约——`wikiToHtml`
+  （不再把 wiki 降级为纯文本）、`trimFencedCodeNewline`、`normalizeTaskLists`（checkbox `disabled`）、
+  `addCodeBlockClass`、表格单元格包 `<p>`；`PublicNoteView.vue` 的 `<article>` 带 `tiptap-content`
+  （`public-doc tiptap-content`），并删除 `styles.css` 中 `.public-doc` 对 h1/h2/h3 的字号覆盖（ADR-057）。
+- **静态站契约**：Go 侧 `internal/sitegen/render.go` 产出与上述一致的结构（见 §13.23），
+  运行期由 `readonly-enhance.js` 按需渲染高亮/数学/图表（ADR-055/056）。
+- **默认外观一致**：`accentRamp` 对默认色直通 `content.css` 的色阶，避免派生偏差（ADR-058）。
 
 ---
 
@@ -588,6 +613,10 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 >
 > v0.13.2 待权衡：运行时切换资产后端**不迁移历史附件**（本地与 S3 各自持有已存文件，切换后旧附件需自行搬运）；
 > 移动端为响应式适配而非独立原生体验，复杂表格/宽内容在窄屏仍需横向滚动。
+>
+> v0.13.3 待权衡：静态站的高亮/数学/图表在**浏览器端运行期渲染**（首屏需下载对应库，Mermaid 单文件较大，
+> 无构建期预渲染）；共享 `content.css` 使应用与静态站强绑定，修改阅读样式需同时回归两侧；
+> 静态站为只读，不提供编辑器交互（selection/toolbar 等）。
 
 ---
 
@@ -756,6 +785,15 @@ HTTP 与前端
 - [x] 用户管理窄屏三行布局（名称/徽章/操作）
 - [x] AI「整理/补全」打开笔记后按钮失效与空笔记无提示修复
 
+**Phase 12 — 静态文档站与应用阅读态一致（v0.13.3）**
+
+渲染一致
+- [x] 共享内容样式单一真源 `internal/sitegen/content.css`（App `@import` + 静态站 `<link>`）
+- [x] Go 侧结构对齐（`render.go`：代码/任务/脚注/数学/图表/表格/wiki/图片/标题 slug/搜索索引）
+- [x] 运行期增强**按需加载与应用同版本** highlight.js/KaTeX/Mermaid（`vendor.go` + `readonly-enhance.js`）
+- [x] 公开页渲染复用编辑器契约（`doc.ts`），`PublicNoteView` 三态统一（`public-doc tiptap-content`）
+- [x] 默认 accent 派生色直通（`accentRamp`），三态默认外观一致
+
 ---
 
 ## 13. 附录
@@ -902,9 +940,11 @@ HTTP 与前端
   `history/revision/restore`、`trash/trash-restore/trash-purge`、
   `asset-upload/assets-orphans/assets-purge`、`import/export-zip`、`build`（`export` 别名）。
 - **`write`**：`--file/--stdin/--body` 三选一，`--public`、`--create`、`--if-version`（乐观并发）。
-- **`build`**（ADR-029）：调用 `sitegen.Generate` 生成可部署静态站（HTML/CSS/`search.js`/`search-index.json`）；
+- **`build`**（ADR-029）：调用 `sitegen.Generate` 生成可部署静态站（每篇 HTML、`index.html`、
+  `style.css`、共享阅读样式 `content.css`、`search.js`/`search-index.json`、运行期增强
+  `readonly-enhance.js` 与按需的 `vendor/highlight|katex|mermaid`、可选 `assets/`）；
   `--all` 导出全部笔记（默认仅 `public`），`--base`/`--title`/`--out` 可配；`--theme auto|light|dark`
-  （或 `OVERVIEW_SITE_THEME`）指定主题，默认 `auto` 跟随访客系统偏好。
+  （或 `OVERVIEW_SITE_THEME`）指定主题，默认 `auto` 跟随访客系统偏好。渲染与增强详见 §13.23。
 
 ### 13.11 MCP 协议升级与工具拉平（v0.11.0，ADR-030/031）
 
@@ -1072,3 +1112,67 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - `go build ./...`、`go test ./...` 全绿（新增 `internal/service/storage_test.go`、`internal/server/storage_test.go`）
 - 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿
 - 端到端：设置页保存 S3 配置后新上传走对象存储、留空 Bucket 回退本地；「测试连接」用表单当前值且不改动活动后端；`secretKey` 不回传；构建失败返回可诊断错误且不切换；窄屏（≤768px）侧栏抽屉/底部面板/搜索浮层可用；用户管理 ≤560px 三行布局；打开笔记后 AI「整理/补全」正常，空笔记有提示
+
+### 13.23 静态文档站与应用阅读态一致（v0.13.3，ADR-054…058）
+
+**共享内容样式（ADR-054）**
+
+- 新增 `internal/sitegen/content.css`：设计令牌（明暗 + `--hl-*` 语法高亮变量）+ `.tiptap-content`
+  全部阅读态规则（标题/列表/引用/代码/表格/图片/链接/wiki 链接/任务列表/KaTeX 数学/Mermaid/脚注）。
+- `web/src/styles.css` 删除这些令牌与规则，改为 `@import "../../internal/sitegen/content.css"` 复用；
+  应用外壳/组件/编辑器交互样式（`.ProseMirror-*`、placeholder、选区、工具栏、面板）仍留在 `styles.css`。
+- 静态站每页 `<link rel="stylesheet" href="…/content.css" />`（与 `style.css` 并列）；`go:embed content.css`
+  保证样式随二进制分发，`content.css` 成为阅读样式的唯一真源（防漂移）。
+
+**结构对齐（ADR-055，`internal/sitegen/render.go`）**
+
+- goldmark（GFM）+ `golang.org/x/net/html` 解析 + 后处理，输出与编辑器阅读态一致的 DOM：
+  - 代码：`pre.code-block > code.language-*`（去掉尾随换行）；`language-mermaid` 转 `.mermaid[data-source]`。
+  - 任务列表：`ul[data-type=taskList]`、`li[data-type=taskItem][data-checked]`（结构为
+    `label > input[disabled] + span` 与 `div > p`，嵌套列表保留在 `div` 内）。
+  - 脚注：引用 `sup.fn-ref[data-id]`，定义集中到尾部 `.fn-defs > .fn-def[data-id]`（镜像 `footnotes.ts`）。
+  - 数学：`.math-inline` / `.math-block` 均带 `data-tex`（保留原始 TeX，Go 侧不渲染）。
+  - 表格：每个 `th`/`td` 包一层 `<p>`（与 ProseMirror 单元格一致）。
+  - wiki 链接：按标题/basename 解析，命中输出 `a.wiki-link`，未命中降级 `span.wiki-link.wiki-missing`。
+  - 图片：`img[loading=lazy][decoding=async]`；`src`/`href` 的 `assets/` 前缀按部署基址（`--base`）重写。
+  - 标题：`id` 按应用 `doc.ts` 的 `slugify` 生成（去标签、小写、保留实体、去标点、空白转 `-`，重复加 `-N`），
+    TOC 锚点与应用完全一致。
+- 搜索索引：`searchText` 提取正文时纳入代码文本与 `data-tex`/`data-source` 原始源文本，
+  使代码/公式/图表可被站内搜索命中。
+- 资源：`assets/` 目录递归拷贝（`copyDir`）；启用 S3 后端时不拷贝本地镜像，改以 `S3PublicURL` 为
+  资源前缀（`Options.AssetURLPrefix`）。
+
+**运行期增强（ADR-056，`internal/sitegen/vendor.go` + `readonly-enhance.js`）**
+
+- `vendor/highlight|katex|mermaid` 从 `web/node_modules` 原样拷贝（与应用**同版本**）；导出时**按需**
+  只写入页面实际用到的库（`writeVendor` 依据 `HasCode`/`HasMath`/`HasMermaid`），无数学/图表/代码的站不增加体积。
+- 页面按需注入 `<link>`（`katex.min.css`）与 `<script>`（highlight/katex/mermaid + `readonly-enhance.js`）。
+- `readonly-enhance.js`：
+  - 高亮 `pre.code-block > code.language-*`（highlight.js `common`，直接 `hljs.highlight`、不加 `hljs` 根类，
+    贴合 `lowlight` 输出）。
+  - 渲染 `[data-tex]`（`displayMode` 与 `math.ts` 一致，`throwOnError:false`、`output:"html"`）。
+  - 渲染 `.mermaid[data-source]`（`securityLevel:"strict"`，按 `data-theme` 取 `dark`/`default`）。
+  - 脚注引用点击平滑滚动到定义（不改变 DOM 形状）。
+  - `<body data-base>` 供搜索索引与资源解析子路径。
+- 体积：仅基础/代码的最小站为几十 KB 级；数学站额外 ~0.3 MB（KaTeX JS + CSS + woff2 字体）；
+  Mermaid 站额外 ~3.5 MB（单文件）；库仅在页面确需时写入。
+
+**三态统一（ADR-057）**
+
+- `web/src/markdown/doc.ts` 的 `renderPublicDoc` 复用编辑器契约：`wikiToHtml`、`trimFencedCodeNewline`、
+  `normalizeTaskLists`（checkbox `disabled`）、`addCodeBlockClass`、表格 `th/td` 包 `<p>`。
+- `PublicNoteView.vue` 的 `<article>` 加 `tiptap-content`（`public-doc tiptap-content`）；
+  `styles.css` 删除 `.public-doc` 对 h1/h2/h3 的字号覆盖，改由 `content.css` 统一。
+
+**默认 accent 直通（ADR-058）**
+
+- `web/src/stores/settings.ts` 的 `accentRamp` 对默认色直接返回与 `content.css` 一致的四元组
+  （浅色 `#d4870e`/`#b87308`/`#fdf4e3`/`rgba(212,135,14,.24)`，深色 `#e9a23b`/`#f2b658`/`#3a2f16`/`rgba(233,162,59,.3)`）；
+  自定义色仍走派生，消除默认外观在三态间的细微偏差。
+
+### 13.24 v0.13.3 验证记录
+
+- `go build ./...`、`go test ./...` 全绿（`internal/sitegen` 覆盖结构对齐、标题 slug、搜索索引、vendor 按需、assets 拷贝）
+- 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿（`markdown/doc` 覆盖公开页契约）
+- 端到端：导出站打开代码/数学/Mermaid/任务/脚注/表格/wiki 链接与 App 阅读态一致；wiki 命中为链接、未命中降级；
+  搜索可命中代码与公式源文本；`--base` 子路径下 vendor/资源/搜索索引路径正确；无数学/图表站点不产生多余 vendor 文件；S3 后端导出资源指向 `S3PublicURL`
