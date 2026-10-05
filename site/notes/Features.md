@@ -54,7 +54,11 @@ public: true
   login page (notice, ICP, link)
 - **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
 - **REST API** — versioned under `/api/v1`, OpenAPI at `/api/docs`
-- **PWA** — installable app shell
+- **PWA** — installable app shell with a responsive **mobile layout**: a drawer sidebar
+  (hamburger + backdrop), a phone-friendly top bar, full-width editor, horizontally
+  scrolling toolbars, right-side panels as a bottom sheet (outline/backlinks/history/AI),
+  a mobile search overlay, and touch basics (tap feedback, 16px inputs, ≥40px targets,
+  `100dvh` + safe-area insets)
 - **Quick capture** — paste a page URL in the top-bar dialog; the server fetches the title and body
   (SSRF-guarded) and saves it as a note in the folder you pick
 
@@ -65,7 +69,8 @@ public: true
 - **Portable archive** — export/import the whole vault (notes + attachments) as a ZIP
 - **Version history** (with retention) and **trash** with restore
 - **Live sync** — a file watcher reindexes external edits
-- **Pluggable assets** — local filesystem or any S3-compatible store
+- **Pluggable assets** — local filesystem or any S3-compatible store, switchable at runtime
+  under **Settings → Object storage** (no restart; existing assets are not migrated)
 - **Static export** with a client-side search and `sitemap.xml` / `robots.txt`
 
 ## Appearance & settings
@@ -73,8 +78,8 @@ public: true
 - **Gridea-style palette** — warm amber accent (`#D4870E`) with light and dark variants,
   shared with the exported static site
 - **Custom accent color** — pick a preset or any hex; the UI derives a light/dark ramp
-- **Standalone settings page** (`/settings`) — appearance, editor, AI, mail, site, data,
-  user management and API tokens
+- **Standalone settings page** (`/settings`) — appearance, editor, AI, mail, site, object
+  storage, data, user management and API tokens
 
 ## Performance & UI
 

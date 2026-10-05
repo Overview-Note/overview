@@ -47,7 +47,14 @@ and `build` to render a deployable static site. See [[CLI]].
 
 ## Is there a mobile app?
 
-The web app is a PWA and can be installed. A native app is on the roadmap.
+The web app is a PWA and can be installed, and it ships a responsive phone layout (drawer
+sidebar, bottom-sheet panels, touch-friendly controls). A native app is on the roadmap.
+
+## Can I store attachments in S3?
+
+Yes. Set the `OVERVIEW_S3_*` variables, or configure it at runtime in **Settings → Object
+storage** (admin only). The settings page value wins once saved; switching backends does not
+migrate existing assets.
 
 ## How do I back up?
 

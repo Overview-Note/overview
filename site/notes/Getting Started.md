@@ -72,8 +72,10 @@ Requirements: **Go 1.26+**, **Node 22+**, Docker (optional). See [[Development]]
 4. Paste or drop an image to upload it; use the **Attachment** button for any other file type.
 5. Toggle a note's visibility to **Public** to share a read-only page, or click
    **Public page** to view it in the docs-style layout.
-6. Admins: open **Settings** to configure appearance (including the accent color), AI and
-   mail, invite users by email, enable self-registration, and manage API tokens.
+6. Admins: open **Settings** to configure appearance (including the accent color), AI, mail
+   and object storage, invite users by email, enable self-registration, and manage API tokens.
+7. On a phone the sidebar becomes a drawer (hamburger) and the outline/backlinks/history/AI
+   panels open as a bottom sheet.
 
 ## Next
 

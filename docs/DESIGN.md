@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.13.0（AI 智能体 · 工具调用 · 危险操作两段式确认 · 工具审计）
+> 版本：v0.13.2（手机端适配 · 对象存储设置 · AI 面板与用户管理修复）
 > 更新日期：2026-10-05
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -27,6 +27,8 @@
 | v0.11.3 | 令牌 UI 修正 | 令牌管理入口从顶栏移入「设置」（较少用）；修复弹框层级（DialogHost `z-index:300` 恒在最上）；令牌对话框加宽、生成后常驻可复制密钥框 |
 | v0.12.0 | 配色 · 设置页 · 邮箱用户 · 附件 · 捕获 | 整体改为 Gridea 风格（琥珀主色 `#D4870E`，暖白/深色两套）+ 主题色自定义（预设 + 取色器，明暗自适应）；设置从弹窗改为独立路由页（外观/编辑器/AI 助手/邮件服务器/站点/数据/用户管理/API 令牌），删除旧 `SettingsDialog/TokensDialog/UsersDialog`；邮箱用户管理（邀请/邮箱验证/密码重置）、可开关自注册、登录页内容注入；文件附件（任意类型，下载链接 + RFC5987）；应用内快速捕获（顶栏弹窗 + SSRF 防护）；静态站样式与应用调色板同步 |
 | v0.13.0 | AI 智能体（工具调用） | 内置助手从纯文本聊天升级为**可执行应用内操作的智能体**：抽取 `internal/tools` 为唯一能力源（原 `internal/mcp/generate.go`+`tools.go` 的 `toolBindings`/`runTool`/schema 迁入，MCP 变薄适配器），新增 `Defs()/DefsOpenAI()/Exec()/Risk()/Allows()/Preview()`；`internal/ai` 支持 OpenAI 兼容 function/tool calling（`ChatTools`/`AgentMessage`/`ToolCall`/`ErrToolsUnsupported` + 能力探测）；新增 `internal/agent` 有界循环（默认 8 步）、进程内会话 registry（TTL/容量）、危险操作「预览→确认→执行」（`/ai/agent/confirm`）、`Stop` 与审计；迁移 `0009_ai_tool_audit` + `internal/index/audit.go`（args 脱敏）；HTTP 新增 `/ai/agent`、`/ai/agent/confirm`、`/ai/agent/stop`，`/ai/status` 与 `/settings/ai` 扩展 agent 字段；前端新增 `AgentPanel/ToolCallCard/ConfirmBar` + `stores/agent.ts` + 编辑器「助手 / 智能体」分段；安全模型含按角色裁剪工具、危险必确认、防提示注入、按用户限流与能力探测降级 |
+| v0.13.1 | 侧栏与标题栏排版 | 统一侧栏字号层级（笔记/文件夹）；放大顶栏与标题栏高度，改善可读性 |
+| v0.13.2 | 手机端适配 · 对象存储设置 · 修复 | 响应式手机端（P0+P1）：抽屉式侧栏（汉堡 + 遮罩，次要入口收进抽屉）、顶栏手机化、编辑器全宽、工具栏/note-bar 横向滚动、右侧面板改底部抽屉（大纲/反链/历史/AI）、移动端搜索浮层、触屏基础（tap-highlight、`touch-action`、`:active`、hover 门槛、16px 输入、≥40px 目标、`100dvh`/safe-area）、明暗 `theme-color`、PWA `orientation` + 192/512 PNG 图标；S3 对象存储可在设置页配置并运行时切换（新增 `internal/service/storage.go` 的 `SwitchableAssetStore`/`StorageService` 与 `internal/server/storage.go` 的 `GET/PUT /settings/storage`、`POST /settings/storage/test`，前端 `StorageSection.vue`；env 为初始值、secret 不回传、历史附件不迁移、保存失败不切换）；用户管理窄屏三行布局；AI「整理/补全」打开笔记后按钮失效与空笔记无提示修复 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -152,6 +154,9 @@ Browser → POST /api/v1/ai/agent → server/agent.go → internal/agent.Run
 | ADR-048 | 工具调用审计（迁移 `0009_ai_tool_audit`，args 脱敏，可撤销操作记录版本/回收站/修订 id） | 智能体执行了写操作，需要事后追责与撤销依据 | 审计只存脱敏摘要（密钥 `[redacted]`、正文/上传存 sha256+长度），无明文正文 |
 | ADR-049 | 工具调用能力探测与降级（`tool_calling_unsupported`） | 部分 OpenAI 兼容后端不支持 tools，硬失败体验差 | 首次被 4xx 拒绝即缓存「不支持」，`/ai/status` 暴露 `toolCalling`，前端禁用智能体 |
 | ADR-050 | 提示注入防护：笔记正文/检索/工具输出一律视为不可信数据 | 笔记内容可能包含针对模型的恶意指令 | `SystemPrompt` 明确「数据非指令」；工具集按角色裁剪；危险操作强制人工确认 |
+| ADR-051 | 移动端适配采用「能力查询 + 抽屉/底部面板」，不维护独立移动版 | 复用同一套组件、路由与状态，成本最低；窄屏按断点重排而非重写 | ≤768px 侧栏变抽屉（汉堡开合 + 遮罩，次要入口收进抽屉），右侧面板变底部抽屉（大纲/反链/历史/AI），顶栏手机化、编辑器全宽、工具栏横向滚动、移动端搜索浮层；触屏基础：`:active` 反馈、`:hover` gate 到 `(hover:hover) and (pointer:fine)`、`touch-action:manipulation`、输入 16px、可点目标 ≥40px、`100dvh` 与 `env(safe-area-inset-*)`；明暗 `theme-color` 与 PWA 图标/朝向 |
+| ADR-052 | 资产存储运行时可切换（`SwitchableAssetStore` + `StorageService`，持久化到 `settings` 表） | S3 原先只能靠环境变量且需重启，运维门槛高；运行时切换让管理员可在设置页自助配置 | 新增 `internal/service/storage.go`（`SwitchableAssetStore` 代理当前后端、`StorageService` 校验/持久化/切换）与 `internal/server/storage.go`；`OVERVIEW_S3_*` 作为初始值，设置页保存后以其为准（`s3_configured`）；切换即时生效但**不迁移历史附件**；`secretKey` 不回传、构建失败不切换 |
+| ADR-053 | AI 面板内容随编辑器状态显式同步（`syncAiContent`） | 打开笔记时 `setContent` 触发的 update 被 `suppress` 吞掉，`aiContent` 未更新，导致「整理/补全」静默无反应 | `load()` 完成、编辑器内容变化、插入 AI 结果后均同步 `aiContent`；空笔记点「整理/补全」给出明确提示（`ai.emptyContent`）而非无反应 |
 
 ---
 
@@ -205,7 +210,7 @@ updated: "2026-10-01T16:54:09Z"
 
 - `users`（迁移 0004 + 0008）：`id`、`username`（唯一）、`password_hash`、`role`（`admin`/`member`）、`created`、`updated`、`email`（唯一，非空时）、`status`（`active`/`invited`）、`email_verified`。受邀账号 `password_hash` 为空串（bcrypt 永不匹配），必须先接受邀请设置密码。
 - `user_tokens`（迁移 0008）：`id`、`user_id`、`purpose`（`invite`/`reset`/`verify`）、`token_hash`（sha256，唯一）、`created`、`expires`、`used`。令牌单次消费：读取-校验-写入在同一事务内完成（连接池限单连接以串行化）。
-- `settings`（迁移 0006）：`key`/`value` 字符串键值表，存 `ai_*`、`mail_*`、`registration_enabled`、`login_*` 等运行时配置。
+- `settings`（迁移 0006）：`key`/`value` 字符串键值表，存 `ai_*`、`mail_*`、`s3_*`、`registration_enabled`、`login_*` 等运行时配置。其中 `s3_endpoint/region/access_key/secret_key/bucket/use_ssl/public_url` 与 `s3_configured` 由设置页「对象存储」写入（见 ADR-052）；`s3_configured=true` 表示运行时配置已保存，重启时优先于环境变量初始值。
 - `api_tokens`（迁移 0007）：`id`、`name`、`prefix`、`token_hash`、`created`、`last_used`、`expires`。
 - `sessions`（迁移 0004）：`token`、`user_id`、`created`、`expires`。
 - `ai_tool_audit`（迁移 0009）：`id`、`run_id`、`user_id`、`username`、`role`、`step`、`tool`、`args`（脱敏后 JSON）、`result_summary`、`status`（`ok`/`error`/`denied`/`rejected`）、`destructive`、`note_version`、`trash_id`、`revision_id`、`created_at`；按 `run_id` 与 `(user_id, created_at)` 建索引。写入前由 `sanitizeAuditArgs` 脱敏：`key/token/password/secret/authorization` → `[redacted]`，`body/content` → `sha256:<hash> (len N)`，截断至 2 KB。
@@ -220,12 +225,12 @@ updated: "2026-10-01T16:54:09Z"
 
 | 包 | 职责 | 关键类型/方法 |
 | --- | --- | --- |
-| `internal/core` | 领域模型、端口接口、哨兵错误 | `Note` `TreeNode` `User` `UserToken` `APIToken` `NoteRepository` `Index` `UserStore` `AssetStore` `TokenStore` `ErrNotFound/ErrConflict/ErrInvalid/ErrForbidden` |
-| `internal/service` | 应用用例编排 | `Tree` `GetNote` `SaveNote` `Delete` `Move` `Mkdir` `Search` `Upload` `Reindex`、`AuthService` `MailService` `SiteService` `TokenService`、`FetchPreview`（捕获） |
+| `internal/core` | 领域模型、端口接口、哨兵错误 | `Note` `TreeNode` `User` `UserToken` `APIToken` `NoteRepository` `Index` `UserStore` `AssetStore` `AssetRestorer` `TokenStore` `ErrNotFound/ErrConflict/ErrInvalid/ErrForbidden/ErrNotSupported` |
+| `internal/service` | 应用用例编排 | `Tree` `GetNote` `SaveNote` `Delete` `Move` `Mkdir` `Search` `Upload` `Reindex`、`AuthService` `MailService` `SiteService` `TokenService`、`FetchPreview`（捕获）、`StorageService`/`SwitchableAssetStore`（运行时资产后端） |
 | `internal/store` | 文件系统实现 | 原子写、版本校验、`List`(结构)、`Walk`(全量) |
 | `internal/index` | SQLite 实现 | 迁移、`Upsert` `Sync` `Tree` `Search` |
 | `internal/textproc` | 文本处理 | `Tokens` `Segment` `Snippet` |
-| `internal/server` | HTTP 适配 | 路由、中间件、错误映射、ETag、`agent.go`（`/ai/agent*`） |
+| `internal/server` | HTTP 适配 | 路由、中间件、错误映射、ETag、`agent.go`（`/ai/agent*`）、`storage.go`（`/settings/storage*`） |
 | `internal/markdown` | frontmatter 解析/序列化 | `Parse` `Document.String` |
 | `internal/tools` | **唯一能力源**（原 MCP 工具实现迁入） | `Defs` `DefsOpenAI` `Exec` `Risk` `Allows` `Preview` `Known`、`Set` |
 | `internal/agent` | AI 智能体：有界工具循环、会话、确认、审计 | `Agent` `Run` `Confirm` `Stop` `SystemPrompt`、`Session`/`Result`/`Step` |
@@ -344,6 +349,9 @@ Base：`/api/v1`
 | PUT | `/settings/mail` | 运行时更新 SMTP 配置（仅管理员） |
 | GET | `/settings/site` | 读取登录页/注册配置（仅管理员） |
 | PUT | `/settings/site` | 更新注册开关、提示语、备案号、链接（仅管理员） |
+| GET | `/settings/storage` | 读取对象存储配置：`endpoint` `region` `accessKey` `bucket` `useSSL` `publicURL` `hasSecret` `enabled`（仅管理员，`secretKey` 永不回传） |
+| PUT | `/settings/storage` | 保存对象存储配置并切换后端（仅管理员；`bucket` 留空回退本地存储；校验/构建失败返回可诊断错误且**不切换**） |
+| POST | `/settings/storage/test` | 用请求体（缺省则用已存配置）探测连接，**不改动当前后端**（仅管理员） |
 | GET | `/assets/orphans` | 未被引用的附件列表 |
 | POST | `/assets/orphans/purge` | 清理孤儿附件 |
 | GET | `/history?path=` | 笔记历史版本列表 |
@@ -402,7 +410,7 @@ Base：`/api/v1`
 ```
 main.ts → Pinia + Router
 router.ts        全部路由懒加载（import()）：/ → EmptyState ； /note/:path(.*) → EditorPane
-                 /settings/{appearance|editor|ai|mail|site|data|users|tokens} → SettingsView 分区
+                 /settings/{appearance|editor|ai|mail|site|storage|data|users|tokens} → SettingsView 分区
                  /public[/:path] → PublicHomeView / PublicNoteView ； /trash
                  /login /setup /register /forgot-password /reset-password /accept-invite /verify-email
                  /capture → 重定向首页（快速捕获改为顶栏弹窗）
@@ -411,13 +419,13 @@ stores/
   settings.ts    主题/字号/语言/压缩/专注/侧栏宽度/主题色（localStorage）
   auth.ts site.ts dialog.ts
 views/           Login/Setup/Register/ForgotPassword/ResetPassword/AcceptInvite/VerifyEmail
-                 SettingsView + settings/{Appearance,Editor,AI,Mail,Site,Data,Users,Tokens}Section
+                 SettingsView + settings/{Appearance,Editor,AI,Mail,Site,Storage,Data,Users,Tokens}Section
 components/
   App.vue        布局 + RouterView + DialogHost + CaptureDialog
   BrandMark.vue  品牌图形（笔记/文档 SVG）
-  Sidebar.vue    操作 + 搜索 + 目录树 + 可拖拽宽度（紧凑字号）
+  Sidebar.vue    操作 + 搜索 + 目录树 + 可拖拽宽度（紧凑字号）；窄屏为抽屉（`open` + 遮罩 + 次要入口 slot）
   TreeNodeItem.vue 递归节点（行内操作浮层，不改变行高）
-  EditorPane.vue Tiptap 编辑器 + 工具栏 + 笔记栏（图片 + 文件附件）
+  EditorPane.vue Tiptap 编辑器 + 工具栏 + 笔记栏（图片 + 文件附件）；窄屏右侧面板变底部抽屉（大纲/反链/历史/AI）
   CaptureDialog.vue 顶栏快速捕获弹窗（URL → 抓取预览 → 选目录保存）
   PublicShell.vue 公开页外壳（文档站风格）
   TokensPanel.vue EmptyState.vue SlashMenu.vue TocPanel.vue HistoryPanel.vue LinksPanel.vue AiPanel.vue
@@ -449,6 +457,26 @@ Vite 自动按需拆分（不使用 `manualChunks`，避免把预加载 helper �
 
 - 深链接：`/note/技术/Go/并发模型.md` 可直接打开、刷新保持、可分享
 - 目录树高亮由路由参数驱动
+
+### 8.4 移动端布局与断点（ADR-051）
+
+窄屏不维护独立版本，而是按断点重排同一套组件（`styles.css` 的 `@media`）：
+
+| 断点 | 变化 |
+| --- | --- |
+| `≤1100px` | 内容区收窄，右侧面板宽度压缩 |
+| `≤860px` | 设置页导航由左侧栏改为顶部横向滚动；用户管理行开始换行 |
+| `≤768px` | **手机布局**：侧栏变抽屉（`position:fixed` + `translateX`，汉堡开合、遮罩关闭、次要入口收进抽屉）；顶栏手机化（隐藏居中搜索与次要链接、品牌名省略号）；编辑器全宽；工具栏与 note-bar 横向滚动；右侧面板变**底部抽屉**（`translateY` + 遮罩，顶部 tab 切换大纲/反链/历史/AI）；搜索改为浮层；`100dvh` + `env(safe-area-inset-*)` |
+| `≤560px` | 用户管理行三行布局（名称 / 徽章 / 操作），长邮箱省略号 |
+
+触屏基础（`@media (pointer:coarse)` / `(hover:none)`）：
+
+- `-webkit-tap-highlight-color: transparent`、`touch-action: manipulation`、`overscroll-behavior` 抑制误触与橡皮筋
+- 所有 `:hover` 规则 gate 到 `(hover:hover) and (pointer:fine)`，避免触屏「粘滞 hover」；行内操作在无 hover 设备常显
+- 可点目标 ≥40px（`button`/`.icon-btn`），输入控件 `font-size:16px` 防止 iOS 聚焦缩放
+- 列表/树/标签等提供 `:active` 按下反馈；`prefers-reduced-motion` 下关闭过渡
+
+PWA：`manifest.webmanifest` 增加 `orientation:"any"` 与 192/512 PNG 图标（`purpose:any`/`maskable`）；`index.html` 提供明暗两套 `theme-color`、`apple-touch-icon` 与 `viewport-fit=cover`。
 
 ---
 
@@ -525,7 +553,8 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 | 工具审计 | `ai_tool_audit` 仅存脱敏摘要：密钥字段 `[redacted]`，正文/上传存 `sha256 + 长度`，不落明文正文；记录可撤销操作对应的版本/回收站/修订 id |
 | 匿名资产只读 | `GET/HEAD /assets/` 匿名放行以渲染公开页；上传/维护/`/api/v1/assets` 仍需认证；文件名含随机 ULID，不可枚举 |
 | base URL / Host | 邮件链接优先用 `OVERVIEW_BASE_URL`，否则按请求推导（尊重 `X-Forwarded-Proto`）；生产应在反代后使用 HTTPS |
-| 密钥 | AI/MCP/S3/SMTP 密钥仅存服务端，接口永不回传（`hasKey` / `hasPassword`） |
+| 密钥 | AI/MCP/S3/SMTP 密钥仅存服务端，接口永不回传（`hasKey` / `hasPassword` / `hasSecret`）；对象存储 `secretKey` 留空表示沿用已存值 |
+| 对象存储配置 | `/settings/storage*` 仅管理员；保存前先构建后端，**失败不切换**且错误信息只含 endpoint/bucket（不含密钥）；「测试连接」用表单当前值且不改动活动后端 |
 | 日志 | 结构化 JSON，无敏感内容；邮件收件人/正文/令牌从不记录 |
 
 > ✅ render 模式已收紧为**白名单**：`renderGuard` 仅放行 `health`、`auth/state`、
@@ -556,6 +585,9 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 > v0.13.0 待权衡：智能体会话 registry 与限流同为**单进程内存**，多实例下会话不共享（确认请求须落到同一实例），
 > 需要粘性会话或外部存储；审计 async 写入（失败仅忽略）且无清理策略；上下文裁剪按字节估算，
 > 极端长会话仍可能触发 provider 上限；工具调用为**非流式**（一次回合返回完整结果）。
+>
+> v0.13.2 待权衡：运行时切换资产后端**不迁移历史附件**（本地与 S3 各自持有已存文件，切换后旧附件需自行搬运）；
+> 移动端为响应式适配而非独立原生体验，复杂表格/宽内容在窄屏仍需横向滚动。
 
 ---
 
@@ -574,16 +606,17 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - [x] 公开分享 / 匿名只读访问
 - [x] MCP 服务端（AI 可操作笔记）
 - [x] AI 助手（对话 / 整理 / 补全）
-- [ ] 移动端 PWA / 原生 App（基于 `/api/v1`）
+- [x] 移动端 PWA（响应式手机端适配，v0.13.2）
+- [ ] 移动端原生 App（基于 `/api/v1`）
 
 **Phase 4 — 体验与规模**
 - [x] 文件监视器，外部编辑自动入库
 - [x] 增量索引（避免全量重建）
 - [x] 版本历史 / 回收站
 - [x] 附件引用计数与回收
-- [x] 多存储后端（S3）
+- [x] 多存储后端（S3，v0.13.2 起可在设置页运行时切换）
 - [x] OpenAPI 文档
-- [x] 移动端 PWA
+- [x] 移动端 PWA（v0.13.2 响应式手机端）
 - [x] 图片压缩（上传前客户端压缩）
 
 **Phase 5 — 设置与设计系统（v0.8）**
@@ -710,6 +743,19 @@ HTTP 与前端
 - [x] 前端「智能体面板」：`AgentPanel/ToolCallCard/ConfirmBar` + `stores/agent.ts` + `api.ts`
 - [x] 编辑器右侧「助手 / 智能体」分段；受影响对象可跳转、写类操作后刷新目录
 
+**Phase 11 — 手机端适配 · 对象存储设置 · 修复（v0.13.2）**
+
+移动端（P0+P1）
+- [x] 抽屉式侧栏（汉堡开合 + 遮罩 + 次要入口收进抽屉）、顶栏手机化、编辑器全宽
+- [x] 工具栏 / note-bar 横向滚动；右侧面板改底部抽屉（大纲/反链/历史/AI）
+- [x] 移动端搜索浮层；触屏基础（tap-highlight、`touch-action`、`:active`、hover 门槛、16px 输入、≥40px 目标、`100dvh`/safe-area）
+- [x] 明暗 `theme-color`；PWA `orientation` + 192/512 PNG 图标
+
+设置与修复
+- [x] S3 对象存储可在设置页配置并运行时切换（`SwitchableAssetStore` + `StorageService` + `/settings/storage*`）
+- [x] 用户管理窄屏三行布局（名称/徽章/操作）
+- [x] AI「整理/补全」打开笔记后按钮失效与空笔记无提示修复
+
 ---
 
 ## 13. 附录
@@ -745,12 +791,12 @@ HTTP 与前端
 | `OVERVIEW_MAIL_PASSWORD` | 空 | SMTP 密码 |
 | `OVERVIEW_MAIL_FROM` | 空 | 发件地址 |
 | `OVERVIEW_MAIL_STARTTLS` | `true` | 是否使用 STARTTLS |
-| `OVERVIEW_S3_BUCKET` | 空 | 设置后附件改存 S3 兼容存储 |
-| `OVERVIEW_S3_ENDPOINT` | 空 | S3 端点（如 `s3.amazonaws.com`） |
-| `OVERVIEW_S3_REGION` | `us-east-1` | 区域 |
-| `OVERVIEW_S3_ACCESS_KEY` / `_SECRET_KEY` | 空 | 凭据 |
-| `OVERVIEW_S3_USE_SSL` | `true` | 是否使用 HTTPS |
-| `OVERVIEW_S3_PUBLIC_URL` | 空 | 可选 CDN/公开前缀 |
+| `OVERVIEW_S3_BUCKET` | 空 | S3 兼容存储桶；**作为初始值**，设置页「对象存储」保存后以其为准 |
+| `OVERVIEW_S3_ENDPOINT` | 空 | S3 端点（如 `s3.amazonaws.com`）；同上，可被设置页覆盖 |
+| `OVERVIEW_S3_REGION` | `us-east-1` | 区域；同上 |
+| `OVERVIEW_S3_ACCESS_KEY` / `_SECRET_KEY` | 空 | 凭据；同上 |
+| `OVERVIEW_S3_USE_SSL` | `true` | 是否使用 HTTPS；同上 |
+| `OVERVIEW_S3_PUBLIC_URL` | 空 | 可选 CDN/公开前缀；同上 |
 
 ### 13.3 双链设计（v0.3）
 
@@ -783,7 +829,7 @@ HTTP 与前端
 - **版本历史**（ADR-020）：每次保存前把旧文件快照到 `data/.history/<path>/`；提供列表、查看、回滚。
 - **回收站**（ADR-020）：删除改为移动到 `data/.trash/<id>/`（含 `meta.json`），支持恢复与彻底删除。
 - **附件孤儿清理**：扫描所有正文中的 `assets/...` 引用，列出并清理未被引用的附件。
-- **S3 后端**（ADR-021）：`internal/s3store`（minio-go）实现 `AssetStore`，配置 `OVERVIEW_S3_BUCKET` 即启用。
+- **S3 后端**（ADR-021/052）：`internal/s3store`（minio-go）实现 `AssetStore`；`OVERVIEW_S3_BUCKET` 作为初始值启用。设置页「对象存储」可在运行时切换本地 ↔ S3（`SwitchableAssetStore` 代理当前后端 + `StorageService` 校验/持久化到 `settings` 表）；保存后以设置页为准（`s3_configured`），切换即时生效但**不迁移历史附件**；`secretKey` 不回传、构建失败不切换。
 - **PWA**（ADR-022）：manifest + service worker，仅缓存应用壳与哈希构建产物，离线可启动。
 - **OpenAPI**（ADR-023）：`/api/v1/openapi.json` 与 `/api/docs`（无外部依赖）。
 
@@ -795,6 +841,7 @@ HTTP 与前端
   - 外观：主题（跟随系统/浅色/深色）、字号（紧凑/默认/舒适/大）、语言、主题色
   - 编辑器：上传前压缩图片（默认开，持久化）
   - AI：状态 + 当前模型；管理员可编辑 Base URL / API Key / Model
+  - 对象存储（管理员，ADR-052）：Endpoint / Region / Access Key / Secret Key / Bucket / HTTPS / 公开前缀 + 「测试连接」；留空 Bucket 回退本地存储
 - **运行时 AI 配置**（ADR-025）：`settings` 表（迁移 0006）存 `ai_base_url`/`ai_api_key`/`ai_model`；`AIService.Load` 合成默认值与环境变量，`SaveConfig` 持久化并即时重载；接口 `GET/PUT /api/v1/settings/ai` 仅管理员，**密钥永不回传**（只返回 `hasKey`）。
 - **图片压缩**：`web/src/media/compress.ts` 用 Canvas 降采样（默认最长边 1920）+ 优先 WebP 重编码 + 2MB 预算自动降质；GIF/SVG 与非图片不动，失败回退原图。
 - **排版系统**（ADR-026）：所有 UI 文本基于 `--base-size` 派生的 `--text-xs/sm/ui/body`；编辑器正文 `--text-body` 与周边一致。字号设置切换时**整站同步缩放**。
@@ -990,3 +1037,38 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - `go build ./...`、`go test ./...` 全绿（新增 `internal/tools`、`internal/agent`、`internal/ai` 工具调用、`server/agent`、MCP↔tools parity 覆盖）
 - 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿
 - 端到端：读写工具可自动执行；删除/清空触发 `needs_confirmation` 且需 `approve`；`reject` 回填并续跑；`member` 调用危险工具被拒；不支持 tool calling 的 provider 返回 `tool_calling_unsupported`；限流超限 429；审计表仅含脱敏 args
+
+### 13.21 手机端适配 · 对象存储设置 · 修复（v0.13.2，ADR-051/052/053）
+
+**手机端适配（P0+P1）**
+
+- **抽屉式侧栏**：`Sidebar.vue` 新增 `open` prop 与 `close` 事件；`App.vue` 顶栏加汉堡按钮（`nav-toggle`），窄屏侧栏 `position:fixed` + `translateX(-100%)` 滑入，配遮罩关闭；搜索/专注/快捷键/设置/捕获/回收站/用户与登出等次要入口收进抽屉（`sidebar-drawer-nav`）。路由变化自动收起。
+- **顶栏手机化**：隐藏居中搜索与次要链接，品牌名省略号；`height` 计入 `env(safe-area-inset-top)`。
+- **编辑器全宽**：`.tiptap-content`/`.editor-crumb` 取消 `max-width`；工具栏与 note-bar 横向滚动（隐藏滚动条、`-webkit-overflow-scrolling:touch`）。
+- **右侧面板 → 底部抽屉**：`EditorPane.vue` 用 `matchMedia("(max-width:768px)")` 判定 `isMobile`；窄屏时大纲/反链/历史/AI 合并为底部抽屉（`sheet-head` tab 切换 + `sheet-backdrop`），`Escape` 关闭，跳转标题后自动收起。
+- **移动端搜索浮层**：`App.vue` 新增 `search-overlay`，`SearchBox` 支持 `autofocus`。
+- **触屏基础**：见 §8.4（tap-highlight、`touch-action`、`:active`、hover 门槛、16px 输入、≥40px 目标、`100dvh`/safe-area）。
+- **PWA**：`manifest.webmanifest` 加 `orientation:"any"` 与 192/512 PNG 图标；`index.html` 明暗 `theme-color`、`apple-touch-icon`、`viewport-fit=cover`。
+
+**用户管理窄屏修复**
+
+- `UsersSection.vue` 行结构改为语义分组 `.user-meta`（名称 + `.user-badges`）与 `.user-actions`；`≤560px` 三行布局（名称 / 徽章 / 操作），徽章 `white-space:nowrap`，长邮箱省略号，操作按钮 ≥40px。
+
+**AI 助手「整理/补全」修复（ADR-053）**
+
+- `EditorPane.vue` 新增 `syncAiContent()`，在 `load()` 完成后、编辑器内容变化、插入 AI 结果后同步 `aiContent`——修复打开笔记后「整理/补全」按钮静默无反应（`setContent` 的 update 被 `suppress` 吞掉）。
+- `AiPanel.vue` 空笔记点「整理/补全」给出 `ai.emptyContent` 提示而非无反应。
+
+**对象存储设置（ADR-052）**
+
+- `internal/service/storage.go`：`SwitchableAssetStore`（`sync.RWMutex` 代理当前 `core.AssetStore`，`Set(nil)` 被忽略以保证始终有可用后端）；`StorageService`（`Load`/`SaveConfig`/`Test`/`TestConfig`/`Config`/`Enabled`，`StoreFactory` 为测试接缝）。`SaveConfig` 先构建后端再持久化，失败返回 `storageBuildError`（含 endpoint/bucket、不含密钥）且不切换；`secretKey` 留空沿用已存值。
+- `internal/server/storage.go`：`GET/PUT /settings/storage`、`POST /settings/storage/test`（均仅管理员）；`test` 接受可选请求体（缺省用已存配置），返回 `{ok,message}`。
+- `cmd/overview/main.go`：用 `service.NewSwitchableAssetStore(st)` 包裹本地存储，env 启用 S3 时 `Set(s3)`；构造 `StorageService` 并 `SetDefaults(env)` + `Load`。
+- 前端 `views/settings/StorageSection.vue` + `api.ts`（`storageSettings`/`saveStorageSettings`/`testStorage`）+ 路由 `settings-storage` + 设置页导航项。
+- `internal/core/errors.go` 新增 `ErrNotSupported`；`archivex` 导入遇到不支持显式路径恢复的后端（如 S3）时跳过该附件而非报错。
+
+### 13.22 v0.13.2 验证记录
+
+- `go build ./...`、`go test ./...` 全绿（新增 `internal/service/storage_test.go`、`internal/server/storage_test.go`）
+- 前端 `vue-tsc`、`npm test`（Vitest）、`vite build` 全绿
+- 端到端：设置页保存 S3 配置后新上传走对象存储、留空 Bucket 回退本地；「测试连接」用表单当前值且不改动活动后端；`secretKey` 不回传；构建失败返回可诊断错误且不切换；窄屏（≤768px）侧栏抽屉/底部面板/搜索浮层可用；用户管理 ≤560px 三行布局；打开笔记后 AI「整理/补全」正常，空笔记有提示

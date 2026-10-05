@@ -78,10 +78,12 @@ services:
 | `OVERVIEW_MAIL_PASSWORD` | — | SMTP password |
 | `OVERVIEW_MAIL_FROM` | — | From address |
 | `OVERVIEW_MAIL_STARTTLS` | `true` | Use STARTTLS |
-| `OVERVIEW_S3_BUCKET` | — | Enable S3-compatible asset storage |
+| `OVERVIEW_S3_BUCKET` | — | S3-compatible asset storage bucket (initial value; overridable in Settings) |
 | `OVERVIEW_S3_ENDPOINT` | — | S3 endpoint (e.g. `s3.amazonaws.com`) |
 | `OVERVIEW_S3_REGION` | `us-east-1` | S3 region |
 | `OVERVIEW_S3_ACCESS_KEY` / `_SECRET_KEY` | — | S3 credentials |
+| `OVERVIEW_S3_USE_SSL` | `true` | Use HTTPS for S3 |
+| `OVERVIEW_S3_PUBLIC_URL` | — | Optional CDN / public URL prefix |
 
 `overview build` (alias `overview export`) also reads `OVERVIEW_EXPORT_DIR` (default `_site`)
 and `OVERVIEW_EXPORT_BASE` (URL prefix, default `/`). Pass `--all` to include non-public notes.
@@ -109,6 +111,22 @@ returned by the API. Set `OVERVIEW_BASE_URL` so links in outbound email point at
 public origin when running behind a proxy.
 
 Self-registration and the login-page notice/ICP/link are managed in **Settings → Site**.
+
+## Object storage (S3)
+
+Attachments are stored on the local filesystem by default. To use any S3-compatible object
+store, either set the `OVERVIEW_S3_*` variables above **or** configure it at runtime in
+**Settings → Object storage** (admin only) — no restart required.
+
+- The `OVERVIEW_S3_*` variables seed the **initial** value; once a configuration is saved in
+  the settings page it takes precedence across restarts.
+- Leave the **bucket** empty to keep using local storage.
+- The **secret key** is never returned by the API; leave it blank when saving to keep the
+  stored value.
+- **Test connection** probes the values currently in the form without changing the active
+  backend.
+- Switching backends is immediate for new uploads and reads, but **existing assets are not
+  migrated** between local storage and the bucket — move them yourself if needed.
 
 ## Logging
 

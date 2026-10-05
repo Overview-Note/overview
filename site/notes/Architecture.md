@@ -35,8 +35,11 @@ public: true
    so backends (e.g. S3 assets) can be swapped without touching business logic.
 3. **Thin adapters.** The same `service` powers REST, WebDAV, MCP, the offline CLI **and the
    in-app AI agent**; the tool surface lives once in `tools`, and `mcp` is only a JSON-RPC
-   shell over it.
-4. **Safe writes.** Atomic writes (temp → fsync → rename) and optimistic concurrency
+   shell over it. The asset backend is a `core.AssetStore` behind a `SwitchableAssetStore`,
+   so it can be swapped between local storage and S3 at runtime.
+4. **One responsive UI.** The Vue SPA adapts to phones by breakpoint (drawer sidebar,
+   bottom-sheet panels, touch basics) rather than shipping a separate mobile build.
+5. **Safe writes.** Atomic writes (temp → fsync → rename) and optimistic concurrency
    (content hash / ETag → 409).
 
 ## Packages
@@ -44,7 +47,7 @@ public: true
 | Package | Responsibility |
 | --- | --- |
 | `core` | Domain models, ports, sentinel errors |
-| `service` | Use cases (notes, search, auth, email/mail, site settings, capture, links, archive, AI) |
+| `service` | Use cases (notes, search, auth, email/mail, site settings, capture, links, archive, AI, runtime storage config) |
 | `store` | Filesystem note/asset repository |
 | `index` | SQLite + FTS5 index, migrations |
 | `textproc` | CJK tokenizer, wiki-links, snippets |
@@ -53,6 +56,7 @@ public: true
 | `watcher` | fsnotify-based live reindex |
 | `archivex` | Portable ZIP export/import |
 | `s3store` | S3-compatible asset backend |
+| `service` (storage) | `SwitchableAssetStore` (runtime-swappable backend) + `StorageService` (validate/persist/swap) |
 | `tools` | Single capability source shared by MCP and the AI agent (`Defs/Exec/Risk/Allows/Preview`) |
 | `agent` | AI agent: bounded tool loop, in-process sessions, two-phase confirmation, audit |
 | `mcp` | MCP server (protocol `2026-07-28`, dual-era); thin JSON-RPC adapter over `tools` |

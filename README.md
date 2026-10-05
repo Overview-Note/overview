@@ -87,7 +87,11 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
   runtime), plus optional **self-registration** and a customizable login page
 - **WebDAV** — mount the vault in Obsidian, Finder, or mobile apps
 - **REST API** — versioned under `/api/v1`, documented via OpenAPI at `/api/docs`
-- **PWA** — installable app shell
+- **PWA** — installable app shell with a responsive **mobile layout**: a drawer sidebar
+  (hamburger + backdrop), a phone-friendly top bar, full-width editor, horizontally
+  scrolling toolbars, right-side panels as a bottom sheet (outline/backlinks/history/AI),
+  a mobile search overlay, and touch basics (tap feedback, 16px inputs, ≥40px targets,
+  `100dvh` + safe-area insets)
 - **Quick capture** — paste a page URL into the top-bar dialog; the server fetches the title/body
   (SSRF-guarded) so you can save it as a note in the folder you pick
 
@@ -100,9 +104,11 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Portable archive** — export/import the whole vault (notes + assets) as a ZIP
 - **CLI** — every vault operation (list, read, write, search, move, history, trash, …)
   runs directly against `data/` with no server, for scripts and tools
-- **Pluggable storage** — local filesystem or any S3-compatible object store
+- **Pluggable storage** — local filesystem or any S3-compatible object store, switchable at
+  runtime under **Settings → Object storage** (no restart; existing assets are not migrated)
 - **Settings page** — standalone `/settings` route: appearance (theme, font, language,
-  **accent color**), editor, AI, mail server, site, data, user management, API tokens
+  **accent color**), editor, AI, mail server, site, object storage, data, user management,
+  API tokens
 - **Static export & sitemap/robots** — publish public notes as a read-only site, with the
   same palette as the app
 
@@ -201,6 +207,12 @@ Overview is configured entirely through environment variables.
 > AI and mail can also be configured at runtime in the **Settings** page (admin only) —
 > **Settings → AI assistant** and **Settings → Mail server** — with no restart needed.
 > Self-registration and the login-page notice/ICP/link are configured under **Settings → Site**.
+>
+> The asset backend is configured under **Settings → Object storage** (admin only).
+> Leave the bucket empty to keep using local storage. The `OVERVIEW_S3_*` variables seed
+> the initial value; once a configuration is saved it takes precedence across restarts.
+> Switching backends is immediate: new uploads and reads use the active backend, but
+> existing assets are **not** migrated between local storage and the bucket.
 
 `overview export` (static site) additionally reads `OVERVIEW_EXPORT_DIR` (default `_site`)
 and `OVERVIEW_EXPORT_BASE` (URL prefix, default `/`).
@@ -367,6 +379,8 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] AI agent with tool calling: bounded loop, two-phase confirmation for dangerous actions,
   role-trimmed tools, prompt-injection defense and redacted tool audit
   (single capability source `internal/tools`, shared with MCP)
+- [x] Responsive mobile layout (drawer sidebar, bottom-sheet panels, touch basics) and
+  runtime-switchable S3 object storage under **Settings → Object storage**
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

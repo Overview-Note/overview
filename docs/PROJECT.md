@@ -88,8 +88,9 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 **AI**：AI 助手（对话/整理/补全）· **AI 智能体（工具调用，可执行应用内操作 + 危险操作确认）** · MCP 服务端（工具与智能体同源于 `internal/tools`）
 **账户**：多用户认证（bcrypt/会话/角色）· **邮箱邀请/验证/密码重置** · **可开关自注册** · 持久 API/MCP 令牌 · 登录页内容注入（提示语/备案号/链接）
 **访问**：WebDAV · REST + OpenAPI · PWA · 应用内快速捕获（顶栏弹窗 · 服务端抓取标题/正文 · SSRF 防护）
-**外观**：Gridea 风格配色（琥珀主色 `#D4870E`）· 明暗主题 · **主题色自定义（预设 + 取色器）** · **独立设置页**（外观/编辑器/AI/邮件/站点/数据/用户/令牌）
-**运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · S3 附件后端 · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
+**移动端**：**响应式手机端**（抽屉式侧栏 · 顶栏手机化 · 编辑器全宽 · 工具栏横向滚动 · 右侧面板底部抽屉 · 搜索浮层 · 触屏基础 · 可安装 PWA）
+**外观**：Gridea 风格配色（琥珀主色 `#D4870E`）· 明暗主题 · **主题色自定义（预设 + 取色器）** · **独立设置页**（外观/编辑器/AI/邮件/站点/对象存储/数据/用户/令牌）
+**运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · **S3 附件后端（设置页可运行时切换）** · 静态站导出 + sitemap/robots · 多语言（中/英/繁中/日/德）
 
 ---
 
@@ -110,7 +111,7 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 
 ## 项目状态
 
-- **版本**：v0.13.0（AI 智能体 / 工具调用：可执行应用内操作、危险操作两段式确认、能力源 `internal/tools`、工具审计；Phase 7 部分待排期）
+- **版本**：v0.13.2（手机端适配 · 对象存储设置页 · AI 面板与用户管理修复；Phase 7 部分待排期）
 - **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli/agent/tools
   以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试与 MCP↔tools parity）；前端 `vue-tsc` 类型检查、
   **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
@@ -119,7 +120,7 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 - **交付**：Docker / 单二进制（内嵌前端）/ GHCR 镜像，浏览器访问
 - **规模**：后端 ~9k 行 Go / 20 个 internal 包；前端 ~5k 行 TS/Vue
 - **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.13.0 待权衡的是智能体会话/限流的
-  单实例内存假设（确认需同实例）、审计无清理策略与工具调用为非流式；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
+  单实例内存假设（确认需同实例）、审计无清理策略与工具调用为非流式；v0.13.2 待权衡的是运行时切换资产后端**不迁移历史附件**、移动端为响应式适配而非原生体验；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
 
 ---
 
@@ -134,6 +135,8 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
   `OVERVIEW_MAIL_FROM` / `OVERVIEW_MAIL_STARTTLS`：SMTP 默认值（也可在「设置 → 邮件服务器」运行时配置）
 - `OVERVIEW_AI_BASE_URL` / `OVERVIEW_AI_API_KEY` / `OVERVIEW_AI_MODEL`：AI（也可运行时配置）
 - `OVERVIEW_MCP_TOKEN`：MCP 静态令牌（推荐改用「设置 → API 令牌」生成）
+- `OVERVIEW_S3_*`（`BUCKET`/`ENDPOINT`/`REGION`/`ACCESS_KEY`/`SECRET_KEY`/`USE_SSL`/`PUBLIC_URL`）：
+  对象存储**初始值**；设置页「对象存储」保存后以其为准（运行时切换本地 ↔ S3，历史附件不迁移）
 
 主要端点：REST 在 `/api/v1`（笔记/检索/历史/回收站/附件/公开笔记/AI/设置/认证），
 OpenAPI 文档 `/api/docs`、规范 `/api/v1/openapi.json`，MCP `POST /mcp`，WebDAV `/dav/`。
@@ -144,6 +147,8 @@ v0.12 新增认证流程端点：`/auth/password/request`、`/auth/password/rese
 v0.13 新增智能体端点：`POST /ai/agent`（运行一回合）、`POST /ai/agent/confirm`（批准/拒绝危险操作）、
 `POST /ai/agent/stop`（终止会话）；`GET /ai/status` 与 `GET/PUT /settings/ai` 扩展
 `toolCalling`、`agentEnabled`、`confirmPolicy`、`maxSteps`、`allowedTools` 字段。
+v0.13.2 新增对象存储设置端点：`GET/PUT /settings/storage`（读取/保存并切换后端，仅管理员，
+`secretKey` 不回传）、`POST /settings/storage/test`（用表单当前值探测连接，不改动活动后端）。
 
 ---
 
