@@ -63,6 +63,11 @@ export const router = createRouter({
           component: () => import("./views/settings/DataSection.vue"),
         },
         {
+          path: "desktop",
+          name: "settings-desktop",
+          component: () => import("./views/settings/DesktopSection.vue"),
+        },
+        {
           path: "users",
           name: "settings-users",
           component: () => import("./views/settings/UsersSection.vue"),

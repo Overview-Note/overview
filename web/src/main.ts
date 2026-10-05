@@ -5,6 +5,7 @@ import App from "./App.vue";
 import { router } from "./router";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
+import { detectDesktop } from "./stores/site";
 import "./styles.css";
 
 const app = createApp(App);
@@ -22,7 +23,9 @@ setUnauthorizedHandler(() => {
 
 app.mount("#app");
 
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
+// The desktop shell bundles its own shell; a service worker would only serve a
+// stale cached copy, so skip registration there.
+if (!detectDesktop() && "serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   });

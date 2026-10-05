@@ -3,8 +3,10 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { t } from "../i18n";
 import { useAuthStore } from "../stores/auth";
+import { useSiteStore } from "../stores/site";
 
 const auth = useAuthStore();
+const site = useSiteStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -14,6 +16,7 @@ interface NavItem {
   name: string;
   labelKey: string;
   admin?: boolean;
+  desktop?: boolean;
 }
 
 const allItems: NavItem[] = [
@@ -24,11 +27,16 @@ const allItems: NavItem[] = [
   { name: "settings-site", labelKey: "site.title", admin: true },
   { name: "settings-storage", labelKey: "storage.title", admin: true },
   { name: "settings-data", labelKey: "settings.data", admin: true },
+  { name: "settings-desktop", labelKey: "settings.desktop", desktop: true },
   { name: "settings-users", labelKey: "users.title", admin: true },
   { name: "settings-tokens", labelKey: "tokens.title", admin: true },
 ];
 
-const items = computed(() => allItems.filter((i) => !i.admin || isAdmin.value));
+const items = computed(() =>
+  allItems.filter(
+    (i) => (!i.admin || isAdmin.value) && (!i.desktop || site.desktop),
+  ),
+);
 const activeName = computed(() => route.name);
 
 const SETTINGS_RETURN_KEY = "overview.settingsReturn";

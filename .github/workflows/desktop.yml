@@ -1,0 +1,172 @@
+name: Desktop
+
+# Builds the native desktop shell for every supported platform and, on a v* tag,
+# publishes the binaries as GitHub Release assets. The shell is compiled with a
+# plain `go build` of ./cmd/overview-desktop (see docs/DESIGN.md ADR-059); the
+# Wails v3 packager (`wails3 package`) is the path to signed installers once the
+# generated Taskfile/build-assets tree is committed.
+#
+# Platform matrix:
+#   windows-latest  amd64, CGO disabled  (WebView2 needs no CGO)
+#   macos-14        arm64, CGO enabled   (Xcode command line tools)
+#   macos-13        amd64, CGO enabled
+#   ubuntu-24.04    amd64, CGO enabled, GTK4 + WebKitGTK 6.0
+#   ubuntu-22.04    amd64, CGO enabled, -tags "desktop gtk3" (GTK3 + WebKit2GTK 4.1)
+# A failing platform does not cancel the others (fail-fast: false).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-amd64
+            os: windows-latest
+            goos: windows
+            goarch: amd64
+            cgo: "0"
+            tags: desktop
+            ext: .exe
+          - name: macos-arm64
+            os: macos-14
+            goos: darwin
+            goarch: arm64
+            cgo: "1"
+            tags: desktop
+            ext: ""
+          - name: macos-amd64
+            os: macos-13
+            goos: darwin
+            goarch: amd64
+            cgo: "1"
+            tags: desktop
+            ext: ""
+          - name: linux-amd64-gtk4
+            os: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+            cgo: "1"
+            tags: desktop
+            ext: ""
+          - name: linux-amd64-gtk3
+            os: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+            cgo: "1"
+            tags: "desktop gtk3"
+            ext: ""
+    env:
+      RAW_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Derive version
+        shell: bash
+        run: echo "VERSION=${RAW_VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: Build frontend
+        working-directory: web
+        run: npm ci
+      - name: Bundle frontend
+        working-directory: web
+        run: npm run build
+
+      # Wails v3 Linux uses GTK4 + WebKitGTK 6.0 by default and GTK3 + WebKit2GTK
+      # 4.1 with the `gtk3` build tag. X11/xkb development headers are pulled in
+      # by the global-shortcut backend.
+      - name: Install Linux desktop dependencies (GTK4)
+        if: runner.os == 'Linux' && matrix.name == 'linux-amd64-gtk4'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-4-dev libwebkitgtk-6.0-dev \
+            libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev \
+            libxi-dev libxxf86vm-dev libxkbcommon-dev
+
+      - name: Install Linux desktop dependencies (GTK3)
+        if: runner.os == 'Linux' && matrix.name == 'linux-amd64-gtk3'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev \
+            libxi-dev libxxf86vm-dev libxkbcommon-dev
+
+      - name: Build desktop shell
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          go build -trimpath -tags "${{ matrix.tags }}" \
+            -ldflags="-s -w -X main.version=${VERSION}" \
+            -o "bin/overview-desktop${{ matrix.ext }}" ./cmd/overview-desktop
+
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path "bin/overview-desktop.exe" `
+            -DestinationPath "dist/overview-desktop-${env:VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.zip"
+
+      - name: Archive (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          tar -czf "dist/overview-desktop-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
+            -C bin overview-desktop
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: overview-desktop-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release assets
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Upload assets to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

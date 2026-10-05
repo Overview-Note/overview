@@ -1943,6 +1943,10 @@ body.resizing {
   margin-top: var(--sp-4);
 }
 
+.settings-save.inline {
+  margin-top: 0;
+}
+
 .status-ok {
   color: var(--success);
   font-size: var(--text-sm);

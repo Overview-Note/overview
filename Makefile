@@ -2,10 +2,12 @@
 # Requires: Go 1.26+, Node 22+, Docker (optional)
 
 BINARY := bin/overview
+DESKTOP_BINARY := bin/overview-desktop
+EXE := $(shell go env GOEXE)
 VERSION ?= 0.14.0
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: help dev demo build build-web build-go test test-go test-web lint fmt vet clean docker site site-export
+.PHONY: help dev demo build build-web build-go build-desktop package-desktop test test-go test-web lint fmt vet clean docker site site-export
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -23,6 +25,18 @@ build-web: ## Build the Vue frontend into internal/webui/dist
 
 build-go: ## Compile the Go binary (expects frontend built)
 	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/overview
+
+# The desktop shell is built with a plain `go build` (Windows/macOS build from
+# the default tags; Linux also needs -tags desktop plus GTK/WebKitGTK headers).
+# This is the supported fallback for the Wails v3 packager (`wails3 package`),
+# which expects the generated Taskfile/build-assets tree; see docs/DESIGN.md
+# ADR-059. The installers (NSIS/DMG/AppImage) are produced by wails3 from the
+# same build/config.yml once those assets exist.
+build-desktop: build-web ## Build the desktop shell for the host platform (frontend + shell)
+	go build -trimpath -tags desktop -ldflags="$(LDFLAGS)" -o $(DESKTOP_BINARY)$(EXE) ./cmd/overview-desktop
+
+package-desktop: build-desktop ## Archive the desktop binary for the host platform
+	cd bin && tar -czf overview-desktop-$(VERSION)-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz overview-desktop$(EXE)
 
 test: test-go test-web ## Run all tests (Go + frontend)
 

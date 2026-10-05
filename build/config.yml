@@ -1,0 +1,68 @@
+# Wails v3 build configuration for the Overview desktop shell.
+#
+# The runtime window (size, URL, tray) is configured in code, in
+# cmd/overview-desktop/main.go; this file feeds the platform packaging assets
+# (bundle metadata, file associations and URL schemes).
+#
+# Platform registration:
+#   Windows: the NSIS installer writes the .md file association and the
+#     overview:// URL protocol to the registry from the entries below.
+#   macOS:   the generated Info.plist carries CFBundleDocumentTypes (from
+#     fileAssociations) and CFBundleURLTypes (from protocols); opening a
+#     document or overview:// URL raises ApplicationOpenedWithFile /
+#     ApplicationLaunchedWithUrl.
+#   Linux:   the Wails packager does not emit a .desktop file or MimeType.
+#     Install one manually (see the note at the bottom of this file).
+#
+# Regenerate the platform build assets with:
+#   wails3 update build-assets -name Overview -binaryname overview-desktop \
+#     -config build/config.yml -dir build
+# The binary itself is produced by `make build-desktop` / `make package-desktop`
+# (a plain `go build` of ./cmd/overview-desktop); the installer formats below
+# (NSIS/DMG/AppImage) are Wails v3 packager targets, see docs/DESIGN.md ADR-059.
+version: '3'
+
+info:
+  companyName: "Overview"
+  productName: "Overview"
+  productIdentifier: "com.overview.app"
+  description: "Local-first Markdown notes with a native desktop shell"
+  copyright: "(c) 2026, Overview"
+  comments: "Overview desktop"
+  version: "0.14.0"
+
+# Register .md documents with the OS and route opens to the app. A file open
+# arrives as an ApplicationOpenedWithFile event (Windows/macOS) or an argv entry
+# on a second launch, and is resolved or imported into the vault.
+fileAssociations:
+  - ext: md
+    name: Markdown
+    description: Overview Markdown note
+    iconName: overviewFileIcon
+    role: Editor
+    mimeType: text/markdown
+
+# The overview:// URL scheme carries deep links such as
+# overview://note/<path> and overview://open?path=<path>.
+protocols:
+  - scheme: overview
+    description: Overview deep link
+
+other:
+  - name: Overview
+
+# Linux note: there is no schema field for the .desktop MimeType here. To
+# register .md and the overview:// scheme on Linux, install a desktop file such
+# as the following into ~/.local/share/applications/overview.desktop:
+#
+#   [Desktop Entry]
+#   Type=Application
+#   Name=Overview
+#   Exec=/usr/local/bin/overview-desktop %u
+#   MimeType=text/markdown;x-scheme-handler/overview;
+#   Terminal=false
+#
+# then refresh the databases:
+#   update-desktop-database ~/.local/share/applications
+#   xdg-mime default overview.desktop text/markdown
+#   xdg-settings set default-url-scheme-handler overview overview.desktop

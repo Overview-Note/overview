@@ -99,6 +99,19 @@ export interface StorageTestResult {
   message: string;
 }
 
+export interface DesktopSettings {
+  autostart: boolean;
+  dataDir: string;
+  version: string;
+}
+
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  hasUpdate: boolean;
+  url: string;
+}
+
 export interface TreeNode {
   name: string;
   path: string;
@@ -479,6 +492,25 @@ export const api = {
         : {}),
     });
     return json<StorageTestResult>(res);
+  },
+
+  async desktopSettings(): Promise<DesktopSettings> {
+    const res = await fetch(`${BASE}/desktop/settings`);
+    return json<DesktopSettings>(res);
+  },
+
+  async saveDesktopSettings(cfg: { autostart: boolean }): Promise<DesktopSettings> {
+    const res = await fetch(`${BASE}/desktop/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    return json<DesktopSettings>(res);
+  },
+
+  async checkUpdate(): Promise<UpdateInfo> {
+    const res = await fetch(`${BASE}/desktop/update`);
+    return json<UpdateInfo>(res);
   },
 
   async aiChat(

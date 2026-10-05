@@ -1,10 +1,19 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
+// detectDesktop reports whether the app is running inside the desktop shell.
+// The shell injects window.__OVERVIEW_DESKTOP__; ?desktop=1 covers previews.
+export function detectDesktop(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.__OVERVIEW_DESKTOP__ === true) return true;
+  return new URLSearchParams(window.location.search).get("desktop") === "1";
+}
+
 export const useSiteStore = defineStore("site", () => {
   const render = ref(false);
   const siteTitle = ref("Overview");
   const loaded = ref(false);
+  const desktop = ref(detectDesktop());
 
   async function load() {
     try {
@@ -23,5 +32,5 @@ export const useSiteStore = defineStore("site", () => {
     }
   }
 
-  return { render, siteTitle, loaded, load };
+  return { render, siteTitle, loaded, desktop, load };
 });

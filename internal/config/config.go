@@ -43,6 +43,14 @@ type Config struct {
 	S3PublicURL  string
 	SiteTitle    string
 	Render       bool
+	// Desktop marks the embedded desktop build. It tightens the defaults
+	// (per-user data directory, loopback address, no auth) while remaining
+	// overridable through the environment.
+	Desktop bool
+	// EnableMCP and EnableDAV gate the MCP and WebDAV endpoints. They stay on
+	// for self-hosted servers and default off for the desktop build.
+	EnableMCP bool
+	EnableDAV bool
 }
 
 // S3Enabled reports whether an S3-compatible asset backend is configured.
@@ -57,7 +65,20 @@ func env(key, def string) string {
 
 // Load builds a Config from environment variables with sensible defaults.
 func Load() Config {
-	dataDir := env("OVERVIEW_DATA_DIR", "./data")
+	desktop := env("OVERVIEW_DESKTOP", "") == "true"
+	dataDirDefault := "./data"
+	addrDefault := ":5230"
+	authDefault := "multi"
+	mcpDefault := "true"
+	davDefault := "true"
+	if desktop {
+		dataDirDefault = DefaultDataDir()
+		addrDefault = "127.0.0.1:5230"
+		authDefault = "none"
+		mcpDefault = "false"
+		davDefault = "false"
+	}
+	dataDir := env("OVERVIEW_DATA_DIR", dataDirDefault)
 	maxUpload, err := strconv.ParseInt(env("OVERVIEW_MAX_UPLOAD_MB", "32"), 10, 64)
 	if err != nil || maxUpload <= 0 {
 		maxUpload = 32
@@ -79,7 +100,7 @@ func Load() Config {
 		mailPort = 587
 	}
 	return Config{
-		Addr:         env("OVERVIEW_ADDR", ":5230"),
+		Addr:         env("OVERVIEW_ADDR", addrDefault),
 		DataDir:      dataDir,
 		NotesDir:     filepath.Join(dataDir, "notes"),
 		AssetsDir:    filepath.Join(dataDir, "assets"),
@@ -93,7 +114,7 @@ func Load() Config {
 		LogFile:      env("OVERVIEW_LOG_FILE", ""),
 		LogMaxMB:     logMaxMB,
 		LogBackups:   logBackups,
-		AuthMode:     env("OVERVIEW_AUTH", "multi"),
+		AuthMode:     env("OVERVIEW_AUTH", authDefault),
 		MCPToken:     env("OVERVIEW_MCP_TOKEN", ""),
 		AIBaseURL:    env("OVERVIEW_AI_BASE_URL", ""),
 		AIAPIKey:     env("OVERVIEW_AI_API_KEY", ""),
@@ -114,6 +135,9 @@ func Load() Config {
 		S3PublicURL:  env("OVERVIEW_S3_PUBLIC_URL", ""),
 		SiteTitle:    env("OVERVIEW_SITE_TITLE", "Overview"),
 		Render:       env("OVERVIEW_RENDER", "") == "true",
+		Desktop:      desktop,
+		EnableMCP:    env("OVERVIEW_ENABLE_MCP", mcpDefault) == "true",
+		EnableDAV:    env("OVERVIEW_ENABLE_DAV", davDefault) == "true",
 	}
 }
 

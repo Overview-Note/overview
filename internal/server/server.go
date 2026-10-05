@@ -40,6 +40,15 @@ type Options struct {
 	// note tree is exposed read-only and the SPA renders notes directly.
 	Render    bool
 	SiteTitle string
+	// LocalOnly enables the loopback host and same-origin guards used by the
+	// desktop build.
+	LocalOnly bool
+	// DesktopHooks supplies desktop-shell state to the settings endpoint. It is
+	// nil for a headless server, which hides the desktop endpoints.
+	DesktopHooks DesktopHooks
+	// UpdateCheck overrides the release lookup used by the desktop update
+	// endpoint. When nil, update.CheckLatest is used.
+	UpdateCheck UpdateChecker
 }
 
 // Server routes HTTP requests to the application service.
@@ -98,7 +107,12 @@ func (s *Server) publicBaseURL(r *http.Request) string {
 
 // Handler returns the composed handler (middleware + routes).
 func (s *Server) Handler() http.Handler {
-	return requestID(recoverer(s.logger)(requestLogger(s.logger)(s.renderGuard(s.authMiddleware(s.mux)))))
+	var h http.Handler = s.authMiddleware(s.mux)
+	if s.opts.LocalOnly {
+		h = localGuard(h)
+	}
+	h = s.desktopGuard(h)
+	return requestID(recoverer(s.logger)(requestLogger(s.logger)(s.renderGuard(h))))
 }
 
 // renderGuard rejects state-changing API requests when running as a docs site.
@@ -241,6 +255,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET "+base+"/settings/storage", s.handleGetStorageSettings)
 	s.mux.HandleFunc("PUT "+base+"/settings/storage", s.handleSaveStorageSettings)
 	s.mux.HandleFunc("POST "+base+"/settings/storage/test", s.handleTestStorage)
+
+	// Desktop shell (available only when running under LocalOnly).
+	s.mux.HandleFunc("GET "+base+"/desktop/settings", s.handleDesktopSettingsGet)
+	s.mux.HandleFunc("PUT "+base+"/desktop/settings", s.handleDesktopSettingsPut)
+	s.mux.HandleFunc("GET "+base+"/desktop/update", s.handleDesktopUpdate)
 
 	// Public (anonymous) read-only access to shared notes.
 	s.mux.HandleFunc("GET "+base+"/public/notes", s.handlePublicNotes)
