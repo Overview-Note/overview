@@ -8,6 +8,7 @@ WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+COPY internal/sitegen/content.css /src/internal/sitegen/content.css
 RUN npm run build
 
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
