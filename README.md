@@ -60,7 +60,9 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Slash commands** — type `/` for headings, lists, tasks, tables, math, diagrams, code blocks
 - **Outline (TOC)** — scroll-linked table of contents
 - **Table bubble menu** — row/column controls appear right above the active table
-- **Focus mode** (`F9`) and a **keyboard-shortcuts** panel (`?`)
+- **Focus mode** (`F9`) — hides the top bar and sidebar, with a low-key floating
+  **Exit focus** button in the bottom-right corner as a visible way out (Esc and `F9` also work) —
+  and a **keyboard-shortcuts** panel (`?`)
 
 ### 🔎 Search & navigation
 - **Full-text search** with SQLite FTS5 and a custom **CJK unigram + bigram tokenizer**
@@ -141,6 +143,9 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
   Windows NSIS / macOS DMG installers are the next step
 - **No console window** — Windows desktop builds use the GUI PE subsystem (`-H=windowsgui`),
   and desktop logs default to `<DataDir>/logs/desktop.log` (a GUI process has no stdout)
+- **Upgrades load the new frontend automatically** — the shell opens the webview with the
+  build version in the URL (`/?desktop=1&v=<version>`), so every release is a fresh WebView2
+  cache entry; there is no stale-bundle cache to clear after upgrading
 
 ### 🔁 Desktop ↔ server sync
 
@@ -511,6 +516,10 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
   (note sequence + tombstone time), in-process `ChangeBus`, empty-folder sync (migrations
   `0011`/`0012`), S3 path-based asset writes (`s3store.Restore`), and clearer error codes
   (`unauthorized`/`forbidden`/`method_not_allowed`/`bad_gateway`)
+- [x] Desktop upgrade visibility and focus escape: content-hashed weak ETags + 404 for missing
+  assets (no more stale `index.html` served from 304), versioned webview URL
+  (`/?desktop=1&v=<version>`) so each release loads a fresh bundle, and a floating
+  **Exit focus** button when the top bar/sidebar are hidden
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

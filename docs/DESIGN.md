@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.16.0（桌面引导/vault 管理 + 无鉴权 owner + 同步实时与增量补齐）
+> 版本：v0.16.1（修复桌面升级后旧前端缓存 + 专注模式可退出）
 > 更新日期：2026-10-06
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -33,6 +33,7 @@
 | v0.14.0 | 桌面应用 | 新增 Wails v3（`v3.0.0-beta.26`）原生桌面壳 `cmd/overview-desktop`：窗口指向本地服务、系统托盘、单实例、优雅退出、首启目录选择器、`.md` 文件关联、`overview://` 深链、文件拖拽、开机自启、更新提醒；抽取 `internal/app` 统一生命周期（进程内实例锁 `.overview.lock` + 端口文件 `.overview-port` + 监听失败回退随机 loopback 端口 + 优雅退出），headless 与桌面共用；`internal/config` 增加 `Desktop`/`DefaultDataDir()`/`EnableMCP`/`EnableDAV`（桌面默认 `127.0.0.1:5230`、`auth=none`、MCP/WebDAV 关闭，均可被环境变量覆盖）；`internal/server/local.go` 本地安全边界（Host 必须为回环名以抵御 DNS rebinding + 写请求同源校验替代 SameSite CSRF），`internal/server/desktop.go` 暴露 `/api/v1/desktop/settings|update`（headless 下一律 404，与不存在路径不可区分）；`internal/update` 只检测 GitHub Releases 版本、不下载不静默安装；前端新增 `web/src/views/settings/DesktopSection.vue`（仅桌面壳显示）；打包配置 `build/config.yml`（应用元数据/文件关联/URL scheme）；新增 `.github/workflows/desktop.yml` 跨平台构建矩阵（Windows/macOS arm64+amd64/Linux GTK4+GTK3）并在 `v*` tag 发布 Release 产物；`make build-desktop` / `package-desktop` 本机构建与归档 |
 | v0.15.0 | 桌面↔服务器同步 · 桌面打磨 | **Phase 1 增量同步（类 Trilium）**。服务端：迁移 `0010_sync`（`notes.changed_seq` + `note_tombstones` + `settings` 的 `vault_id`/`change_seq`）、`GET /api/v1/sync/manifest`（`vaultId` + 笔记版本 + 文件夹，**强 ETag + 304**）、`PUT /api/v1/note` 支持 `raw:true`（**字节保真写入**、保留 frontmatter id/created、`baseVersion` 乐观并发且禁止无条件写）、`PUT /api/v1/assets/{path}`（按路径写附件、防穿越、S3→501）、`GET /api/v1/note?raw=1`；`service` 新增 `Manifest`/`VaultID`/`SaveNoteRaw`/`RawNote`/`RestoreAsset`，删除/移动记录墓碑。客户端：新包 `internal/sync`（`RemoteClient` 仅 https 或 loopback http、令牌独立文件；`State` 持久化 `<DataDir>/sync.json` + `.sync-token`；`Engine` 三方比对、pull/push/delete/move、冲突副本 `<name> (conflict-<device>-<ts>).md`、首同步补 id、指数退避、方向 `both\|pull\|push`、附件按路径、watcher 近实时）。桌面：`internal/app` 以 `SyncFactory` 装配引擎生命周期；`internal/server/sync.go` 暴露 `/desktop/sync`、`/run`、`/conflicts`、`/conflicts/resolve`（仅桌面 LocalOnly，headless 404）；`cmd/overview-desktop` 注入。前端：`web/src/views/settings/SyncSection.vue`（服务器地址/令牌/开关/方向/间隔/立即同步/状态卡/冲突区，仅桌面显示）。**桌面隐藏控制台**：Windows 桌面构建加 `-H=windowsgui`（GUI PE 子系统）、桌面日志默认 `<DataDir>/logs/desktop.log`、`internal/logging` 改为容错 fanout（GUI 下无 stdout 也能写文件）；修复同步 `plan()` 的 `canPull`/`canPush` 守卫与显式「立即同步」绕过节流 |
 | v0.16.0 | 桌面引导 · owner 权限 · 同步补齐 | **无鉴权 = owner/admin**：`authMiddleware` 在 `!Auth.Required()` 时向每个请求注入 `owner`（`core.RoleAdmin`）用户，桌面/本地单用户安装可访问邮件/站点/存储/数据/用户/令牌等全部管理设置；前端 `auth.isAdmin = mode==="none" || user.role==="admin"` 同步放开设置分区。**桌面初始化与 vault 管理**：新增 `internal/config/desktop.go`（配置持久化 `<UserConfigDir>/Overview/desktop.json`、`HasVault`、`PrepareDataDir` 校验并建目录/测可写）；桌面壳首启引导（`runOnboarding`：默认/打开已有/新建 + 原生目录对话框，`--data-dir`/`OVERVIEW_DATA_DIR` 跳过）；设置页「桌面」分区可**更改数据目录**（`PUT /api/v1/desktop/vault`）、**打开数据目录**（`POST /api/v1/desktop/open-folder`）、**重启应用**（`POST /api/v1/desktop/restart`，重启子进程等待前任退出以释放单实例/vault 锁）。**同步补齐（Phase 2/3 局部）**：增量 `GET /api/v1/sync/changes?since=&sinceTs=&limit=`（`changes/tombstones/folderTombstones/latestSeq/latestTs/hasMore`，迁移 `0011_sync_folders` 的 `folder_tombstones` 与 `0012_folder_changes` 的 `folder_changes`）；实时 `GET /api/v1/sync/events`（SSE，25s 心跳，`http.ResponseController` 清写超时、`statusRecorder` 透出 `Unwrap`/`Flush`、`http.Server.BaseContext` 在 Stop 时取消流）；进程内 `service.ChangeBus` 广播（覆盖 Save/SaveRaw/Delete/Move/Mkdir/ReindexPath/Reindex，即写入/删除/移动/reindex/watcher/Mkdir）。客户端：`RemoteClient.Changes/Events`（SSE 自动重连 + 指数退避，401/403 停止）；`Engine` 订阅 SSE（debounce 500ms 触发 `SyncOnce`，先查 `/sync/changes` 头再决定）+ 轮询兜底 + `execMu` 单飞；游标 `state.cursor` 持久化；**空文件夹双向同步**（父→子建、子→父删、`folder_sync`/`folder_forget`，`remoteFolderEmpty`/`localFolderEmpty` 守卫）；目录删除实时（`folder_tombstones`）；超大附件跳过并记 warning 而非中断。**S3 显式路径写**：`s3store.Restore` 按 vault 相对 key 写入，S3 下附件同步不再 501。**错误码分类**：401→`unauthorized`、403→`forbidden`、405→`method_not_allowed`、502→`bad_gateway` |
+| v0.16.1 | 桌面升级可见性 · 专注出口 | **静态资源校验修正**：`weakETag` 改为对文件**内容**计算 FNV-1a 哈希（原实现只哈希路径 + 字节长度），Vite 重建后字节数几乎不变的 `index.html` 不再算出相同 ETag 而被 304 长期沿用；缺失的静态资源（`assets/` 前缀或带扩展名）返回 **404**，不再回退 `index.html`，避免把 HTML 当 JS/CSS 返回（`internal/server/static.go`）。**桌面壳按版本破缓存**：窗口 URL 由 `/?desktop=1` 改为 `/?desktop=1&v=<version>`（`desktopURL`，`net/url` 转义），每次发版即新的 WebView2 缓存条目，升级后自动加载新前端（`cmd/overview-desktop/main.go`）。**专注模式可退出**：顶栏/侧栏隐藏时新增右下角低调浮动按钮 `.focus-exit`（i18n `focus.exit`，zh「退出专注」/en「Exit focus」），仍保留 Esc/F9 出口（`web/src/App.vue` + `styles.css`） |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -257,6 +258,9 @@ GET /api/v1/sync/manifest                          全量清单（强 ETag，正
 | ADR-081 | 目录变更序号与空文件夹同步：迁移 `0011` 的 `folder_tombstones(path, deleted_at, device)` 与 `0012` 的 `folder_changes(path, changed_seq)`；`RecordFolderChange` 从**共享计数器**分配序号，`RecordFolderTombstone` upsert 删除标记；`LatestSeq` 取笔记与目录序号的最大值 | 只含空文件夹的目录此前无任何笔记，「新建空文件夹」不会推进任何游标，客户端观察不到；目录删除也需可传播 | 空文件夹与笔记共用同一游标空间，`/sync/changes` 能报告目录创建/移动/删除；客户端 `plan()` 据 `st.Folders`（base）、本地、远端三方做 `mkdir`（父先子后）/`folder_delete`（子先父后）/`folder_sync`/`folder_forget`，`remoteFolderEmpty`/`localFolderEmpty` 确保删除不误伤有内容的目录 |
 | ADR-082 | S3 后端实现 `core.AssetRestorer`（`s3store.Restore` 按 vault 相对 key 直接 `PutObject`），不再对按路径写附件返回 501 | 附件同步与 ZIP 导入都需要「原样写回相对路径」的能力；此前 S3 缺失该能力导致附件整体跳过 | S3 下附件可正常双向同步与导入；`Restore` 不做日期分区命名，key 即 vault 相对路径（与 Markdown 引用一致） |
 | ADR-083 | 错误码分类补齐：401→`unauthorized`、403→`forbidden`、405→`method_not_allowed`、502→`bad_gateway`（新增/细化 `statusCode`） | 客户端与测试需要按语义区分未认证、无权限、方法不允许与上游失败；原先这些状态只能落到 `internal` 泛化码 | 错误响应的 `error.code` 更精确；对既有 `invalid`/`not_found`/`conflict`/`too_large`/`not_supported`/`rate_limited`/`unavailable`/`email_not_verified` 映射保持不变 |
+| ADR-084 | 静态资源弱 ETag 改为对文件**内容**计算 FNV-1a 哈希（原实现只哈希路径 + 字节长度）；缺失的静态资源（`assets/` 前缀或带扩展名）返回 404，不再回退 `index.html` | 内容哈希才能反映内容变化：Vite 重建的 `index.html` 字节长度几乎不变，旧的「路径 + 长度」校验器会算出相同 ETag，客户端 304 命中并长期沿用旧壳；旧壳引用的哈希资源又被 `immutable` 缓存一年，导致升级后前端 bundle 停留在旧版本。把 `index.html` 当作 JS/CSS 返回还会触发 MIME 解析错误 | 内容变化即新 ETag，`no-cache` 壳文件正确重取；只有无扩展名的客户端路由仍回退 `index.html`，缺失的资源明确 404，便于发现前后端版本不一致；`internal/server/static_test.go` 覆盖内容哈希与 404 行为 |
+| ADR-085 | 桌面壳窗口 URL 追加构建版本 `?v=<version>`（`desktopURL`，`net/url` 转义） | WebView2 的 HTTP 缓存按 URL 区分条目；只用 `/?desktop=1` 时同一 URL 会复用旧缓存，配合被 `immutable` 缓存的旧资源，升级后可能一直加载旧前端 | 每个发行版本是全新缓存条目，升级后首次打开即拉取新 bundle；`?desktop=1` 标记保持不变，前端仍据此识别桌面壳并跳过 Service Worker 注册 |
+| ADR-086 | 专注模式提供**可见出口**：右下角低调浮动按钮 `.focus-exit`（i18n `focus.exit`，zh「退出专注」/en「Exit focus」），点击调用 `settings.setFocus(false)`；Esc/F9 快捷键仍可用 | 专注模式隐藏顶栏/侧栏，此前只有键盘出口，触屏或鼠标用户无处退出，形成「无路可退」的死角 | 按钮 `z-index:90` 位于内容之上、全屏遮罩（`z-index:100`）之下；仅在专注模式且非 plain（render/公开）时渲染；`prefers-reduced-motion` 下不引入额外动画 |
 
 ---
 
@@ -813,6 +817,15 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 > 见 ADR-067）；SSE 为进程内 `ChangeBus`，多实例下事件不跨节点（与限流/会话同为单进程假设），
 > 需要粘性路由或外部消息；`folder_changes` 使目录空置也占用共享序号空间，长期只增不减（未做
 > 目录变更历史的清理/压缩）；增量游标位于客户端状态文件，状态丢失时仍回退一次完整 manifest。
+>
+> v0.16.1 已修复（原「已知问题」）：**桌面升级后仍加载旧前端**。根因是静态资源弱 ETag 只哈希
+> 路径 + 字节长度，Vite 重建的 `index.html` 字节数几乎不变 → ETag 不变 → 客户端 304 沿用旧壳，
+> 而旧壳引用的哈希资源又被 `immutable` 缓存一年。现改为内容哈希，并让桌面壳 URL 带版本号
+> （`?v=<version>`）形成全新缓存条目（ADR-084/085）。同时补上专注模式的**可见出口**（ADR-086）：
+> 顶栏/侧栏隐藏时不再只有 Esc/F9。
+> v0.16.1 仍待权衡：`immutable` 缓存一年意味着**旧哈希资源**在升级后仍占据用户磁盘，直到浏览器
+> 按容量淘汰（无主动清理）；桌面壳缓存条目按版本累积，长期频繁升级会新增多条缓存目录；版本号
+> 通过 URL 查询串传递，若前端将来解析 `v` 需注意其仅用于破缓存、不代表后端 API 版本。
 
 ---
 
@@ -1050,6 +1063,13 @@ HTTP 与前端
 - [x] `s3store.Restore` 按路径写，S3 下附件同步不再 501
 - [x] 错误码补全 401/403/405/502（`unauthorized`/`forbidden`/`method_not_allowed`/`bad_gateway`）
 
+**Phase 16 — 桌面升级可见性与专注出口（v0.16.1）**
+
+- [x] `weakETag` 改为内容哈希（FNV-1a），修正「字节数相近的重建 `index.html` 命中 304」的旧前端缓存（ADR-084）
+- [x] 缺失的静态资源（`assets/` 前缀或带扩展名）返回 404，不再回退 `index.html`（ADR-084）
+- [x] 桌面壳窗口 URL 带构建版本 `?v=<version>`，每个发版形成新 WebView2 缓存条目（ADR-085）
+- [x] 专注模式新增右下角浮动「退出专注」按钮 `.focus-exit`（i18n `focus.exit`），保留 Esc/F9（ADR-086）
+
 ---
 
 ## 13. 附录
@@ -1229,6 +1249,11 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - **传输优化**（ADR-033）：`internal/server/static.go` 对静态资源 **gzip**（压缩结果内存缓存）、
   哈希资源 `Cache-Control: immutable`、壳文件 `no-cache` + ETag 304、SPA 回退；前端 `/assets/*`
   统一经该处理器（此前被上传路由绕过）。Lighthouse（移动端）由 80+ 提升到 **99**。
+- **缓存校验语义**（v0.16.1，ADR-084/085）：`weakETag` 用文件**内容**的 FNV-1a 哈希（而非路径 +
+  字节长度），因此 `index.html` 内容变化必然更新 ETag，`no-cache` 下重取新壳；未命中的静态资源
+  （`assets/` 前缀或带扩展名）直接 **404**，只有无扩展名的客户端路由才回退 `index.html`（避免把
+  HTML 当 JS/CSS 返回）。桌面壳窗口 URL 带 `?v=<version>`（ADR-085），使每个发版成为独立的
+  WebView2 缓存条目，升级后自动加载新前端，无需用户清缓存。
 - **交互修复**：侧栏行内操作改为绝对定位浮层（消除悬浮引起的行高/截断抖动）；新增可拖拽宽度
   （持久化，双击复位）与文件名提示；加深文字令牌、强化激活态以恢复层级。
 - **图片密集页卡顿修复**：笔记内图片统一加 `loading="lazy"` 与 `decoding="async"`（编辑器的
@@ -1560,3 +1585,39 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   `/sync/events` 保持 SSE 流。
 - **本轮未验证**：真实双机的事件驱动收敛、多实例下的 SSE（预期不跨节点）、S3 后端的按路径附件同步、
   桌面壳（macOS/Linux）与原生引导对话框的人工回归。
+
+### 13.28 桌面升级可见性与专注出口（v0.16.1，ADR-084…086）
+
+**静态资源缓存校验（`internal/server/static.go`，ADR-084）**
+
+- `weakETag(p, data)` 由「路径 + 字节长度」的哈希改为对 `p` 与**完整内容** `data` 做 FNV-1a 哈希；
+  内容变化必然换 ETag，重建后字节数几乎不变的 `index.html` 不再被 304 命中。
+- `serve` 在 `fs.Stat` 未命中时调用新增的 `isAssetRequest(p)`：`assets/` 前缀或带扩展名的路径
+  返回 `http.NotFound`（404），只有无扩展名的客户端路由才回退 `index.html`。避免把 HTML 作为
+  JS/CSS 返回造成 MIME 解析失败，也让「资源缺失」这一版本不一致信号不被掩盖。
+- `internal/server/static_test.go` 新增覆盖：同长度不同内容的 `index.html` 需返回不同 ETag；
+  缺失资源 404、未知无扩展名路由回退 `index.html`。
+
+**桌面壳缓存破化（`cmd/overview-desktop/main.go`，ADR-085）**
+
+- 新增 `desktopURL(base, version)`：返回 `base + "/?desktop=1&v=" + url.QueryEscape(version)`；
+  窗口 `URL` 由硬编码 `base + "/?desktop=1"` 改为 `desktopURL(base, version)`。每次发版是新缓存
+  条目，升级后 WebView2 首次打开即拉取新前端；`?desktop=1` 语义不变（前端据此跳过 Service Worker）。
+- `cmd/overview-desktop/main_test.go` 更新 `desktopURL` 用例（含版本转义与 origin 校验）。
+
+**专注模式出口（`web/src/App.vue` + `styles.css` + i18n，ADR-086）**
+
+- 非 plain 分支内新增 `<button v-if="settings.focusMode" class="focus-exit" @click="settings.setFocus(false)">`，
+  文案取 i18n `focus.exit`（zh「退出专注」/en「Exit focus」），`title` 复用已有 `shortcuts.exitFocus`。
+- `.focus-exit` 为右下角浮动胶囊：`position:fixed` + `env(safe-area-inset-*)`、`z-index:90`、
+  `color-mix` 半透明背景 + `backdrop-filter`，默认 `opacity:0.75`，`hover` 提升；`prefers-reduced-motion`
+  兼容。
+
+**验证记录**
+
+- `go build ./...`、`go test ./...` 全绿（含新增/更新的 `internal/server/static_test.go`、
+  `cmd/overview-desktop/main_test.go`）。
+- `cd web && npm run build`（`overview-web@0.16.1`）通过。
+- headless：`bin/overview.exe` 重编为 v0.16.1 并以 `OVERVIEW_AUTH=multi` 重启 demo；`/api/v1/health`
+  返回 `version: 0.16.1`。
+- **本轮未验证**：真实 WebView2 升级路径（旧缓存 → 新 bundle）的人工回归、macOS/Linux 桌面壳。

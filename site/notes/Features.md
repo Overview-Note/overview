@@ -24,7 +24,9 @@ public: true
 - **Slash commands** — type `/` for headings, lists, tasks, tables, math, diagrams, code
 - **Outline (TOC)** — scroll-linked table of contents
 - **Table bubble menu** — row/column controls above the active table
-- **Focus mode** (`F9`) and a keyboard-shortcuts panel (`?`)
+- **Focus mode** (`F9`) — hides the top bar and sidebar and offers a floating **Exit focus**
+  button in the bottom-right corner (Esc and `F9` also leave it) — and a keyboard-shortcuts
+  panel (`?`)
 
 ## Search
 

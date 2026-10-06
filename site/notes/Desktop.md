@@ -33,6 +33,13 @@ the headless server are the same program with a different front end.
 - **Vault management** — under **Settings → Desktop** you can **change the data directory**
   (native picker), **open it** in the system file manager, and **restart the app** to apply a
   change
+- **Upgrades load the new frontend automatically** — the window opens at
+  `/?desktop=1&v=<version>`, so every release is a fresh WebView2 cache entry and there is no
+  stale bundle to clear after an upgrade (the static handler also hashes file *contents* for
+  its `ETag`, and missing assets return `404` instead of an HTML fallback)
+- **Focus mode is escapable** — focus mode hides the top bar and sidebar, and a low-key
+  floating **Exit focus** button in the bottom-right corner is the visible way out (Esc and
+  `F9` also work)
 
 ## Vault sync (desktop ↔ server)
 
@@ -158,4 +165,4 @@ Tagged releases build the Windows/macOS/Linux shells in CI
 
 See [[Architecture]] for how the shell fits into the codebase, and
 [`docs/DESIGN.md`](https://github.com/Overview-Note/overview/blob/main/docs/DESIGN.md)
-(ADR-059…083) for the design decisions.
+(ADR-059…086) for the design decisions.
