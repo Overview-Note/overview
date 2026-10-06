@@ -27,7 +27,12 @@ the headless server are the same program with a different front end.
 - **Launch at login** — available as a toggle under **Settings → Desktop**
 - **Update notification** — checks GitHub Releases and links to the download page; it never
   downloads or installs silently
-- **First-run folder picker** — choose which vault to open the first time
+- **First-run onboarding** — choose the default vault, open an existing one (a folder with
+  `notes/` or `overview.db`), or create a new one; the choice is remembered in
+  `<UserConfigDir>/Overview/desktop.json`
+- **Vault management** — under **Settings → Desktop** you can **change the data directory**
+  (native picker), **open it** in the system file manager, and **restart the app** to apply a
+  change
 
 ## Vault sync (desktop ↔ server)
 
@@ -52,9 +57,19 @@ there too.
   saved as a sibling `<name> (conflict-<device>-<ts>).md` and the remote original stays put.
   Resolve each conflict from the settings page with *keep local* or *keep remote*.
 - **Attachments** — synced by vault-relative path; pushes are de-duplicated by content hash
-  and pulls only fill in missing files.
-- **Polling, not streaming** — Phase 1 checks on an interval (default 60s) and is also woken
-  by the local file watcher; there is no SSE/push yet.
+  and pulls only fill in missing files. S3 vendors now support path-based writes too
+  (`s3store.Restore`), so attachments sync against object-storage backends as well.
+- **Real-time + incremental** — the server streams changes over **Server-Sent Events** at
+  `GET /api/v1/sync/events` and offers a cursor-based `GET /api/v1/sync/changes`
+  (`since` note sequence + `sinceTs` tombstone time). The client subscribes to the stream and
+  reconciles on change (debounced by 500 ms), persisting its cursor; interval polling
+  (default 60s) and the file watcher remain as fallbacks, and a change event is only a hint —
+  the manifest comparison still guarantees convergence.
+- **Empty folders** — folder creations, moves and deletions share the note change sequence
+  (migrations `0011`/`0012`), so a folder that holds no notes syncs as well: parents are
+  created before children and deleted after them.
+- **Oversized attachments** — an attachment above the server's upload limit is skipped with a
+  warning in the sync status instead of failing the whole sync.
 
 The token is stored separately in `<DataDir>/.sync-token` (never in the exportable
 `sync.json` or logs), and plain HTTP is only accepted for loopback hosts — a remote server
@@ -71,7 +86,9 @@ On the desktop the app is a single-user, local-only tool:
 
 Because authentication may be off, write requests are protected by a **Host and origin
 guard** (the Host header must be a loopback name, and state-changing browser requests must be
-same-origin) rather than cookie CSRF protection. The desktop-only API endpoints
+same-origin) rather than cookie CSRF protection. With authentication off, every request is
+treated as the **owner (admin)**, so all admin settings — mail, site, object storage, data,
+users and API tokens — are reachable without a login. The desktop-only API endpoints
 (`/api/v1/desktop/*`) are not even registered by a headless server — it answers `404`.
 
 Setting `OVERVIEW_DESKTOP=true` switches on these defaults; every one of them can be
@@ -86,8 +103,11 @@ overridden with the usual environment variables (`OVERVIEW_ADDR`, `OVERVIEW_AUTH
 | macOS | `~/Documents/Overview` |
 | Linux | `~/Documents/Overview`, else `$XDG_DATA_HOME/overview` or `~/.local/share/overview` |
 
-If the directory is missing or empty, the first launch asks you to pick a folder (cancelling
-keeps the default).
+If the directory is missing or empty, the first launch runs an onboarding flow that lets you
+use the default, open an existing vault, or create a new one (cancelling keeps the default).
+The resolved path is stored in `<UserConfigDir>/Overview/desktop.json`, so later launches skip
+onboarding; you can change it under **Settings → Desktop** (the change applies after a
+restart, which the settings page can trigger for you).
 
 ## Building
 
@@ -130,10 +150,12 @@ Tagged releases build the Windows/macOS/Linux shells in CI
 - Updates are only *notified* — there is no silent auto-update.
 - If the preferred port is taken, the app falls back to a random loopback port (written to
   `.overview-port`); the port is not guaranteed to be stable.
-- Sync Phase 1 polls the full manifest (default 60s, plus file-watcher triggers) rather than
-  streaming; a server is a single shared vault with no per-user ACL; and S3 asset backends
-  are skipped (`PUT /assets/{path}` returns `501`).
+- Sync is event-driven (SSE) with interval polling as a fallback, but a server is still a
+  single shared vault with **no per-user ACL**, the SSE bus is in-process (no fan-out across
+  multiple server instances), and **oversized attachments are skipped** (no chunked upload).
+- The desktop config (`desktop.json`) lives in the user config directory; a lost sync cursor
+  falls back to one full manifest comparison.
 
 See [[Architecture]] for how the shell fits into the codebase, and
 [`docs/DESIGN.md`](https://github.com/Overview-Note/overview/blob/main/docs/DESIGN.md)
-(ADR-059…066) for the design decisions.
+(ADR-059…083) for the design decisions.

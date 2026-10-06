@@ -48,7 +48,12 @@ public: true
 
 - **Offline CLI** — `overview <command>` runs the same operations directly against `data/`
   with no server (notes, search, history, trash, assets, archives, static-site build)
-- **Multi-user auth** — bcrypt, sessions, roles, first-run setup
+- **Multi-user auth** — bcrypt, sessions, roles, first-run setup; with authentication disabled
+  (desktop/local single-user) the caller acts as the **owner/admin**, so every admin setting is
+  reachable without a login
+- **Desktop app** — Wails v3 native window with tray, single instance, `.md`/`overview://`
+  integration, drag-and-drop, launch at login, first-run **vault onboarding**, and vault
+  management (**change / open the data directory, restart**) under **Settings → Desktop**
 - **Email accounts** — invite users, email verification and password reset (SMTP configurable at
   runtime under **Settings → Mail server**), optional **self-registration**, and a customizable
   login page (notice, ICP, link)
@@ -81,13 +86,20 @@ public: true
   (Trilium-style client ↔ server). Identity is the frontmatter note `id`; a strong-ETag
   `GET /api/v1/sync/manifest` drives three-way reconciliation, then notes and attachments are
   pulled, pushed, deleted and moved
+- **Real-time + incremental** — changes stream over SSE (`GET /api/v1/sync/events`) with a
+  cursor-based `GET /api/v1/sync/changes` (`since` note sequence + `sinceTs` tombstone time);
+  the client reconciles on change and persists its cursor, with interval polling (default 60s)
+  and file-watcher triggers as fallbacks
+- **Empty folders sync** — folder creates/moves/deletes share the note change sequence
+  (migrations `0011`/`0012`), so a folder with no notes still propagates
 - **Faithful writes** — sync stores the exact Markdown bytes (`raw`) with a `baseVersion`, so
   a concurrent edit is reported, never silently overwritten
 - **No destructive merge** — both-edited notes produce a `<name> (conflict-<device>-<ts>).md`
   copy that you resolve with *keep local* / *keep remote* in **Settings → Sync**
-- **Direction & cadence** — `both`/`pull`/`push`, on an interval (default 60s) with
-  file-watcher triggers; the token is kept in `.sync-token` (owner-only) and remote servers
-  must be HTTPS
+- **Direction** — `both`/`pull`/`push`; the token is kept in `.sync-token` (owner-only) and
+  remote servers must be HTTPS
+- **Attachments anywhere** — synced by vault-relative path, including on S3 backends; an
+  oversized attachment is skipped with a warning rather than failing the sync
 - **Console-less desktop build** — Windows uses the GUI PE subsystem (`-H=windowsgui`) and
   logs to `<DataDir>/logs/desktop.log`
 

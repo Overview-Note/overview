@@ -88,14 +88,30 @@ Gridea 风格暖色配色（琥珀主色 `#D4870E`，明暗两套），主题色
 Linux 需 `-tags desktop` 与 GTK/WebKitGTK（CGO）。Windows 构建使用 GUI PE 子系统
 （`-H=windowsgui`），启动不再弹出控制台；桌面日志默认写 `<DataDir>/logs/desktop.log`。
 
-### 10. 桌面↔服务器同步（Phase 1）
+### 10. 桌面↔服务器同步（Phase 1 + 实时/增量补齐）
 桌面端可以把本地 vault 与一个自建 Overview 服务器双向收敛（类 Trilium 的客户端↔服务端模型）：
 以 frontmatter `id` 为跨设备身份，借助服务端 `GET /sync/manifest`（强 ETag）做三方比对，
 自动 pull/push/delete/move 笔记与附件；双方都改同一篇时**不覆盖**，而是生成同级「冲突副本」
 交由用户在设置页裁决（保留本地或远端）。写入走字节保真的 `raw` 通道并携带 `baseVersion`，
-避免重新序列化 frontmatter。同步方向可选 `both`/`pull`/`push`，默认每 60s 轮询 + 文件监视触发近实时。
+避免重新序列化 frontmatter。同步方向可选 `both`/`pull`/`push`。
+
+v0.16.0 补齐了实时与增量：服务端新增 `GET /sync/changes`（按笔记序号 + 墓碑时间戳游标增量拉取）
+与 `GET /sync/events`（SSE 实时推送，25s 心跳），写路径经进程内 `ChangeBus` 广播；客户端订阅事件
+（500ms debounce 触发一次收敛），轮询降为断线兜底，并持久化游标。**空文件夹也能双向同步**（父→子建、
+子→父删），目录删除实时传播；S3 附件后端实现按相对路径写入（`Restore`），不再返回 501。
 桌面端**不新增**环境变量：服务器地址与 API 令牌在「设置 → 同步」中配置，令牌单独存
 `.sync-token`（不进可导出的状态文件）。
+
+### 11. 桌面引导与 vault 管理
+桌面壳首次启动会引导选择「数据目录」（vault）：使用默认位置、打开已有 vault（含 `notes/` 或
+`overview.db`），或新建一个；选择结果写入用户配置目录的 `desktop.json`，之后启动直接复用。
+设置页「桌面」分区可**更改数据目录**、**打开数据目录**与**重启应用**（更改重启后生效）。无鉴权
+模式下（桌面默认）调用者被视为 **owner（管理员）**，因此邮件、站点、对象存储、数据、用户与令牌等
+管理设置全部可用。
+
+### 12. 错误码
+错误响应统一为 `{error:{code,message}}`；v0.16.0 补齐语义码：401→`unauthorized`、403→`forbidden`、
+405→`method_not_allowed`、502→`bad_gateway`，客户端与脚本可更精确地区分失败原因。
 
 ---
 
@@ -109,7 +125,8 @@ Linux 需 `-tags desktop` 与 GTK/WebKitGTK（CGO）。Windows 构建使用 GUI 
 **访问**：WebDAV · REST + OpenAPI · PWA · 应用内快速捕获（顶栏弹窗 · 服务端抓取标题/正文 · SSRF 防护）
 **移动端**：**响应式手机端**（抽屉式侧栏 · 顶栏手机化 · 编辑器全宽 · 工具栏横向滚动 · 右侧面板底部抽屉 · 搜索浮层 · 触屏基础 · 可安装 PWA）
 **外观**：Gridea 风格配色（琥珀主色 `#D4870E`）· 明暗主题 · **主题色自定义（预设 + 取色器）** · **独立设置页**（外观/编辑器/AI/邮件/站点/对象存储/数据/用户/令牌）
-**桌面**：**Wails v3 原生窗口** · 系统托盘 · 单实例 · `.md` 文件关联 · `overview://` 深链 · 文件拖拽 · 开机自启 · 更新提醒（只检测）· 首启目录选择 · 平台数据目录 · **桌面↔服务器同步（设置页配置服务器 + API 令牌，方向/间隔/冲突副本裁决）** · **无控制台启动（Windows GUI PE 子系统）+ 桌面日志文件**
+**桌面**：**Wails v3 原生窗口** · 系统托盘 · 单实例 · `.md` 文件关联 · `overview://` 深链 · 文件拖拽 · 开机自启 · 更新提醒（只检测）· **首启引导（默认/打开已有/新建 vault）** · **数据目录管理（更改/打开/重启生效）** · 平台数据目录 · **桌面↔服务器同步（设置页配置服务器 + API 令牌，方向/间隔/冲突副本裁决，SSE 实时 + 增量游标 + 空文件夹）** · **无控制台启动（Windows GUI PE 子系统）+ 桌面日志文件**
+**权限**：多用户（bcrypt/会话/角色）· **无鉴权模式 = owner（管理员，桌面/本机单用户）**
 **运维**：单二进制 · Docker · 结构化日志（文件 + 轮转）· SQLite 迁移 · 原子写 + 乐观并发 · 版本历史 · 回收站 · 增量索引 + 文件监视 · ZIP 导入/导出 · **S3 附件后端（设置页可运行时切换）** · **静态站导出（与应用阅读态一致：共享内容样式 + 运行期按需加载 KaTeX/Mermaid/高亮）** + sitemap/robots · 多语言（中/英/繁中/日/德）
 
 ---
@@ -132,11 +149,14 @@ Linux 需 `-tags desktop` 与 GTK/WebKitGTK（CGO）。Windows 构建使用 GUI 
 
 ## 项目状态
 
-- **版本**：v0.15.0（桌面↔服务器同步 Phase 1 + 桌面隐藏控制台；Phase 7 部分待排期）
+- **版本**：v0.16.0（桌面引导 + 无鉴权 owner + 同步实时/增量补齐；Phase 7 部分待排期）
 - **测试**：`go test ./...` 覆盖 config/logging/history/archivex/sitegen/trash/ai/openapi/cli/agent/tools
   以及 store/index/textproc/service/server/mcp（含 `httptest` 集成测试与 MCP↔tools parity）；
   v0.15.0 起新增 `internal/sync`（三方比对/方向/冲突/状态与令牌分离）与 `server`/`index` 的同步端点、
-  `changed_seq`、墓碑覆盖；前端 `vue-tsc` 类型检查、
+  `changed_seq`、墓碑覆盖；v0.16.0 新增 `internal/config/desktop`（vault 校验/配置持久化）、
+  `index` 的 `folder_tombstones`/`folder_changes`（迁移 `0011`/`0012`）、`server` 的 `/sync/changes`/
+  `/sync/events` 与 `/desktop/vault|restart|open-folder`、无鉴权 owner、错误码分类、
+  `sync` 的 SSE/增量/空文件夹同步覆盖；前端 `vue-tsc` 类型检查、
   **Vitest** 单元测试（`npm test`）与 `vite build`；`make test` 一键运行 Go + 前端
 - **CI**：GitHub Actions（后端 race 测试、前端类型检查+测试+构建、golangci-lint、Windows 桌面编译冒烟）；
   推送 `v*` 标签自动构建 **多架构镜像** 发布到 GHCR，并构建 **桌面壳多平台产物** 发布到 Release
@@ -144,7 +164,7 @@ Linux 需 `-tags desktop` 与 GTK/WebKitGTK（CGO）。Windows 构建使用 GUI 
   浏览器访问或原生桌面窗口
 - **规模**：后端 ~10k 行 Go / 21 个 internal 包；前端 ~5k 行 TS/Vue
 - **已知限制**：见 [`DESIGN.md`](DESIGN.md) §11。v0.13.0 待权衡的是智能体会话/限流的
-  单实例内存假设（确认需同实例）、审计无清理策略与工具调用为非流式；v0.13.2 待权衡的是运行时切换资产后端**不迁移历史附件**、移动端为响应式适配而非原生体验；v0.13.3 待权衡的是静态站高亮/数学/图表在浏览器端运行期渲染（首屏需下载对应库、Mermaid 单文件较大）、共享内容样式使应用与静态站强绑定、静态站只读无编辑器交互；**v0.14.0 待权衡的是桌面壳未在 macOS/Linux 实机验证（CI 只编译归档）**、NSIS/DMG/AppImage 安装器与 Linux `.desktop` 尚未生成、`wails3` 未接入仓库流水线、更新只提醒不静默安装、端口被占会回退随机 loopback 端口；**v0.15.0 待权衡的是同步 Phase 1 为完整 manifest 轮询（默认 60s，非 SSE 实时）、大库每次比对传输全部笔记元数据、多用户共享整库（无按用户 ACL，令牌即整库读写）、S3 附件后端不支持按路径写入（`PUT /assets/{path}` 返回 501，附件跳过）、删除与编辑的判定依赖客户端状态（状态丢失时可能误判）、冲突副本以独立笔记出现在两侧需用户裁决、桌面无控制台且日志文件也不可写时难以诊断**；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
+  单实例内存假设（确认需同实例）、审计无清理策略与工具调用为非流式；v0.13.2 待权衡的是运行时切换资产后端**不迁移历史附件**、移动端为响应式适配而非原生体验；v0.13.3 待权衡的是静态站高亮/数学/图表在浏览器端运行期渲染（首屏需下载对应库、Mermaid 单文件较大）、共享内容样式使应用与静态站强绑定、静态站只读无编辑器交互；**v0.14.0 待权衡的是桌面壳未在 macOS/Linux 实机验证（CI 只编译归档）**、NSIS/DMG/AppImage 安装器与 Linux `.desktop` 尚未生成、`wails3` 未接入仓库流水线、更新只提醒不静默安装、端口被占会回退随机 loopback 端口；**v0.15.0 待权衡的是同步 Phase 1 为完整 manifest 轮询（默认 60s，非 SSE 实时）、大库每次比对传输全部笔记元数据、多用户共享整库（无按用户 ACL，令牌即整库读写）、S3 附件后端不支持按路径写入（`PUT /assets/{path}` 返回 501，附件跳过）、删除与编辑的判定依赖客户端状态（状态丢失时可能误判）、冲突副本以独立笔记出现在两侧需用户裁决、桌面无控制台且日志文件也不可写时难以诊断**；**v0.16.0 已缓解：同步实时化（SSE `/sync/events` + `ChangeBus`，轮询降为兜底）、增量 `/sync/changes`（序号 + 墓碑游标）、远端新建空文件夹实时、S3 附件按路径同步不再 501、错误码补齐语义分类；v0.16.0 仍待权衡：大文件分片上传未做（超大附件在同步中跳过并告警）、多用户仍无 per-user 工作区（整库一 vault）、SSE 为进程内单实例（多实例不跨节点）、`folder_changes` 序号只增不减、游标丢失时回退一次完整 manifest**；仍待办的是标签/置顶/实时协作/评论等功能（Phase 7）与 i18n 语言扩充（暂缓）
 
 ---
 
@@ -182,6 +202,10 @@ v0.15.0 新增同步端点：服务端 `GET /sync/manifest`（强 ETag + 304）�
 `POST /desktop/sync/conflicts/resolve`（仅桌面且挂载同步引擎，headless 一律 404）。
 同步的服务器地址与 API 令牌在桌面「设置 → 同步」中配置（不新增环境变量）；令牌单独存
 `<DataDir>/.sync-token`，状态存 `<DataDir>/sync.json`。
+v0.16.0 新增同步实时/增量端点：`GET /sync/changes?since=&sinceTs=&limit=`（增量变更流，
+返回游标/墓碑/目录墓碑/hasMore）、`GET /sync/events`（SSE 实时推送，25s 心跳）；桌面控制面新增
+`PUT /desktop/vault`（更改数据目录，空串唤起原生目录选择器）、`POST /desktop/restart`（重启应用）、
+`POST /desktop/open-folder`（打开数据目录）。桌面配置存 `<UserConfigDir>/Overview/desktop.json`。
 
 ---
 

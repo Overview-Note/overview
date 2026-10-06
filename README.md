@@ -121,10 +121,17 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
   WebView pointing at `http://127.0.0.1`), sharing `internal/app` and every service with the
   headless binary
 - **System integration** — system tray, single instance, `.md` **file association**,
-  `overview://` **deep links**, drag-and-drop, launch at login, and a first-run folder picker
+  `overview://` **deep links**, drag-and-drop, launch at login, and a first-run **onboarding
+  wizard** to use the default vault, open an existing one, or create a new one
+- **Vault management** — the resolved vault path is remembered in
+  `<UserConfigDir>/Overview/desktop.json`; under **Settings → Desktop** you can **change the
+  data directory** (native picker), **open it** in the file manager, and **restart the app**
+  to apply the change
 - **Local-first defaults** — loopback only, authentication off, MCP/WebDAV disabled; a
   Host/origin guard replaces cookie CSRF protection. `OVERVIEW_DESKTOP=true` applies these
-  defaults and any of them can be overridden with the usual environment variables
+  defaults and any of them can be overridden with the usual environment variables. With
+  authentication off the caller is treated as the **owner (admin)**, so every admin setting —
+  mail, site, object storage, data, users and API tokens — is reachable without a login
 - **Update *notification* only** — checks GitHub Releases and links to the download page;
   it never downloads or installs anything silently
 - **Per-user data** — Windows/macOS use `~/Documents/Overview`; Linux prefers
@@ -135,7 +142,7 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **No console window** — Windows desktop builds use the GUI PE subsystem (`-H=windowsgui`),
   and desktop logs default to `<DataDir>/logs/desktop.log` (a GUI process has no stdout)
 
-### 🔁 Desktop ↔ server sync (Phase 1)
+### 🔁 Desktop ↔ server sync
 
 Keep a desktop vault and a self-hosted Overview server in step, the way Trilium does
 client ↔ server synchronisation:
@@ -148,15 +155,24 @@ client ↔ server synchronisation:
   with a strong `ETag`; the client compares that inventory against its local vault and its
   last-synced state, then pulls, pushes, deletes and moves notes and attachments. Notes
   without a frontmatter `id` are assigned one on the first sync
+- **Real-time + incremental** — the server broadcasts changes over Server-Sent Events at
+  `GET /api/v1/sync/events` and exposes a cursor-based `GET /api/v1/sync/changes`
+  (`since` note sequence + `sinceTs` tombstone time); the client subscribes to the stream and
+  reconciles on change (debounced), persisting the cursor, while interval polling remains as a
+  fallback. Events are a hint — the manifest comparison is still what guarantees convergence
+- **Empty folders sync too** — folder creations, moves and deletions ride the same change
+  sequence (migrations `0011`/`0012`), so a folder that holds no notes still propagates
 - **Direction** — `both` (default), `pull` (server → desktop) or `push` (desktop → server)
 - **Conflicts are never overwritten** — when both sides edit the same note, the local copy is
   written to a sibling `<name> (conflict-<device>-<ts>).md` and the remote original is kept;
   resolve each one in **Settings → Sync** with *keep local* or *keep remote*
 - **Faithful writes** — sync writes the exact Markdown bytes (frontmatter preserved) with a
   `baseVersion`, so it never silently clobbers a concurrent edit
-- **Limits** — Phase 1 polls the full manifest (default 60s, plus file-watcher triggers; not
-  SSE), a server is a single shared vault (no per-user ACL), and S3 asset backends are skipped
-  (path-based asset writes return `501`)
+- **Attachments everywhere** — assets sync by vault-relative path, including on **S3** backends
+  (`s3store.Restore`); an attachment over the server's upload limit is skipped with a warning
+  rather than failing the whole sync
+- **Limits** — a server is still a single shared vault (no per-user ACL), and chunked uploads
+  for oversized files are not implemented yet
 
 ---
 
@@ -488,13 +504,20 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
   **Settings → Sync** section
 - [x] Console-less Windows desktop build (`-H=windowsgui`) and desktop logging to
   `<DataDir>/logs/desktop.log` via a fault-tolerant fanout writer
+- [x] Desktop onboarding and vault management: remember the vault in `desktop.json`, change /
+  open / restart from **Settings → Desktop**; no-auth mode acts as the **owner** so all admin
+  settings are reachable
+- [x] Sync real-time + incremental: SSE `GET /sync/events`, cursor-based `GET /sync/changes`
+  (note sequence + tombstone time), in-process `ChangeBus`, empty-folder sync (migrations
+  `0011`/`0012`), S3 path-based asset writes (`s3store.Restore`), and clearer error codes
+  (`unauthorized`/`forbidden`/`method_not_allowed`/`bad_gateway`)
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 
 - [ ] Signed desktop installers (Windows NSIS, macOS DMG) and Linux AppImage/`.desktop`
 - [ ] Desktop verification on real macOS/Linux hardware (CI only compiles/archives today)
-- [ ] Sync Phase 2: incremental `changed_seq`/tombstone deltas and SSE instead of full-manifest
-  polling; S3 asset backends; real two-machine sync verification
+- [ ] Sync: chunked uploads for oversized files, per-user workspaces, multi-instance SSE
+  fan-out, and real two-machine event-driven verification
 
 - [ ] Tags: management UI, tag tree, tag filtering, `#` autocomplete
 - [ ] Pin / favorites, saved filter views, timeline view
