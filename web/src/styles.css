@@ -577,27 +577,27 @@ button:disabled {
   border-radius: 6px;
 }
 
-/* Folder rows: level-0 group headers are the strongest, deeper folders
-   progressively lighter. */
+/* Folder rows: every depth shares the strongest text color; depth is conveyed
+   by indentation and the uppercase/600-weight treatment. */
 .tree-row.folder {
   font-weight: 600;
-  color: var(--text-soft);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 12px;
 }
 .tree-row.folder.depth-0 {
   font-size: var(--text-sm);
-  color: var(--text-soft);
+  color: var(--text);
 }
 .tree-row.folder.depth-1 {
   font-size: var(--text-sm);
-  color: var(--text-soft);
+  color: var(--text);
 }
 .tree-row.folder.depth-2,
 .tree-row.folder.depth-3 {
   font-size: var(--text-sm);
-  color: var(--text-faint);
+  color: var(--text);
 }
 
 /* Notes: normal case, plain weight; indent increases with depth. */
@@ -619,7 +619,7 @@ button:disabled {
 .tree-row.note.depth-3 {
   font-size: var(--text-sm);
   padding-left: 22px;
-  color: var(--text-soft);
+  color: var(--text-muted);
 }
 
 .twist {
