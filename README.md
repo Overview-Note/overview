@@ -520,6 +520,9 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
   assets (no more stale `index.html` served from 304), versioned webview URL
   (`/?desktop=1&v=<version>`) so each release loads a fresh bundle, and a floating
   **Exit focus** button when the top bar/sidebar are hidden
+- [x] Darker, more readable sidebar tree: every folder depth uses the strongest text token
+  (`--text`) and deep notes use `--text-muted`, so depth is conveyed by indentation and the
+  uppercase/600-weight folder treatment rather than fading deeper levels
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

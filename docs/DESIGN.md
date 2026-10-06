@@ -1,6 +1,6 @@
 # Overview 设计文档
 
-> 版本：v0.16.1（修复桌面升级后旧前端缓存 + 专注模式可退出）
+> 版本：v0.16.2（侧栏树文字对比度：文件夹统一 `--text`、笔记 `--text-muted`）
 > 更新日期：2026-10-06
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
@@ -34,6 +34,7 @@
 | v0.15.0 | 桌面↔服务器同步 · 桌面打磨 | **Phase 1 增量同步（类 Trilium）**。服务端：迁移 `0010_sync`（`notes.changed_seq` + `note_tombstones` + `settings` 的 `vault_id`/`change_seq`）、`GET /api/v1/sync/manifest`（`vaultId` + 笔记版本 + 文件夹，**强 ETag + 304**）、`PUT /api/v1/note` 支持 `raw:true`（**字节保真写入**、保留 frontmatter id/created、`baseVersion` 乐观并发且禁止无条件写）、`PUT /api/v1/assets/{path}`（按路径写附件、防穿越、S3→501）、`GET /api/v1/note?raw=1`；`service` 新增 `Manifest`/`VaultID`/`SaveNoteRaw`/`RawNote`/`RestoreAsset`，删除/移动记录墓碑。客户端：新包 `internal/sync`（`RemoteClient` 仅 https 或 loopback http、令牌独立文件；`State` 持久化 `<DataDir>/sync.json` + `.sync-token`；`Engine` 三方比对、pull/push/delete/move、冲突副本 `<name> (conflict-<device>-<ts>).md`、首同步补 id、指数退避、方向 `both\|pull\|push`、附件按路径、watcher 近实时）。桌面：`internal/app` 以 `SyncFactory` 装配引擎生命周期；`internal/server/sync.go` 暴露 `/desktop/sync`、`/run`、`/conflicts`、`/conflicts/resolve`（仅桌面 LocalOnly，headless 404）；`cmd/overview-desktop` 注入。前端：`web/src/views/settings/SyncSection.vue`（服务器地址/令牌/开关/方向/间隔/立即同步/状态卡/冲突区，仅桌面显示）。**桌面隐藏控制台**：Windows 桌面构建加 `-H=windowsgui`（GUI PE 子系统）、桌面日志默认 `<DataDir>/logs/desktop.log`、`internal/logging` 改为容错 fanout（GUI 下无 stdout 也能写文件）；修复同步 `plan()` 的 `canPull`/`canPush` 守卫与显式「立即同步」绕过节流 |
 | v0.16.0 | 桌面引导 · owner 权限 · 同步补齐 | **无鉴权 = owner/admin**：`authMiddleware` 在 `!Auth.Required()` 时向每个请求注入 `owner`（`core.RoleAdmin`）用户，桌面/本地单用户安装可访问邮件/站点/存储/数据/用户/令牌等全部管理设置；前端 `auth.isAdmin = mode==="none" || user.role==="admin"` 同步放开设置分区。**桌面初始化与 vault 管理**：新增 `internal/config/desktop.go`（配置持久化 `<UserConfigDir>/Overview/desktop.json`、`HasVault`、`PrepareDataDir` 校验并建目录/测可写）；桌面壳首启引导（`runOnboarding`：默认/打开已有/新建 + 原生目录对话框，`--data-dir`/`OVERVIEW_DATA_DIR` 跳过）；设置页「桌面」分区可**更改数据目录**（`PUT /api/v1/desktop/vault`）、**打开数据目录**（`POST /api/v1/desktop/open-folder`）、**重启应用**（`POST /api/v1/desktop/restart`，重启子进程等待前任退出以释放单实例/vault 锁）。**同步补齐（Phase 2/3 局部）**：增量 `GET /api/v1/sync/changes?since=&sinceTs=&limit=`（`changes/tombstones/folderTombstones/latestSeq/latestTs/hasMore`，迁移 `0011_sync_folders` 的 `folder_tombstones` 与 `0012_folder_changes` 的 `folder_changes`）；实时 `GET /api/v1/sync/events`（SSE，25s 心跳，`http.ResponseController` 清写超时、`statusRecorder` 透出 `Unwrap`/`Flush`、`http.Server.BaseContext` 在 Stop 时取消流）；进程内 `service.ChangeBus` 广播（覆盖 Save/SaveRaw/Delete/Move/Mkdir/ReindexPath/Reindex，即写入/删除/移动/reindex/watcher/Mkdir）。客户端：`RemoteClient.Changes/Events`（SSE 自动重连 + 指数退避，401/403 停止）；`Engine` 订阅 SSE（debounce 500ms 触发 `SyncOnce`，先查 `/sync/changes` 头再决定）+ 轮询兜底 + `execMu` 单飞；游标 `state.cursor` 持久化；**空文件夹双向同步**（父→子建、子→父删、`folder_sync`/`folder_forget`，`remoteFolderEmpty`/`localFolderEmpty` 守卫）；目录删除实时（`folder_tombstones`）；超大附件跳过并记 warning 而非中断。**S3 显式路径写**：`s3store.Restore` 按 vault 相对 key 写入，S3 下附件同步不再 501。**错误码分类**：401→`unauthorized`、403→`forbidden`、405→`method_not_allowed`、502→`bad_gateway` |
 | v0.16.1 | 桌面升级可见性 · 专注出口 | **静态资源校验修正**：`weakETag` 改为对文件**内容**计算 FNV-1a 哈希（原实现只哈希路径 + 字节长度），Vite 重建后字节数几乎不变的 `index.html` 不再算出相同 ETag 而被 304 长期沿用；缺失的静态资源（`assets/` 前缀或带扩展名）返回 **404**，不再回退 `index.html`，避免把 HTML 当 JS/CSS 返回（`internal/server/static.go`）。**桌面壳按版本破缓存**：窗口 URL 由 `/?desktop=1` 改为 `/?desktop=1&v=<version>`（`desktopURL`，`net/url` 转义），每次发版即新的 WebView2 缓存条目，升级后自动加载新前端（`cmd/overview-desktop/main.go`）。**专注模式可退出**：顶栏/侧栏隐藏时新增右下角低调浮动按钮 `.focus-exit`（i18n `focus.exit`，zh「退出专注」/en「Exit focus」），仍保留 Esc/F9 出口（`web/src/App.vue` + `styles.css`） |
+| v0.16.2 | 侧栏树文字对比度 | 左侧栏文件树「多级菜单」去掉「层级越深越淡」：`.tree-row.folder`（含 depth-0/1/2/3）由 `--text-soft`/`--text-faint` 统一改为 **`--text`**；`.tree-row.note.depth-3` 由 `--text-soft` 改为 **`--text-muted`**；层级仍由 `padding-left` 缩进 + 文件夹「大写 + 600 字重」区分，hover/active 不变。仅改 `web/src/styles.css`，未动 `internal/sitegen/content.css` 的共享 token（ADR-087） |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -261,6 +262,7 @@ GET /api/v1/sync/manifest                          全量清单（强 ETag，正
 | ADR-084 | 静态资源弱 ETag 改为对文件**内容**计算 FNV-1a 哈希（原实现只哈希路径 + 字节长度）；缺失的静态资源（`assets/` 前缀或带扩展名）返回 404，不再回退 `index.html` | 内容哈希才能反映内容变化：Vite 重建的 `index.html` 字节长度几乎不变，旧的「路径 + 长度」校验器会算出相同 ETag，客户端 304 命中并长期沿用旧壳；旧壳引用的哈希资源又被 `immutable` 缓存一年，导致升级后前端 bundle 停留在旧版本。把 `index.html` 当作 JS/CSS 返回还会触发 MIME 解析错误 | 内容变化即新 ETag，`no-cache` 壳文件正确重取；只有无扩展名的客户端路由仍回退 `index.html`，缺失的资源明确 404，便于发现前后端版本不一致；`internal/server/static_test.go` 覆盖内容哈希与 404 行为 |
 | ADR-085 | 桌面壳窗口 URL 追加构建版本 `?v=<version>`（`desktopURL`，`net/url` 转义） | WebView2 的 HTTP 缓存按 URL 区分条目；只用 `/?desktop=1` 时同一 URL 会复用旧缓存，配合被 `immutable` 缓存的旧资源，升级后可能一直加载旧前端 | 每个发行版本是全新缓存条目，升级后首次打开即拉取新 bundle；`?desktop=1` 标记保持不变，前端仍据此识别桌面壳并跳过 Service Worker 注册 |
 | ADR-086 | 专注模式提供**可见出口**：右下角低调浮动按钮 `.focus-exit`（i18n `focus.exit`，zh「退出专注」/en「Exit focus」），点击调用 `settings.setFocus(false)`；Esc/F9 快捷键仍可用 | 专注模式隐藏顶栏/侧栏，此前只有键盘出口，触屏或鼠标用户无处退出，形成「无路可退」的死角 | 按钮 `z-index:90` 位于内容之上、全屏遮罩（`z-index:100`）之下；仅在专注模式且非 plain（render/公开）时渲染；`prefers-reduced-motion` 下不引入额外动画 |
+| ADR-087 | 侧栏文件树的多级菜单**不再靠降低不透明度表达层级**：`.tree-row.folder`（含 depth-0/1/2/3）统一用 `--text`，`.tree-row.note.depth-3` 用 `--text-muted`；层级改由 `padding-left` 缩进与文件夹「大写 + 600 字重」承载，hover/active 不变 | 原实现「层级越深越淡」（`--text-soft` → `--text-faint`，浅色下 #9b9b9b/#b7b7b3）使深层文件夹/笔记与背景对比度不足，长目录树可读性差；用**对比度**编码深度还会与 hover/active 态、暗色主题相互干扰 | 所有层级的树文字都达到主/次文本对比度（浅色 `--text` #37352f、笔记 `--text-muted` #6b6b6b），缩进与字重仍清晰区分层级；仅改应用侧 `web/src/styles.css`，**未动** `internal/sitegen/content.css` 的共享 token，静态站与公开页不受影响 |
 
 ---
 
@@ -1070,6 +1072,11 @@ HTTP 与前端
 - [x] 桌面壳窗口 URL 带构建版本 `?v=<version>`，每个发版形成新 WebView2 缓存条目（ADR-085）
 - [x] 专注模式新增右下角浮动「退出专注」按钮 `.focus-exit`（i18n `focus.exit`），保留 Esc/F9（ADR-086）
 
+**Phase 17 — 侧栏树可读性（v0.16.2）**
+
+- [x] 文件夹行（含 depth-0/1/2/3）统一 `--text`，去掉深层 `--text-soft`/`--text-faint` 的降对比度（ADR-087）
+- [x] 三级笔记行由 `--text-soft` 改为 `--text-muted`；层级改由缩进 + 文件夹大写/600 字重表达（ADR-087）
+
 ---
 
 ## 13. 附录
@@ -1160,6 +1167,9 @@ HTTP 与前端
 - **图片压缩**：`web/src/media/compress.ts` 用 Canvas 降采样（默认最长边 1920）+ 优先 WebP 重编码 + 2MB 预算自动降质；GIF/SVG 与非图片不动，失败回退原图。
 - **排版系统**（ADR-026）：所有 UI 文本基于 `--base-size` 派生的 `--text-xs/sm/ui/body`；编辑器正文 `--text-body` 与周边一致。字号设置切换时**整站同步缩放**。
 - **布局重做**：全宽顶栏（品牌左、居中搜索 `Ctrl K`、右侧导航）、左侧分组式多级导航（顶层大写分组、按深度区分字重/缩进/配色）、内容区大标题 + 右侧「大纲」栏，参考 Starlight 文档站。
+- **侧栏树文字对比度**（v0.16.2，ADR-087）：多级菜单不再「层级越深越淡」——`.tree-row.folder`（含 depth-0/1/2/3）
+  统一 `--text`，`.tree-row.note.depth-3` 用 `--text-muted`；层级靠 `padding-left` 缩进与文件夹「大写 + 600 字重」
+  表达，hover/active 不变。token 定义仍在共享 `internal/sitegen/content.css`，本次只调整应用侧选择器。
 - **操作分层**（ADR-027）：编辑器上方新增**笔记栏**承载大纲/历史版本/AI/分享等页面级动作；格式化工具栏只保留排版类操作。
 - **表格密度与动效微调**（参考 apple-design）：表格使用更紧的行距（1.4）、0.95em 字号与更小内边距，
   并折叠 ProseMirror 单元格内 `<p>` 的默认外边距，使行高贴合内容；公开页顶栏采用半透明材质
@@ -1621,3 +1631,25 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - headless：`bin/overview.exe` 重编为 v0.16.1 并以 `OVERVIEW_AUTH=multi` 重启 demo；`/api/v1/health`
   返回 `version: 0.16.1`。
 - **本轮未验证**：真实 WebView2 升级路径（旧缓存 → 新 bundle）的人工回归、macOS/Linux 桌面壳。
+
+### 13.29 侧栏树文字对比度（v0.16.2，ADR-087）
+
+**改动（`web/src/styles.css`，仅应用侧）**
+
+- `.tree-row.folder`（基础规则）与其 `depth-0`/`depth-1`/`depth-2`/`depth-3` 变体：颜色由
+  `--text-soft`（depth-2/3 原为 `--text-faint`）统一改为 `--text`。
+- `.tree-row.note.depth-3`：颜色由 `--text-soft` 改为 `--text-muted`（depth-0/1/2 笔记本就用 `--text-muted`）。
+- 层级编码不变：`padding-left` 缩进 + 文件夹「`text-transform:uppercase` + `font-weight:600`」；
+  hover/active 与行内操作浮层未改。**未修改** `internal/sitegen/content.css` 的共享 token，
+  因此静态站/公开页配色不受影响。
+
+**验证记录（computed color，浏览器 devtools，浅色主题）**
+
+- `.tree-row.folder.depth-2`：改前 `rgb(183, 183, 179)`（`--text-faint` #b7b7b3）→ 改后 `rgb(55, 53, 47)`
+  （`--text` #37352f）。
+- `.tree-row.note.depth-3`：改前 `rgb(155, 155, 155)`（`--text-soft` #9b9b9b）→ 改后 `rgb(107, 107, 107)`
+  （`--text-muted` #6b6b6b）。
+- `go build ./...`、`go test ./...`、`cd web && npm run build` 全绿；headless demo 重启后
+  `/api/v1/health` 返回 `version: 0.16.2`。
+- **本轮未验证**：暗色主题的 computed color 人工比对（token 本身未改，预期 `--text` #e9e6e0 /
+  `--text-muted` #b3afa8）。
