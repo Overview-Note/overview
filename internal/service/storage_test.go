@@ -41,6 +41,36 @@ func (f *fakeAssetStore) ListAssets(_ context.Context) ([]core.Asset, error) {
 
 func (f *fakeAssetStore) DeleteAsset(_ context.Context, _ string) error { return nil }
 
+type fakeRestoreStore struct {
+	fakeAssetStore
+	restored string
+	body     string
+}
+
+func (f *fakeRestoreStore) Restore(_ context.Context, rel string, r io.Reader) error {
+	b, _ := io.ReadAll(r)
+	f.restored = rel
+	f.body = string(b)
+	return nil
+}
+
+func TestSwitchableAssetStoreRestoreDelegates(t *testing.T) {
+	restore := &fakeRestoreStore{fakeAssetStore: fakeAssetStore{id: "s3"}}
+	wrapper := NewSwitchableAssetStore(restore)
+	if err := wrapper.Restore(context.Background(), "2026/10/pic.png", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if restore.restored != "2026/10/pic.png" || restore.body != "payload" {
+		t.Errorf("delegated restore = %q/%q", restore.restored, restore.body)
+	}
+
+	// A backend without the capability still reports ErrNotSupported.
+	bare := NewSwitchableAssetStore(&fakeAssetStore{id: "bare"})
+	if err := bare.Restore(context.Background(), "x", strings.NewReader("y")); !errors.Is(err, core.ErrNotSupported) {
+		t.Errorf("Restore on bare store = %v, want ErrNotSupported", err)
+	}
+}
+
 func activeID(s *SwitchableAssetStore) string {
 	if f, ok := s.Get().(*fakeAssetStore); ok {
 		return f.id

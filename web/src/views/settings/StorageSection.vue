@@ -5,7 +5,7 @@ import { t } from "../../i18n";
 import { useAuthStore } from "../../stores/auth";
 
 const auth = useAuthStore();
-const isAdmin = computed(() => auth.user?.role === "admin");
+const isAdmin = computed(() => auth.isAdmin);
 
 const endpoint = ref("");
 const region = ref("us-east-1");

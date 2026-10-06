@@ -105,6 +105,12 @@ export interface DesktopSettings {
   version: string;
 }
 
+export interface DesktopVaultResult extends DesktopSettings {
+  changed: boolean;
+  /** The directory that will become active after a restart, when changed. */
+  pendingDataDir?: string;
+}
+
 export interface UpdateInfo {
   current: string;
   latest: string;
@@ -545,6 +551,29 @@ export const api = {
       body: JSON.stringify(cfg),
     });
     return json<DesktopSettings>(res);
+  },
+
+  /**
+   * Changes the vault directory. An empty dataDir opens the shell's native
+   * directory picker; a cancelled picker returns `changed: false`.
+   */
+  async changeVault(dataDir = ""): Promise<DesktopVaultResult> {
+    const res = await fetch(`${BASE}/desktop/vault`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dataDir }),
+    });
+    return json<DesktopVaultResult>(res);
+  },
+
+  async restartDesktop(): Promise<void> {
+    const res = await fetch(`${BASE}/desktop/restart`, { method: "POST" });
+    if (!res.ok) throw await parseError(res);
+  },
+
+  async openDesktopFolder(): Promise<void> {
+    const res = await fetch(`${BASE}/desktop/open-folder`, { method: "POST" });
+    if (!res.ok) throw await parseError(res);
   },
 
   async checkUpdate(): Promise<UpdateInfo> {

@@ -7,6 +7,11 @@ const settings = ref<DesktopSettings | null>(null);
 const settingsError = ref("");
 const saving = ref(false);
 
+const changing = ref(false);
+const restartNeeded = ref(false);
+const pendingDataDir = ref("");
+const restarting = ref(false);
+
 const update = ref<UpdateInfo | null>(null);
 const checking = ref(false);
 const updateError = ref("");
@@ -30,6 +35,45 @@ async function toggleAutostart() {
     settingsError.value = (e as Error).message;
   } finally {
     saving.value = false;
+  }
+}
+
+async function changeDataDir() {
+  if (changing.value) return;
+  changing.value = true;
+  settingsError.value = "";
+  try {
+    const result = await api.changeVault();
+    settings.value = result;
+    if (result.changed) {
+      pendingDataDir.value = result.pendingDataDir ?? result.dataDir;
+      restartNeeded.value = true;
+    }
+  } catch (e) {
+    settingsError.value = (e as Error).message;
+  } finally {
+    changing.value = false;
+  }
+}
+
+async function openDataDir() {
+  settingsError.value = "";
+  try {
+    await api.openDesktopFolder();
+  } catch (e) {
+    settingsError.value = (e as Error).message;
+  }
+}
+
+async function restartNow() {
+  if (restarting.value) return;
+  restarting.value = true;
+  settingsError.value = "";
+  try {
+    await api.restartDesktop();
+  } catch (e) {
+    settingsError.value = (e as Error).message;
+    restarting.value = false;
   }
 }
 
@@ -72,8 +116,29 @@ function openDownload() {
 
       <div class="settings-row">
         <span class="settings-label">{{ t("desktop.dataDir") }}</span>
-        <code class="settings-code">{{ settings?.dataDir ?? "—" }}</code>
+        <div class="settings-save inline">
+          <code class="settings-code">{{ settings?.dataDir ?? "—" }}</code>
+          <button :disabled="!settings" @click="openDataDir">
+            {{ t("desktop.openDataDir") }}
+          </button>
+          <button class="primary" :disabled="changing || !settings" @click="changeDataDir">
+            {{ changing ? t("desktop.choosing") : t("desktop.changeDataDir") }}
+          </button>
+        </div>
       </div>
+      <p class="settings-hint">{{ t("desktop.dataDirHint") }}</p>
+
+      <template v-if="restartNeeded">
+        <p class="settings-hint">
+          {{ t("desktop.restartNeeded", { dataDir: pendingDataDir }) }}
+        </p>
+        <div class="settings-save inline">
+          <button class="primary" :disabled="restarting" @click="restartNow">
+            {{ restarting ? t("desktop.restarting") : t("desktop.restartNow") }}
+          </button>
+        </div>
+        <p class="settings-hint">{{ t("desktop.restartManual") }}</p>
+      </template>
 
       <div class="settings-row">
         <span class="settings-label">{{ t("desktop.version") }}</span>

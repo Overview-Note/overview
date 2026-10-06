@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,6 +77,140 @@ func TestNeedsBootstrap(t *testing.T) {
 	}
 	if needsBootstrap(empty) {
 		t.Error("non-empty directory should not require bootstrap")
+	}
+}
+
+func TestChooseDataDirExplicitSkipsOnboarding(t *testing.T) {
+	called := false
+	got, persist := chooseDataDir(true, "/explicit", config.DesktopConfig{DataDir: "/cfg"}, "/default", func(string) string {
+		called = true
+		return "/onboard"
+	})
+	if got != "/explicit" {
+		t.Errorf("got %q, want /explicit", got)
+	}
+	if persist {
+		t.Error("persist = true, want false for explicit data dir")
+	}
+	if called {
+		t.Error("onboarding ran for an explicit data dir")
+	}
+}
+
+func TestChooseDataDirUsesPersistedConfig(t *testing.T) {
+	called := false
+	got, persist := chooseDataDir(false, "/default", config.DesktopConfig{DataDir: "/cfg"}, "/default", func(string) string {
+		called = true
+		return "/onboard"
+	})
+	if got != "/cfg" {
+		t.Errorf("got %q, want /cfg", got)
+	}
+	if persist {
+		t.Error("persist = true, want false when a config already exists")
+	}
+	if called {
+		t.Error("onboarding ran despite a persisted config")
+	}
+}
+
+func TestChooseDataDirNonEmptyDefaultSkipsOnboarding(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "overview.db"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	called := false
+	got, persist := chooseDataDir(false, dir, config.DesktopConfig{}, dir, func(string) string {
+		called = true
+		return "/onboard"
+	})
+	if got != dir || !persist {
+		t.Errorf("got (%q, %v), want (%q, true)", got, persist, dir)
+	}
+	if called {
+		t.Error("onboarding ran for a non-empty default directory")
+	}
+}
+
+func TestChooseDataDirOnboarding(t *testing.T) {
+	empty := t.TempDir()
+	got, persist := chooseDataDir(false, empty, config.DesktopConfig{}, empty, func(def string) string {
+		if def != empty {
+			t.Errorf("onboarding def = %q, want %q", def, empty)
+		}
+		return "/chosen"
+	})
+	if got != "/chosen" || !persist {
+		t.Errorf("got (%q, %v), want (/chosen, true)", got, persist)
+	}
+}
+
+func TestChooseDataDirOnboardingCancelFallsBackToDefault(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	got, persist := chooseDataDir(false, missing, config.DesktopConfig{}, missing, func(string) string {
+		return ""
+	})
+	if got != missing || !persist {
+		t.Errorf("got (%q, %v), want (%q, true)", got, persist, missing)
+	}
+}
+
+func TestProcessAlive(t *testing.T) {
+	if !processAlive(os.Getpid()) {
+		t.Error("processAlive(self) = false, want true")
+	}
+	if processAlive(1 << 30) {
+		t.Error("processAlive(unused pid) = true, want false")
+	}
+}
+
+func TestWaitForPredecessorExitsWhenGone(t *testing.T) {
+	t.Setenv(restartWaitPIDEnv, strconv.Itoa(1<<30))
+	done := make(chan struct{})
+	go func() {
+		waitForPredecessor()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("waitForPredecessor blocked on a non-existent process")
+	}
+}
+
+func TestWaitForPredecessorNoEnv(t *testing.T) {
+	t.Setenv(restartWaitPIDEnv, "")
+	done := make(chan struct{})
+	go func() {
+		waitForPredecessor()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("waitForPredecessor blocked without the env var set")
+	}
+}
+
+func TestRestartEnvDropsDataDirWhenImplicit(t *testing.T) {
+	t.Setenv("OVERVIEW_DATA_DIR", "/old")
+	for _, kv := range restartEnv(false, "/old") {
+		if strings.HasPrefix(kv, "OVERVIEW_DATA_DIR=") {
+			t.Fatal("restartEnv kept OVERVIEW_DATA_DIR for an implicit data dir")
+		}
+	}
+}
+
+func TestRestartEnvKeepsDataDirWhenExplicit(t *testing.T) {
+	t.Setenv("OVERVIEW_DATA_DIR", "/fixed")
+	found := false
+	for _, kv := range restartEnv(true, "/fixed") {
+		if kv == "OVERVIEW_DATA_DIR=/fixed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("restartEnv did not preserve an explicit OVERVIEW_DATA_DIR")
 	}
 }
 

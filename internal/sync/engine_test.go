@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/index"
 	"github.com/Overview-Note/overview/internal/markdown"
 	"github.com/Overview-Note/overview/internal/server"
@@ -86,6 +88,27 @@ func (v *testVault) body(rel string) string {
 func (v *testVault) have(rel string) bool {
 	_, err := v.store.Read(v.ctx(), rel)
 	return err == nil
+}
+
+func (v *testVault) mkdir(rel string) {
+	v.t.Helper()
+	if err := v.store.Mkdir(v.ctx(), rel); err != nil {
+		v.t.Fatalf("mkdir %s: %v", rel, err)
+	}
+}
+
+func (v *testVault) haveDir(rel string) bool {
+	v.t.Helper()
+	entries, err := v.store.List(v.ctx())
+	if err != nil {
+		v.t.Fatalf("list: %v", err)
+	}
+	for _, e := range entries {
+		if e.IsDir && e.Path == rel {
+			return true
+		}
+	}
+	return false
 }
 
 func newRemoteServer(t *testing.T, v *testVault) *httptest.Server {
@@ -584,6 +607,18 @@ func TestSyncRunForcesThroughLoopThrottle(t *testing.T) {
 	waitForCount(t, 5*time.Second, manifests, before+2, "loop did not run forced syncs")
 }
 
+func waitFor(t *testing.T, timeout time.Duration, cond func() bool, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal(msg)
+}
+
 func waitForCount(t *testing.T, timeout time.Duration, count func() int, want int, msg string) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -699,5 +734,356 @@ func TestConflictPathFor(t *testing.T) {
 	got := conflictPathFor("dir/note.md", "device-123456789")
 	if !strings.HasPrefix(got, "dir/note (conflict-device-1-") || !strings.HasSuffix(got, ").md") {
 		t.Errorf("conflictPathFor = %q", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// directories
+// ---------------------------------------------------------------------------
+
+func TestSyncFolderCreateRemotePulls(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+
+	remote.mkdir("empty")
+	mustSync(t, eng)
+
+	if !local.haveDir("empty") {
+		t.Fatal("local missing pulled empty folder")
+	}
+	if _, ok := eng.state.Snapshot().Folders["empty"]; !ok {
+		t.Error("folder base not recorded")
+	}
+}
+
+func TestSyncFolderCreateLocalPushes(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+
+	local.mkdir("empty")
+	mustSync(t, eng)
+
+	if !remote.haveDir("empty") {
+		t.Fatal("remote missing pushed empty folder")
+	}
+}
+
+func TestSyncFolderDeleteRemotePropagates(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+
+	remote.mkdir("empty")
+	mustSync(t, eng)
+	if !local.haveDir("empty") {
+		t.Fatal("setup: local missing folder")
+	}
+
+	if err := remote.svc.Delete(remote.ctx(), "empty"); err != nil {
+		t.Fatal(err)
+	}
+	mustSync(t, eng)
+	if local.haveDir("empty") {
+		t.Error("local empty folder survived a remote delete")
+	}
+}
+
+func TestSyncFolderDeleteLocalPropagates(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+
+	local.mkdir("empty")
+	mustSync(t, eng)
+	if !remote.haveDir("empty") {
+		t.Fatal("setup: remote missing folder")
+	}
+
+	if err := local.svc.Delete(local.ctx(), "empty"); err != nil {
+		t.Fatal(err)
+	}
+	mustSync(t, eng)
+	if remote.haveDir("empty") {
+		t.Error("remote empty folder survived a local delete")
+	}
+}
+
+func TestSyncFolderDeleteParentChildOrder(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+
+	for _, dir := range []string{"a", "a/b", "a/b/c"} {
+		remote.mkdir(dir)
+	}
+	mustSync(t, eng)
+	for _, dir := range []string{"a", "a/b", "a/b/c"} {
+		if !local.haveDir(dir) {
+			t.Fatalf("setup: local missing %s", dir)
+		}
+	}
+
+	// Delete the whole remote subtree; every folder should disappear locally.
+	if err := remote.svc.Delete(remote.ctx(), "a"); err != nil {
+		t.Fatal(err)
+	}
+	mustSync(t, eng)
+	for _, dir := range []string{"a", "a/b", "a/b/c"} {
+		if local.haveDir(dir) {
+			t.Errorf("local folder %s survived", dir)
+		}
+	}
+}
+
+func TestPlanFolderDeleteOrder(t *testing.T) {
+	local := newTestVault(t)
+	for _, dir := range []string{"a", "a/b", "a/b/c"} {
+		local.mkdir(dir)
+	}
+	eng, err := NewEngine(Options{
+		DataDir: t.TempDir(),
+		Repo:    local.store,
+		Raw:     local.store,
+		Assets:  local.store,
+		Logger:  discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := stateData{
+		Direction: string(DirectionBoth),
+		Folders: map[string]folderState{
+			"a": {}, "a/b": {}, "a/b/c": {},
+		},
+	}
+	manifest := &core.VaultManifest{Folders: []string{}, Notes: []core.ManifestNote{}}
+	actions := eng.plan(context.Background(), st, map[string]localNote{}, manifest, nil)
+
+	var deletes []string
+	for _, a := range actions {
+		if a.kind == actFolderDeleteLocal {
+			deletes = append(deletes, a.path)
+		}
+	}
+	want := []string{"a/b/c", "a/b", "a"}
+	if len(deletes) != len(want) {
+		t.Fatalf("folder deletes = %v, want %v", deletes, want)
+	}
+	for i := range want {
+		if deletes[i] != want[i] {
+			t.Fatalf("folder delete order = %v, want %v", deletes, want)
+		}
+	}
+}
+
+func TestSyncRemoteChangedQuickCheck(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+	client := eng.currentClient()
+
+	mustSync(t, eng)
+	changed, err := eng.remoteChanged(context.Background(), client, eng.state.Snapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Error("remoteChanged = true after a clean sync")
+	}
+
+	remote.writeNote("r.md", "id-r", "remote")
+	changed, err = eng.remoteChanged(context.Background(), client, eng.state.Snapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Error("remoteChanged = false after a remote write")
+	}
+}
+
+func TestSyncRemoteChangedFolderTombstone(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+	client := eng.currentClient()
+
+	remote.mkdir("empty")
+	mustSync(t, eng)
+
+	if err := remote.svc.Delete(remote.ctx(), "empty"); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := eng.remoteChanged(context.Background(), client, eng.state.Snapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Error("remoteChanged = false after a remote folder deletion")
+	}
+}
+
+func TestSyncCursorPersists(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	dir := t.TempDir()
+	eng, err := NewEngine(Options{
+		DataDir: dir,
+		Repo:    local.store,
+		Raw:     local.store,
+		Assets:  local.store,
+		Logger:  discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := eng.SyncConfigure(context.Background(), server.SyncConfig{
+		ServerURL: strPtr(ts.URL), Enabled: boolPtr(true), IntervalSec: intPtr(1),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	remote.writeNote("c.md", "id-c", "one")
+	mustSync(t, eng)
+	first := eng.state.Snapshot().Cursor
+
+	reopened, err := OpenState(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.Snapshot().Cursor; got != first {
+		t.Fatalf("persisted cursor = %+v, want %+v", got, first)
+	}
+	if first.LatestSeq == 0 {
+		t.Error("cursor latestSeq = 0 after a remote write")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// real-time (SSE)
+// ---------------------------------------------------------------------------
+
+func TestSyncSSETriggersConvergence(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngineInterval(t, local, ts.URL, DirectionBoth, 3600)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eng.Start(ctx)
+	defer func() { _ = eng.Stop(context.Background()) }()
+
+	// Wait for the initial poll sync to settle so the write below can only be
+	// observed through the change stream.
+	waitFor(t, 8*time.Second, func() bool { return !eng.state.Snapshot().LastSyncAt.IsZero() }, "initial sync did not run")
+	remote.writeNote("sse.md", "id-sse", "live")
+
+	waitFor(t, 8*time.Second, func() bool { return local.have("sse.md") }, "SSE did not converge the remote write")
+	if got := local.body("sse.md"); got != "live" {
+		t.Errorf("pulled body = %q, want live", got)
+	}
+}
+
+func TestSyncSSEFolderDelete(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	ts := newRemoteServer(t, remote)
+	eng := newEngineInterval(t, local, ts.URL, DirectionBoth, 3600)
+
+	remote.mkdir("empty")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eng.Start(ctx)
+	defer func() { _ = eng.Stop(context.Background()) }()
+
+	// The initial poll sync pulls the folder; the deletion below must then
+	// arrive through the change stream.
+	waitFor(t, 8*time.Second, func() bool { return local.haveDir("empty") }, "initial folder pull failed")
+	if err := remote.svc.Delete(remote.ctx(), "empty"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 8*time.Second, func() bool { return !local.haveDir("empty") }, "SSE did not propagate the folder deletion")
+}
+
+func TestSyncSSEReconnectConverges(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	inner := server.New(remote.svc, server.Options{
+		MaxUploadBytes: 1 << 20,
+		Version:        "test",
+		Logger:         discardLogger(),
+	}).Handler()
+	// Force the change stream to drop every 300ms so the client must reconnect.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/sync/events" {
+			ctx, cancel := context.WithTimeout(r.Context(), 300*time.Millisecond)
+			defer cancel()
+			inner.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		inner.ServeHTTP(w, r)
+	}))
+	t.Cleanup(ts.Close)
+
+	eng := newEngineInterval(t, local, ts.URL, DirectionBoth, 3600)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eng.Start(ctx)
+	defer func() { _ = eng.Stop(context.Background()) }()
+
+	waitFor(t, 8*time.Second, func() bool { return !eng.state.Snapshot().LastSyncAt.IsZero() }, "initial sync did not run")
+	remote.writeNote("reconnect.md", "id-reconnect", "after-drop")
+
+	waitFor(t, 12*time.Second, func() bool { return local.have("reconnect.md") }, "engine did not converge after an SSE reconnect")
+}
+
+// ---------------------------------------------------------------------------
+// robustness
+// ---------------------------------------------------------------------------
+
+func TestSyncAssetTooLargeSkips(t *testing.T) {
+	local := newTestVault(t)
+	remote := newTestVault(t)
+	handler := server.New(remote.svc, server.Options{
+		MaxUploadBytes: 8,
+		Version:        "test",
+		Logger:         discardLogger(),
+	}).Handler()
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+	eng := newEngine(t, local, ts.URL, DirectionBoth)
+
+	data := []byte("this attachment is far larger than eight bytes")
+	if err := local.store.Restore(local.ctx(), "big.bin", bytes.NewReader(data)); err != nil {
+		t.Fatal(err)
+	}
+	local.writeNote("big.md", "id-big", "![b](/assets/big.bin)\n")
+	mustSync(t, eng)
+
+	if _, err := remote.store.Open(remote.ctx(), "big.bin"); err == nil {
+		t.Error("oversized asset was uploaded")
+	}
+	status, err := eng.SyncStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(status.LastError, "exceeds the remote upload limit") {
+		t.Errorf("status lastError = %q, want an oversized-asset warning", status.LastError)
+	}
+}
+
+func TestRetryableAssetTooLargeIsFinal(t *testing.T) {
+	if retryable(ErrTooLarge) {
+		t.Error("ErrTooLarge must not be retried")
 	}
 }

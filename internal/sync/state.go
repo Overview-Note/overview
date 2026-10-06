@@ -34,6 +34,14 @@ type assetState struct {
 	Size     int64  `json:"size"`
 }
 
+// cursorState records the remote change feed head the client last synced
+// against. It lets the engine skip a full reconciliation when the remote has
+// not advanced.
+type cursorState struct {
+	LatestSeq int64     `json:"latestSeq"`
+	LatestTs  time.Time `json:"latestTs"`
+}
+
 // Conflict records a note whose local and remote copies diverged. The remote
 // original stays at OriginalPath; the local copy lives at ConflictPath as a
 // standalone note.
@@ -55,6 +63,7 @@ type stateData struct {
 	IntervalSec int                    `json:"intervalSec"`
 	Direction   string                 `json:"direction"`
 	LastSyncAt  time.Time              `json:"lastSyncAt"`
+	Cursor      cursorState            `json:"cursor"`
 	Notes       map[string]noteState   `json:"notes"`
 	Folders     map[string]folderState `json:"folders"`
 	Assets      map[string]assetState  `json:"assets"`

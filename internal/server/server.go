@@ -214,6 +214,8 @@ func (s *Server) routes() {
 
 	// Desktop/server synchronization.
 	s.mux.HandleFunc("GET "+base+"/sync/manifest", s.handleSyncManifest)
+	s.mux.HandleFunc("GET "+base+"/sync/changes", s.handleSyncChanges)
+	s.mux.HandleFunc("GET "+base+"/sync/events", s.handleSyncEvents)
 
 	// API documentation (public).
 	s.mux.HandleFunc("GET /api/v1/openapi.json", s.handleOpenAPI)
@@ -266,6 +268,9 @@ func (s *Server) routes() {
 	// Desktop shell (available only when running under LocalOnly).
 	s.mux.HandleFunc("GET "+base+"/desktop/settings", s.handleDesktopSettingsGet)
 	s.mux.HandleFunc("PUT "+base+"/desktop/settings", s.handleDesktopSettingsPut)
+	s.mux.HandleFunc("PUT "+base+"/desktop/vault", s.handleDesktopVaultPut)
+	s.mux.HandleFunc("POST "+base+"/desktop/restart", s.handleDesktopRestart)
+	s.mux.HandleFunc("POST "+base+"/desktop/open-folder", s.handleDesktopOpenFolder)
 	s.mux.HandleFunc("GET "+base+"/desktop/update", s.handleDesktopUpdate)
 
 	// Desktop vault synchronization (available only when running under
@@ -346,6 +351,17 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap lets http.ResponseController reach the underlying connection so an SSE
+// handler can clear the server's write deadline.
+func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+// Flush forwards to the underlying writer for streamed responses.
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -396,10 +412,15 @@ func userFromContext(ctx context.Context) (core.User, bool) {
 	return u, ok
 }
 
+// ownerUser is the implicit administrator injected on every request when
+// authentication is disabled. Single-user installs (desktop, local) behave as
+// the owner so admin-gated handlers remain reachable without a session.
+var ownerUser = core.User{ID: "owner", Username: "owner", Role: core.RoleAdmin}
+
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.opts.Auth.Required() {
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(withUser(r.Context(), ownerUser)))
 			return
 		}
 		p := r.URL.Path
@@ -518,8 +539,14 @@ func statusCode(status int) string {
 	switch status {
 	case http.StatusBadRequest:
 		return "invalid"
+	case http.StatusUnauthorized:
+		return "unauthorized"
+	case http.StatusForbidden:
+		return "forbidden"
 	case http.StatusNotFound:
 		return "not_found"
+	case http.StatusMethodNotAllowed:
+		return "method_not_allowed"
 	case http.StatusConflict:
 		return "conflict"
 	case http.StatusRequestEntityTooLarge:
@@ -528,6 +555,8 @@ func statusCode(status int) string {
 		return "rate_limited"
 	case http.StatusNotImplemented:
 		return "not_supported"
+	case http.StatusBadGateway:
+		return "bad_gateway"
 	case http.StatusServiceUnavailable:
 		return "unavailable"
 	default:

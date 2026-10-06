@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { api, type User } from "../api";
 
 export const useAuthStore = defineStore("auth", () => {
@@ -12,6 +12,10 @@ export const useAuthStore = defineStore("auth", () => {
   const loginIcp = ref("");
   const loginLink = ref<{ text: string; url: string } | null>(null);
   const loaded = ref(false);
+
+  const isAdmin = computed(
+    () => mode.value === "none" || user.value?.role === "admin",
+  );
 
   async function loadState() {
     const state = await api.authState();
@@ -54,6 +58,7 @@ export const useAuthStore = defineStore("auth", () => {
     loginIcp,
     loginLink,
     loaded,
+    isAdmin,
     loadState,
     setup,
     login,

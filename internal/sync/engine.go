@@ -72,13 +72,11 @@ type Engine struct {
 	client *RemoteClient
 	token  string
 
-	manifestMu   sync.Mutex
-	lastManifest *core.VaultManifest
-
 	statusMu   sync.Mutex
 	status     string
 	progress   server.SyncProgress
 	lastError  string
+	warning    string
 	connected  bool
 	lastSyncAt time.Time
 
@@ -89,6 +87,17 @@ type Engine struct {
 	attemptMu    sync.Mutex
 	lastAttempt  time.Time
 	forcePending int
+
+	// execMu serializes SyncOnce so the poll loop and the SSE trigger never
+	// reconcile concurrently.
+	execMu sync.Mutex
+
+	sseMu     sync.Mutex
+	sseCancel context.CancelFunc
+	sseWake   chan struct{}
+
+	debounceMu    sync.Mutex
+	debounceTimer *time.Timer
 
 	wake    chan struct{}
 	writeMu sync.Mutex
@@ -126,6 +135,7 @@ func NewEngine(opts Options) (*Engine, error) {
 		token:    token,
 		status:   StatusIdle,
 		wake:     make(chan struct{}, 1),
+		sseWake:  make(chan struct{}, 1),
 		recent:   map[string]time.Time{},
 	}
 	if e.ua == "" {
@@ -243,6 +253,7 @@ func (e *Engine) SyncConfigure(ctx context.Context, cfg server.SyncConfig) (serv
 		return server.SyncStatus{}, err
 	}
 	e.rebuildClient(newURL, token)
+	e.restartSSE()
 
 	if newEnabled && newURL != "" {
 		client := e.currentClient()
@@ -424,10 +435,12 @@ func (e *Engine) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Run polls on the configured interval and syncs whenever a dirty path is
-// signalled. It blocks until ctx is cancelled.
+// Run subscribes to the server's change stream and polls on the configured
+// interval as a fallback, syncing whenever the stream signals a change or a
+// dirty path is signalled. It blocks until ctx is cancelled.
 func (e *Engine) Run(ctx context.Context) error {
 	e.syncIfEnabled(ctx)
+	go e.runSSE(ctx)
 	for {
 		interval := e.interval()
 		timer := time.NewTimer(interval)
@@ -442,6 +455,153 @@ func (e *Engine) Run(ctx context.Context) error {
 			e.syncIfEnabled(ctx)
 		}
 	}
+}
+
+// sseDebounce coalesces a burst of change events into a single reconciliation.
+const sseDebounce = 500 * time.Millisecond
+
+// restartSSE cancels the active subscription so the loop reconnects with the
+// current client and configuration.
+func (e *Engine) restartSSE() {
+	e.sseMu.Lock()
+	cancel := e.sseCancel
+	e.sseMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	select {
+	case e.sseWake <- struct{}{}:
+	default:
+	}
+}
+
+// runSSE keeps a change-stream subscription alive for as long as sync is
+// enabled. The poll loop in Run remains the correctness fallback when the
+// stream is unavailable or disconnected.
+func (e *Engine) runSSE(ctx context.Context) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		st := e.state.Snapshot()
+		client := e.currentClient()
+		if !st.Enabled || client == nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-e.sseWake:
+			case <-time.After(time.Second):
+			}
+			continue
+		}
+
+		subCtx, cancel := context.WithCancel(ctx)
+		e.sseMu.Lock()
+		e.sseCancel = cancel
+		e.sseMu.Unlock()
+		err := client.Events(subCtx, func(seq int, ts string) {
+			e.onRemoteEvent(subCtx, seq, ts)
+		})
+		cancel()
+		e.sseMu.Lock()
+		e.sseCancel = nil
+		e.sseMu.Unlock()
+
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil && (errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden)) {
+			e.logger.Warn("sync change stream unauthorized; waiting for reconfiguration", "error", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-e.sseWake:
+			case <-time.After(30 * time.Second):
+			}
+			continue
+		}
+		// Events reconnects internally; a short pause avoids a hot loop if it
+		// returns immediately.
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+// onRemoteEvent debounces a stream event into a single triggered sync.
+func (e *Engine) onRemoteEvent(ctx context.Context, _ int, _ string) {
+	e.debounceMu.Lock()
+	if e.debounceTimer != nil {
+		e.debounceTimer.Stop()
+	}
+	e.debounceTimer = time.AfterFunc(sseDebounce, func() {
+		e.debounceMu.Lock()
+		e.debounceTimer = nil
+		e.debounceMu.Unlock()
+		e.sseTriggeredSync(ctx)
+	})
+	e.debounceMu.Unlock()
+}
+
+// sseTriggeredSync runs a full reconciliation when the remote cursor has moved
+// since the last successful sync. The /sync/changes head is only a fast
+// "is anything new" check; correctness still comes from the manifest three-way
+// comparison inside SyncOnce.
+func (e *Engine) sseTriggeredSync(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+	st := e.state.Snapshot()
+	if !st.Enabled {
+		return
+	}
+	client := e.currentClient()
+	if client == nil {
+		return
+	}
+	changed, err := e.remoteChanged(ctx, client, st)
+	if err != nil {
+		e.logger.Debug("sync change check failed", "error", err)
+	} else if !changed {
+		return
+	}
+	if err := e.SyncOnce(ctx); err != nil && ctx.Err() == nil {
+		e.logger.Warn("event-driven sync failed", "error", err)
+	}
+}
+
+// remoteChanged reports whether the remote change feed has advanced past the
+// stored cursor. Any error is treated as "changed" so a failed probe never
+// causes a missed sync.
+func (e *Engine) remoteChanged(ctx context.Context, client *RemoteClient, st stateData) (bool, error) {
+	if st.LastSyncAt.IsZero() {
+		return true, nil
+	}
+	changes, err := client.Changes(ctx, st.Cursor.LatestSeq, cursorTimestamp(st.Cursor.LatestTs), 1)
+	if err != nil {
+		return true, err
+	}
+	if changes.LatestSeq != st.Cursor.LatestSeq {
+		return true, nil
+	}
+	if !changes.LatestTs.Equal(st.Cursor.LatestTs) {
+		return true, nil
+	}
+	if len(changes.Tombstones) > 0 || len(changes.FolderTombstones) > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+// cursorTimestamp renders a cursor timestamp as the RFC3339 string the server
+// expects, or "" for the zero time.
+func cursorTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // NotifyDirty signals that a local path changed. Self-writes performed by the
@@ -491,16 +651,11 @@ func (e *Engine) syncIfEnabled(ctx context.Context) {
 		return
 	}
 	e.attemptMu.Lock()
-	forced := e.forcePending > 0
-	if forced {
+	if e.forcePending > 0 {
 		e.forcePending--
 	}
-	if !forced && time.Since(e.lastAttempt) < time.Second {
-		e.attemptMu.Unlock()
-		return
-	}
-	e.lastAttempt = time.Now()
 	pending := e.forcePending
+	e.lastAttempt = time.Now()
 	e.attemptMu.Unlock()
 
 	if pending > 0 {
@@ -572,8 +727,12 @@ type localNote struct {
 	body    string
 }
 
-// SyncOnce runs a single three-way reconciliation.
+// SyncOnce runs a single three-way reconciliation. It is single-flight: the
+// poll loop and the SSE trigger serialize on execMu.
 func (e *Engine) SyncOnce(ctx context.Context) error {
+	e.execMu.Lock()
+	defer e.execMu.Unlock()
+
 	st := e.state.Snapshot()
 	if !st.Enabled {
 		e.setStatus(StatusIdle)
@@ -587,6 +746,7 @@ func (e *Engine) SyncOnce(ctx context.Context) error {
 	e.setStatus(StatusSyncing)
 	e.setProgress(0, 0)
 	e.setError(nil)
+	e.clearWarning()
 
 	local, err := e.scanLocal(ctx)
 	if err != nil {
@@ -613,7 +773,8 @@ func (e *Engine) SyncOnce(ctx context.Context) error {
 		}
 	}
 
-	actions := e.plan(ctx, st, local, manifest)
+	head := e.fetchChanges(ctx, client, st)
+	actions := e.plan(ctx, st, local, manifest, folderTombstones(head))
 	e.setProgress(0, len(actions))
 	for i, act := range actions {
 		if err := ctx.Err(); err != nil {
@@ -633,43 +794,65 @@ func (e *Engine) SyncOnce(ctx context.Context) error {
 	}
 
 	now := time.Now().UTC()
-	_ = e.state.Mutate(func(d *stateData) { d.LastSyncAt = now })
+	_ = e.state.Mutate(func(d *stateData) {
+		d.LastSyncAt = now
+		if head != nil {
+			// Only advance to the head observed before the actions ran. A
+			// change that arrived during the sync is deliberately left ahead of
+			// the cursor so its event retriggers a reconciliation.
+			d.Cursor = cursorState{LatestSeq: head.LatestSeq, LatestTs: head.LatestTs}
+		}
+	})
 	e.statusMu.Lock()
 	e.lastSyncAt = now
 	e.connected = true
 	e.status = StatusIdle
-	e.lastError = ""
+	if e.warning != "" {
+		e.lastError = e.warning
+	} else {
+		e.lastError = ""
+	}
+	e.warning = ""
 	e.statusMu.Unlock()
 	return nil
 }
 
-// fetchManifest performs a conditional manifest request, reusing the cached
-// inventory on 304.
-func (e *Engine) fetchManifest(ctx context.Context, client *RemoteClient) (*core.VaultManifest, error) {
-	e.manifestMu.Lock()
-	etag := ""
-	if e.lastManifest != nil {
-		etag = e.lastManifest.ETag
+// fetchChanges reads the remote change head, using the stored cursor so the
+// response is bounded. It is best effort: an older server without the endpoint
+// still syncs via the manifest.
+func (e *Engine) fetchChanges(ctx context.Context, client *RemoteClient, st stateData) *core.SyncChanges {
+	changes, err := client.Changes(ctx, st.Cursor.LatestSeq, cursorTimestamp(st.Cursor.LatestTs), 1)
+	if err != nil {
+		if !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrNotSupported) {
+			e.logger.Debug("sync change query failed", "error", err)
+		}
+		return nil
 	}
-	e.manifestMu.Unlock()
+	return &changes
+}
 
-	manifest, notModified, err := client.Manifest(ctx, etag)
+// folderTombstones indexes the folder deletion markers from a change response
+// by path and deletion time.
+func folderTombstones(changes *core.SyncChanges) map[string]time.Time {
+	if changes == nil || len(changes.FolderTombstones) == 0 {
+		return nil
+	}
+	out := make(map[string]time.Time, len(changes.FolderTombstones))
+	for _, t := range changes.FolderTombstones {
+		out[t.Path] = t.DeletedAt
+	}
+	return out
+}
+
+// fetchManifest fetches the full inventory. The manifest ETag does not cover
+// folder membership, so a conditional request could return a 304 with stale
+// folders; the client therefore always fetches fresh. Bandwidth is saved by the
+// /sync/changes check on the event-driven path instead.
+func (e *Engine) fetchManifest(ctx context.Context, client *RemoteClient) (*core.VaultManifest, error) {
+	manifest, _, err := client.Manifest(ctx, "")
 	if err != nil {
 		return nil, err
 	}
-	if notModified {
-		e.manifestMu.Lock()
-		cached := e.lastManifest
-		e.manifestMu.Unlock()
-		if cached != nil {
-			return cached, nil
-		}
-		manifest, _, err := client.Manifest(ctx, "")
-		return manifest, err
-	}
-	e.manifestMu.Lock()
-	e.lastManifest = manifest
-	e.manifestMu.Unlock()
 	return manifest, nil
 }
 
@@ -726,6 +909,10 @@ type actKind int
 const (
 	actMkdirLocal actKind = iota
 	actMkdirRemote
+	actFolderSync
+	actFolderDeleteLocal
+	actFolderDeleteRemote
+	actFolderForget
 	actPull
 	actPush
 	actPullMove
@@ -742,20 +929,20 @@ type action struct {
 	from          string
 	to            string
 	write         bool
+	empty         bool
 	base          string
 	remoteVersion string
 	localVersion  string
 	body          string
 }
 
-// plan computes the ordered action list: folders, then pulls, then pushes,
-// then deletes. Moves are ordered parent-first so a renamed folder exists
-// before its children are touched.
-func (e *Engine) plan(ctx context.Context, st stateData, local map[string]localNote, manifest *core.VaultManifest) []action {
+// plan computes the ordered action list: folder creates (parent first), pulls,
+// pushes, note deletes, then folder deletes (child first) so a folder is only
+// removed once its contents have been reconciled.
+func (e *Engine) plan(ctx context.Context, st stateData, local map[string]localNote, manifest *core.VaultManifest, tombstones map[string]time.Time) []action {
 	canPull := Direction(st.Direction) != DirectionPush
 	canPush := Direction(st.Direction) != DirectionPull
 
-	var folders []action
 	entries, err := e.repo.List(ctx)
 	if err != nil {
 		e.logger.Warn("list local folders", "error", err)
@@ -770,21 +957,66 @@ func (e *Engine) plan(ctx context.Context, st stateData, local map[string]localN
 	for _, f := range manifest.Folders {
 		remoteDirs[f] = true
 	}
-	if canPull {
-		for _, f := range manifest.Folders {
-			if !localDirs[f] {
-				folders = append(folders, action{kind: actMkdirLocal, path: f})
+	baseDirs := make(map[string]bool, len(st.Folders))
+	for p := range st.Folders {
+		baseDirs[p] = true
+	}
+	remoteNotePaths := make(map[string]bool, len(manifest.Notes))
+	for _, n := range manifest.Notes {
+		remoteNotePaths[n.Path] = true
+	}
+
+	var creates, folderDeletes, folderSync, forgets []action
+	seen := map[string]bool{}
+	consider := func(p string) {
+		if p == "" || seen[p] {
+			return
+		}
+		seen[p] = true
+		l, r, b := localDirs[p], remoteDirs[p], baseDirs[p]
+		if at, ok := tombstones[p]; ok && r && at.After(manifest.GeneratedAt) {
+			// The folder was deleted after this manifest was generated, so the
+			// tombstone is newer and wins over the stale listing.
+			r = false
+		}
+		switch {
+		case l && r:
+			folderSync = append(folderSync, action{kind: actFolderSync, path: p})
+		case l && !r:
+			switch {
+			case b:
+				if canPull {
+					folderDeletes = append(folderDeletes, action{kind: actFolderDeleteLocal, path: p})
+				}
+			case canPush:
+				creates = append(creates, action{kind: actMkdirRemote, path: p})
+			}
+		case !l && r:
+			switch {
+			case b:
+				if canPush && remoteFolderEmpty(p, remoteDirs, remoteNotePaths) {
+					folderDeletes = append(folderDeletes, action{kind: actFolderDeleteRemote, path: p, empty: true})
+				}
+			case canPull:
+				creates = append(creates, action{kind: actMkdirLocal, path: p})
+			}
+		default:
+			if b {
+				forgets = append(forgets, action{kind: actFolderForget, path: p})
 			}
 		}
 	}
-	if canPush {
-		for dir := range localDirs {
-			if !remoteDirs[dir] {
-				folders = append(folders, action{kind: actMkdirRemote, path: dir})
-			}
-		}
+	for p := range localDirs {
+		consider(p)
 	}
-	sortByDepth(folders)
+	for p := range remoteDirs {
+		consider(p)
+	}
+	for p := range baseDirs {
+		consider(p)
+	}
+	sortByDepth(creates)
+	sortByDepthDesc(folderDeletes)
 
 	remote := make(map[string]core.ManifestNote, len(manifest.Notes))
 	for _, n := range manifest.Notes {
@@ -923,18 +1155,48 @@ func (e *Engine) plan(ctx context.Context, st stateData, local map[string]localN
 	sortByDepth(pushes)
 	sortByDepth(deletes)
 
-	out := make([]action, 0, len(folders)+len(pulls)+len(pushes)+len(deletes))
-	out = append(out, folders...)
+	out := make([]action, 0, len(creates)+len(folderSync)+len(pulls)+len(pushes)+len(deletes)+len(folderDeletes)+len(forgets))
+	out = append(out, creates...)
+	out = append(out, folderSync...)
 	out = append(out, pulls...)
 	out = append(out, pushes...)
 	out = append(out, deletes...)
+	out = append(out, folderDeletes...)
+	out = append(out, forgets...)
 	return out
+}
+
+// remoteFolderEmpty reports whether a remote folder holds no notes or
+// subfolders, so a folder deletion never removes remote content.
+func remoteFolderEmpty(dir string, dirs, notes map[string]bool) bool {
+	prefix := dir + "/"
+	for p := range dirs {
+		if p != dir && strings.HasPrefix(p, prefix) {
+			return false
+		}
+	}
+	for p := range notes {
+		if strings.HasPrefix(p, prefix) {
+			return false
+		}
+	}
+	return true
 }
 
 // sortByDepth orders actions so parent paths (fewer separators) run first.
 func sortByDepth(actions []action) {
 	for i := 1; i < len(actions); i++ {
 		for j := i; j > 0 && pathDepth(actionPath(actions[j])) < pathDepth(actionPath(actions[j-1])); j-- {
+			actions[j], actions[j-1] = actions[j-1], actions[j]
+		}
+	}
+}
+
+// sortByDepthDesc orders actions so deeper paths (children) run before their
+// parents, used for folder deletions.
+func sortByDepthDesc(actions []action) {
+	for i := 1; i < len(actions); i++ {
+		for j := i; j > 0 && pathDepth(actionPath(actions[j])) > pathDepth(actionPath(actions[j-1])); j-- {
 			actions[j], actions[j-1] = actions[j-1], actions[j]
 		}
 	}
@@ -960,17 +1222,41 @@ func (e *Engine) execute(ctx context.Context, client *RemoteClient, act action) 
 			return err
 		}
 		e.markWritten(act.path)
-		return e.state.Mutate(func(d *stateData) {
-			d.Folders[act.path] = folderState{SyncedAt: time.Now().UTC()}
-		})
+		return e.recordFolderBase(act.path)
 
 	case actMkdirRemote:
 		if err := e.retry(ctx, func() error { return client.Mkdir(ctx, act.path) }); err != nil {
 			return err
 		}
-		return e.state.Mutate(func(d *stateData) {
-			d.Folders[act.path] = folderState{SyncedAt: time.Now().UTC()}
-		})
+		return e.recordFolderBase(act.path)
+
+	case actFolderSync:
+		return e.recordFolderBase(act.path)
+
+	case actFolderDeleteLocal:
+		if !e.localFolderEmpty(ctx, act.path) {
+			return nil
+		}
+		if err := e.repo.Delete(ctx, act.path); err != nil && !errors.Is(err, core.ErrNotFound) {
+			return err
+		}
+		e.markWritten(act.path)
+		return e.forgetFolder(act.path)
+
+	case actFolderDeleteRemote:
+		if !act.empty {
+			return nil
+		}
+		if err := e.retry(ctx, func() error { return client.DeleteNote(ctx, act.path) }); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return e.forgetFolder(act.path)
+			}
+			return err
+		}
+		return e.forgetFolder(act.path)
+
+	case actFolderForget:
+		return e.forgetFolder(act.path)
 
 	case actPull:
 		return e.execPull(ctx, client, act.path, act.id, act.remoteVersion)
@@ -998,6 +1284,43 @@ func (e *Engine) execute(ctx context.Context, client *RemoteClient, act action) 
 		return e.execConflict(ctx, client, act)
 	}
 	return nil
+}
+
+// recordFolderBase marks a folder as synchronized so a later disappearance on
+// one side can be told apart from a folder that was never shared. Recording an
+// already-known folder is a no-op, avoiding a state rewrite on every sync.
+func (e *Engine) recordFolderBase(path string) error {
+	if _, ok := e.state.Snapshot().Folders[path]; ok {
+		return nil
+	}
+	return e.state.Mutate(func(d *stateData) {
+		d.Folders[path] = folderState{SyncedAt: time.Now().UTC()}
+	})
+}
+
+// forgetFolder drops a folder from the base after it disappeared on both sides
+// or was deleted.
+func (e *Engine) forgetFolder(path string) error {
+	return e.state.Mutate(func(d *stateData) { delete(d.Folders, path) })
+}
+
+// localFolderEmpty reports whether a local folder holds no entries. The folder
+// itself appears in the listing and is ignored.
+func (e *Engine) localFolderEmpty(ctx context.Context, rel string) bool {
+	entries, err := e.repo.List(ctx)
+	if err != nil {
+		return false
+	}
+	prefix := rel + "/"
+	for _, entry := range entries {
+		if entry.Path == rel {
+			continue
+		}
+		if strings.HasPrefix(entry.Path, prefix) {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *Engine) execPull(ctx context.Context, client *RemoteClient, rel, id, expectVersion string) error {
@@ -1215,7 +1538,12 @@ func (e *Engine) pushAssets(ctx context.Context, client *RemoteClient, noteConte
 				continue
 			}
 			if errors.Is(err, ErrTooLarge) {
-				e.setError(err)
+				// A 413 is final (retryable returns false), so the asset is
+				// skipped rather than retried; chunked upload is not supported.
+				tooLarge := fmt.Sprintf("asset %s (%d bytes) exceeds the remote upload limit and was skipped; chunked upload is not supported", rel, len(data))
+				e.setWarning(tooLarge)
+				e.logger.Warn("asset too large; skipping", "path", rel, "size", len(data))
+				continue
 			}
 			e.logger.Warn("asset push failed", "path", rel, "error", err)
 			continue
@@ -1341,6 +1669,20 @@ func (e *Engine) setError(err error) {
 	} else {
 		e.lastError = err.Error()
 	}
+	e.statusMu.Unlock()
+}
+
+// setWarning records a non-fatal problem (such as a skipped oversized asset)
+// that should surface in the sync status even though the sync succeeds.
+func (e *Engine) setWarning(msg string) {
+	e.statusMu.Lock()
+	e.warning = msg
+	e.statusMu.Unlock()
+}
+
+func (e *Engine) clearWarning() {
+	e.statusMu.Lock()
+	e.warning = ""
 	e.statusMu.Unlock()
 }
 

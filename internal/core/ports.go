@@ -81,6 +81,29 @@ type Index interface {
 	PublicBody(ctx context.Context, path string) (string, error)
 }
 
+// ChangeLog is an optional capability exposing the index change feed used for
+// incremental synchronization: the notes that changed after a sequence, the
+// deletion markers after a timestamp, and the current head cursors.
+type ChangeLog interface {
+	// LatestSeq returns the highest note change sequence.
+	LatestSeq(ctx context.Context) (int64, error)
+	// ChangesSince returns the notes whose change sequence is greater than
+	// seq, ordered oldest first, and whether more remain beyond limit.
+	ChangesSince(ctx context.Context, seq int64, limit int) ([]SyncChange, bool, error)
+	// TombstonesSince returns note deletion markers newer than since.
+	TombstonesSince(ctx context.Context, since time.Time) ([]Tombstone, error)
+	// FolderTombstonesSince returns folder deletion markers newer than since.
+	FolderTombstonesSince(ctx context.Context, since time.Time) ([]FolderTombstone, error)
+	// LatestTombstoneTime returns the newest deletion marker timestamp, note or
+	// folder, or the zero time when there are none.
+	LatestTombstoneTime(ctx context.Context) (time.Time, error)
+	// RecordFolderTombstone upserts a deletion marker for a folder.
+	RecordFolderTombstone(ctx context.Context, t FolderTombstone) error
+	// RecordFolderChange upserts a creation or relocation marker for a folder,
+	// advancing the change sequence so an empty folder is observable.
+	RecordFolderChange(ctx context.Context, path string) error
+}
+
 // RawWriter is an optional capability for writing raw note bytes at an
 // explicit path without frontmatter processing. It is used by archive import to
 // restore files faithfully.

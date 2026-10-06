@@ -62,6 +62,8 @@ type App struct {
 	reindexCancel context.CancelFunc
 	reindexDone   chan struct{}
 
+	baseCancel context.CancelFunc
+
 	stopOnce sync.Once
 	stopErr  error
 }
@@ -323,12 +325,17 @@ func (a *App) Start(ctx context.Context) (string, error) {
 		a.portPath = path
 	}
 
+	baseCtx, baseCancel := context.WithCancel(context.Background())
+	a.baseCancel = baseCancel
 	a.http = &http.Server{
 		Handler:           a.server.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
 		WriteTimeout:      120 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		// The base context is cancelled on Stop so open SSE streams return and
+		// graceful shutdown does not block on them.
+		BaseContext: func(net.Listener) context.Context { return baseCtx },
 	}
 
 	a.logger.Info("Overview listening", "addr", addr, "data", a.cfg.DataDir, "version", Version)
@@ -438,6 +445,9 @@ func (a *App) Stop(ctx context.Context) error {
 			case <-a.watcherDone:
 			case <-ctx.Done():
 			}
+		}
+		if a.baseCancel != nil {
+			a.baseCancel()
 		}
 		if a.http != nil {
 			if err := a.http.Shutdown(ctx); err != nil {

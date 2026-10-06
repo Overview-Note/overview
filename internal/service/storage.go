@@ -78,8 +78,9 @@ func (a *SwitchableAssetStore) DeleteAsset(ctx context.Context, rel string) erro
 }
 
 // Restore delegates to the active backend when it supports explicit-path
-// restoration, and reports ErrNotSupported otherwise (an S3 bucket cannot
-// restore an archive path directly). Archive import treats that as a skip.
+// restoration. Both the local filesystem store and the S3 store implement it;
+// a backend that does not reports ErrNotSupported, which archive import treats
+// as a skip.
 func (a *SwitchableAssetStore) Restore(ctx context.Context, rel string, r io.Reader) error {
 	restorer, ok := a.Get().(core.AssetRestorer)
 	if !ok {

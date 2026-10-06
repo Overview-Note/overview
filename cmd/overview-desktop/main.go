@@ -58,6 +58,7 @@ const shutdownTimeout = 10 * time.Second
 
 func main() {
 	ensureDesktopEnv()
+	waitForPredecessor()
 
 	base := config.Load()
 	flags := parseFlags(os.Args[1:], base)
@@ -163,6 +164,10 @@ type desktop struct {
 	// leaves it nil so reportProblem raises a system notification; tests
 	// inject a recorder to assert the error path returns without blocking.
 	problemReporter func(title, message string)
+
+	// onboard overrides the first-run directory flow. Production leaves it nil
+	// so runOnboarding drives native dialogs; tests inject a stub.
+	onboard func(def string) string
 }
 
 // start brings up the local server and, once it is listening, the window and
@@ -230,32 +235,57 @@ func (d *desktop) start() {
 }
 
 // resolveDataDir returns the vault directory. An explicit --data-dir or
-// OVERVIEW_DATA_DIR always wins. Otherwise a missing or empty default
-// directory triggers a native directory picker so users can point Overview at
-// an existing vault; cancelling falls back to the default.
+// OVERVIEW_DATA_DIR always wins and skips onboarding. Otherwise the persisted
+// desktop configuration is used; when there is none and the default directory
+// is missing or empty, the first-run onboarding runs and its result is saved.
 func (d *desktop) resolveDataDir() string {
-	if d.explicitDataDir {
-		return d.cfg.DataDir
+	var persisted config.DesktopConfig
+	if loaded, err := config.LoadDesktopConfig(); err != nil {
+		d.logger.Warn("read desktop config", "error", err)
+	} else {
+		persisted = loaded
 	}
-	def := config.DefaultDataDir()
-	if !needsBootstrap(def) {
-		return def
+	onboard := d.onboard
+	if onboard == nil {
+		onboard = d.runOnboarding
 	}
-
-	dialog := d.wails.Dialog.OpenFile().
-		SetTitle("选择 Overview 数据目录").
-		SetButtonText("使用此目录").
-		CanChooseFiles(false).
-		CanChooseDirectories(true).
-		CanCreateDirectories(true)
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		dialog.SetDirectory(home)
-	}
-	chosen, err := dialog.PromptForSingleSelection()
-	if err != nil || chosen == "" {
-		return def
+	chosen, persist := chooseDataDir(
+		d.explicitDataDir, d.cfg.DataDir, persisted, config.DefaultDataDir(), onboard,
+	)
+	if persist {
+		d.persistDataDir(chosen)
 	}
 	return chosen
+}
+
+// chooseDataDir applies the startup precedence: explicit flag/env, then the
+// persisted desktop config, then the default directory. When the default
+// directory is missing or empty the onboarding callback decides, and its
+// result (plus the default fallback) must be persisted. It reports whether the
+// caller should write the resulting directory back to the desktop config.
+func chooseDataDir(explicit bool, explicitDir string, persisted config.DesktopConfig, def string, onboarding func(string) string) (string, bool) {
+	if explicit {
+		return explicitDir, false
+	}
+	if persisted.DataDir != "" {
+		return persisted.DataDir, false
+	}
+	if !needsBootstrap(def) {
+		return def, true
+	}
+	chosen := onboarding(def)
+	if chosen == "" {
+		chosen = def
+	}
+	return chosen, true
+}
+
+// persistDataDir remembers the resolved vault so later launches skip
+// onboarding. A write failure is non-fatal; the app still starts.
+func (d *desktop) persistDataDir(dataDir string) {
+	if err := config.SaveDesktopConfig(config.DesktopConfig{DataDir: dataDir}); err != nil {
+		d.logger.Warn("save desktop config", "error", err)
+	}
 }
 
 // desktopHooks exposes shell state to the local HTTP API. The server depends
@@ -281,6 +311,18 @@ func (h *desktopHooks) SetAutostart(on bool) error {
 }
 
 func (h *desktopHooks) DataDir() string { return h.desktop.cfg.DataDir }
+
+func (h *desktopHooks) SetVault(dataDir string) (string, bool, error) {
+	return h.desktop.changeVault(dataDir)
+}
+
+func (h *desktopHooks) Restart() error {
+	return h.desktop.restart()
+}
+
+func (h *desktopHooks) OpenDataDir() error {
+	return h.desktop.wails.Env.OpenFileManager(h.desktop.cfg.DataDir, false)
+}
 
 // desktopSyncFactory builds the vault sync engine from the app's local vault.
 // The engine also serves the desktop sync endpoints through app.Options.

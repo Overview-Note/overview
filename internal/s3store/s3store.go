@@ -25,6 +25,8 @@ type Store struct {
 	publicURL string
 }
 
+var _ core.AssetRestorer = (*Store)(nil)
+
 // Options configures an S3 asset store.
 type Options struct {
 	Endpoint  string // e.g. s3.amazonaws.com or minio.local:9000
@@ -86,6 +88,19 @@ func (s *Store) Save(ctx context.Context, name string, r io.Reader) (core.Asset,
 		ContentType: ct,
 		Created:     time.Now().UTC(),
 	}, nil
+}
+
+// Restore writes an asset at an explicit key. Unlike Save it does not derive a
+// date-partitioned name, so a sync client or archive import can reproduce a
+// vault-relative attachment path faithfully.
+func (s *Store) Restore(ctx context.Context, rel string, r io.Reader) error {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	_, err = s.client.PutObject(ctx, s.bucket, rel, bytes.NewReader(data),
+		int64(len(data)), minio.PutObjectOptions{ContentType: contentType(rel)})
+	return err
 }
 
 // Open returns a reader for the asset at rel.

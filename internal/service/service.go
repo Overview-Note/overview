@@ -36,6 +36,7 @@ type Service struct {
 	trash    *trash.Store
 	exporter *archivex.Exporter
 	importer *archivex.Importer
+	bus      *ChangeBus
 }
 
 // New constructs a Service. history and trash may be nil to disable those
@@ -49,7 +50,90 @@ func New(repo core.NoteRepository, index core.Index, assets core.AssetStore, his
 		trash:    tr,
 		exporter: archivex.NewExporter(repo, assets),
 		importer: archivex.NewImporter(repo, assets),
+		bus:      NewChangeBus(),
 	}
+}
+
+// ChangeBus returns the change broadcast bus used to drive real-time sync
+// subscribers. It is never nil.
+func (s *Service) ChangeBus() *ChangeBus { return s.bus }
+
+// CurrentChangeCursor returns the latest note sequence and tombstone timestamp
+// so a subscriber can start from a known point.
+func (s *Service) CurrentChangeCursor(ctx context.Context) ChangeEvent {
+	return s.changeEvent(ctx)
+}
+
+// changeEvent reads the current change cursors, tolerating an index that does
+// not expose the change feed.
+func (s *Service) changeEvent(ctx context.Context) ChangeEvent {
+	log, ok := s.index.(core.ChangeLog)
+	if !ok {
+		return ChangeEvent{}
+	}
+	var ev ChangeEvent
+	if seq, err := log.LatestSeq(ctx); err == nil {
+		ev.LatestSeq = seq
+	}
+	if ts, err := log.LatestTombstoneTime(ctx); err == nil {
+		ev.LatestTs = ts
+	}
+	return ev
+}
+
+// notifyChange publishes the current change cursors to real-time subscribers.
+func (s *Service) notifyChange(ctx context.Context) {
+	if s.bus == nil {
+		return
+	}
+	s.bus.Publish(s.changeEvent(ctx))
+}
+
+// Changes returns the incremental change feed after the given note sequence and
+// tombstone timestamp. since is exclusive for note sequences; sinceTs is
+// exclusive for note and folder tombstones.
+func (s *Service) Changes(ctx context.Context, since int64, sinceTs time.Time, limit int) (core.SyncChanges, error) {
+	log, ok := s.index.(core.ChangeLog)
+	if !ok {
+		return core.SyncChanges{}, fmt.Errorf("%w: incremental changes are not supported", core.ErrNotSupported)
+	}
+	changes, hasMore, err := log.ChangesSince(ctx, since, limit)
+	if err != nil {
+		return core.SyncChanges{}, err
+	}
+	tombstones, err := log.TombstonesSince(ctx, sinceTs)
+	if err != nil {
+		return core.SyncChanges{}, err
+	}
+	folders, err := log.FolderTombstonesSince(ctx, sinceTs)
+	if err != nil {
+		return core.SyncChanges{}, err
+	}
+	latestSeq, err := log.LatestSeq(ctx)
+	if err != nil {
+		return core.SyncChanges{}, err
+	}
+	latestTs, err := log.LatestTombstoneTime(ctx)
+	if err != nil {
+		return core.SyncChanges{}, err
+	}
+	if changes == nil {
+		changes = []core.SyncChange{}
+	}
+	if tombstones == nil {
+		tombstones = []core.Tombstone{}
+	}
+	if folders == nil {
+		folders = []core.FolderTombstone{}
+	}
+	return core.SyncChanges{
+		LatestSeq:        latestSeq,
+		LatestTs:         latestTs,
+		HasMore:          hasMore,
+		Changes:          changes,
+		Tombstones:       tombstones,
+		FolderTombstones: folders,
+	}, nil
 }
 
 // ExportArchive writes the whole vault (notes + assets) as a ZIP stream.
@@ -169,6 +253,7 @@ func (s *Service) SaveNote(ctx context.Context, path, body, expectedVersion stri
 	if err := s.index.Upsert(ctx, note); err != nil {
 		return core.Note{}, err
 	}
+	s.notifyChange(ctx)
 	return note, nil
 }
 
@@ -214,6 +299,7 @@ func (s *Service) SaveNoteRaw(ctx context.Context, path string, content []byte, 
 	if err := s.index.Upsert(ctx, note); err != nil {
 		return core.Note{}, err
 	}
+	s.notifyChange(ctx)
 	return note, nil
 }
 
@@ -359,6 +445,10 @@ func (s *Service) Delete(ctx context.Context, path string) error {
 	existing, readErr := s.repo.Read(ctx, path)
 	isNote := readErr == nil
 	victims := s.deletionVictims(ctx, path, existing, isNote)
+	var folders []string
+	if !isNote {
+		folders = s.folderVictims(ctx, path)
+	}
 
 	if s.trash != nil {
 		locator, ok := s.repo.(core.PathLocator)
@@ -366,7 +456,7 @@ func (s *Service) Delete(ctx context.Context, path string) error {
 			if err := s.repo.Delete(ctx, path); err != nil {
 				return err
 			}
-			return s.finishDelete(ctx, path, isNote, victims)
+			return s.finishDelete(ctx, path, isNote, victims, folders)
 		}
 		full, err := locator.AbsPath(path)
 		if err != nil {
@@ -378,7 +468,30 @@ func (s *Service) Delete(ctx context.Context, path string) error {
 	} else if err := s.repo.Delete(ctx, path); err != nil {
 		return err
 	}
-	return s.finishDelete(ctx, path, isNote, victims)
+	return s.finishDelete(ctx, path, isNote, victims, folders)
+}
+
+// folderVictims returns every folder at or under path. It must run before the
+// folders disappear so an empty folder's deletion can be recorded.
+func (s *Service) folderVictims(ctx context.Context, prefix string) []string {
+	entries, err := s.repo.List(ctx)
+	if err != nil {
+		return nil
+	}
+	prefix = strings.Trim(prefix, "/")
+	if prefix == "" {
+		return nil
+	}
+	out := make([]string, 0, 8)
+	for _, e := range entries {
+		if !e.IsDir {
+			continue
+		}
+		if e.Path == prefix || strings.HasPrefix(e.Path, prefix+"/") {
+			out = append(out, e.Path)
+		}
+	}
+	return out
 }
 
 // deletionVictims gathers the notes removed by a delete so their tombstones can
@@ -400,8 +513,8 @@ func (s *Service) deletionVictims(ctx context.Context, path string, existing cor
 }
 
 // finishDelete updates the index for a removed note or folder and records a
-// tombstone for every note that disappeared.
-func (s *Service) finishDelete(ctx context.Context, path string, isNote bool, victims []core.NoteMeta) error {
+// tombstone for every note and folder that disappeared.
+func (s *Service) finishDelete(ctx context.Context, path string, isNote bool, victims []core.NoteMeta, folders []string) error {
 	var err error
 	if isNote {
 		err = s.index.DeleteByPath(ctx, path)
@@ -411,7 +524,14 @@ func (s *Service) finishDelete(ctx context.Context, path string, isNote bool, vi
 	if err != nil {
 		return err
 	}
-	return s.recordTombstones(ctx, victims, "")
+	if err := s.recordTombstones(ctx, victims, ""); err != nil {
+		return err
+	}
+	if err := s.recordFolderTombstones(ctx, folders, ""); err != nil {
+		return err
+	}
+	s.notifyChange(ctx)
+	return nil
 }
 
 // recordTombstones persists deletion markers so a sync client can reconcile
@@ -432,6 +552,48 @@ func (s *Service) recordTombstones(ctx context.Context, victims []core.NoteMeta,
 		}
 	}
 	return nil
+}
+
+// recordFolderTombstones persists deletion markers for removed folders so a
+// sync client can drop folders that held no notes. It is a no-op when the index
+// does not support the change feed.
+func (s *Service) recordFolderTombstones(ctx context.Context, paths []string, device string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	log, ok := s.index.(core.ChangeLog)
+	if !ok {
+		return nil
+	}
+	now := time.Now().UTC()
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		if err := log.RecordFolderTombstone(ctx, core.FolderTombstone{
+			Path:      p,
+			DeletedAt: now,
+			Device:    device,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recordFolderChange persists a folder creation marker so a sync client can
+// observe a folder that holds no notes. It is a no-op when the index does not
+// support the change feed.
+func (s *Service) recordFolderChange(ctx context.Context, path string) error {
+	path = strings.Trim(strings.TrimSpace(path), "/")
+	if path == "" {
+		return nil
+	}
+	log, ok := s.index.(core.ChangeLog)
+	if !ok {
+		return nil
+	}
+	return log.RecordFolderChange(ctx, path)
 }
 
 // Trash lists soft-deleted items.
@@ -484,6 +646,7 @@ func (s *Service) Move(ctx context.Context, from, to string) error {
 	if err != nil {
 		return err
 	}
+	folders := s.folderVictims(ctx, from)
 	if err := s.repo.Move(ctx, from, to); err != nil {
 		return err
 	}
@@ -501,7 +664,14 @@ func (s *Service) Move(ctx context.Context, from, to string) error {
 	for _, n := range moved {
 		victims = append(victims, core.NoteMeta{ID: n.ID, Path: n.Path})
 	}
-	return s.recordTombstones(ctx, victims, "")
+	if err := s.recordTombstones(ctx, victims, ""); err != nil {
+		return err
+	}
+	if err := s.recordFolderTombstones(ctx, folders, ""); err != nil {
+		return err
+	}
+	s.notifyChange(ctx)
+	return nil
 }
 
 // Mkdir creates a folder.
@@ -509,7 +679,14 @@ func (s *Service) Mkdir(ctx context.Context, path string) error {
 	if strings.TrimSpace(path) == "" {
 		return core.Invalidf("path is required")
 	}
-	return s.repo.Mkdir(ctx, path)
+	if err := s.repo.Mkdir(ctx, path); err != nil {
+		return err
+	}
+	if err := s.recordFolderChange(ctx, path); err != nil {
+		return err
+	}
+	s.notifyChange(ctx)
+	return nil
 }
 
 // Search runs a full-text query.
@@ -564,7 +741,7 @@ func (s *Service) Upload(ctx context.Context, name string, r io.Reader) (core.As
 }
 
 // RestoreAsset writes an attachment body at an explicit vault-relative path.
-// Backends without explicit-path restore (for example S3) return ErrNotSupported.
+// Backends without explicit-path restore return ErrNotSupported.
 func (s *Service) RestoreAsset(ctx context.Context, rel string, r io.Reader) error {
 	restorer, ok := s.assets.(core.AssetRestorer)
 	if !ok {
@@ -645,7 +822,11 @@ func (s *Service) ReindexPath(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	return s.index.ReplacePrefix(ctx, path, notes)
+	if err := s.index.ReplacePrefix(ctx, path, notes); err != nil {
+		return err
+	}
+	s.notifyChange(ctx)
+	return nil
 }
 
 // Reindex rebuilds the search index from the repository.
@@ -657,7 +838,11 @@ func (s *Service) Reindex(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	return s.index.Sync(ctx, notes)
+	if err := s.index.Sync(ctx, notes); err != nil {
+		return err
+	}
+	s.notifyChange(ctx)
+	return nil
 }
 
 // ---------------------------------------------------------------------------

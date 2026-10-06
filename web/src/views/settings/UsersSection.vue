@@ -7,7 +7,7 @@ import { useDialogStore } from "../../stores/dialog";
 
 const auth = useAuthStore();
 const dialogs = useDialogStore();
-const isAdmin = computed(() => auth.user?.role === "admin");
+const isAdmin = computed(() => auth.isAdmin);
 
 const users = ref<User[]>([]);
 const error = ref("");

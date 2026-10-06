@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +17,14 @@ type fakeHooks struct {
 	autostart bool
 	dataDir   string
 	setErr    error
+
+	vaultErr    error
+	vaultResult bool
+	vaultCalled string
+	restarted   bool
+	restartErr  error
+	opened      bool
+	openErr     error
 }
 
 func (h *fakeHooks) AutostartEnabled() bool { return h.autostart }
@@ -29,6 +38,35 @@ func (h *fakeHooks) SetAutostart(on bool) error {
 }
 
 func (h *fakeHooks) DataDir() string { return h.dataDir }
+
+func (h *fakeHooks) SetVault(dataDir string) (string, bool, error) {
+	h.vaultCalled = dataDir
+	if h.vaultErr != nil {
+		return "", false, h.vaultErr
+	}
+	if !h.vaultResult {
+		return "", false, nil
+	}
+	// The running server keeps serving the old directory until it restarts,
+	// so DataDir() intentionally stays put; only pendingDataDir moves.
+	return dataDir, true, nil
+}
+
+func (h *fakeHooks) Restart() error {
+	if h.restartErr != nil {
+		return h.restartErr
+	}
+	h.restarted = true
+	return nil
+}
+
+func (h *fakeHooks) OpenDataDir() error {
+	if h.openErr != nil {
+		return h.openErr
+	}
+	h.opened = true
+	return nil
+}
 
 func newDesktopServer(t *testing.T, hooks server.DesktopHooks, check server.UpdateChecker) *httptest.Server {
 	t.Helper()
@@ -84,6 +122,99 @@ func TestDesktopSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDesktopVaultPut(t *testing.T) {
+	hooks := &fakeHooks{dataDir: "/old", vaultResult: true}
+	ts := newDesktopServer(t, hooks, nil)
+
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/desktop/vault",
+		strings.NewReader(`{"dataDir":"/new"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got["changed"] != true || got["dataDir"] != "/old" || got["pendingDataDir"] != "/new" {
+		t.Errorf("vault response = %v", got)
+	}
+	if hooks.vaultCalled != "/new" {
+		t.Errorf("vaultCalled = %q, want /new", hooks.vaultCalled)
+	}
+}
+
+func TestDesktopVaultPutCancelled(t *testing.T) {
+	hooks := &fakeHooks{dataDir: "/old"}
+	ts := newDesktopServer(t, hooks, nil)
+
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/desktop/vault",
+		strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got["changed"] != false || got["dataDir"] != "/old" {
+		t.Errorf("vault response = %v", got)
+	}
+}
+
+func TestDesktopVaultPutInvalid(t *testing.T) {
+	hooks := &fakeHooks{vaultErr: errors.New("not a vault")}
+	ts := newDesktopServer(t, hooks, nil)
+
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/desktop/vault",
+		strings.NewReader(`{"dataDir":"/bad"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestDesktopRestartAndOpenFolder(t *testing.T) {
+	hooks := &fakeHooks{}
+	ts := newDesktopServer(t, hooks, nil)
+
+	for _, tc := range []struct {
+		path   string
+		verify func() bool
+	}{
+		{"/api/v1/desktop/restart", func() bool { return hooks.restarted }},
+		{"/api/v1/desktop/open-folder", func() bool { return hooks.opened }},
+	} {
+		resp, err := http.Post(ts.URL+tc.path, "application/json", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST %s = %d, want 200", tc.path, resp.StatusCode)
+		}
+		if !tc.verify() {
+			t.Errorf("POST %s did not invoke the hook", tc.path)
+		}
+	}
+}
+
 func TestDesktopUpdateUsesChecker(t *testing.T) {
 	check := func(context.Context, string) (string, string, bool, error) {
 		return "v0.14.0", "https://example.com/releases/v0.14.0", true, nil
@@ -112,7 +243,13 @@ func TestDesktopEndpointsHiddenWhenHeadless(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	for _, path := range []string{"/api/v1/desktop/settings", "/api/v1/desktop/update"} {
+	for _, path := range []string{
+		"/api/v1/desktop/settings",
+		"/api/v1/desktop/update",
+		"/api/v1/desktop/vault",
+		"/api/v1/desktop/restart",
+		"/api/v1/desktop/open-folder",
+	} {
 		resp, err := http.Get(ts.URL + path)
 		if err != nil {
 			t.Fatal(err)

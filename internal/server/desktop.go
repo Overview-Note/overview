@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/Overview-Note/overview/internal/update"
@@ -15,6 +17,14 @@ type DesktopHooks interface {
 	AutostartEnabled() bool
 	SetAutostart(bool) error
 	DataDir() string
+	// SetVault switches the vault directory. An empty dataDir asks the shell
+	// to open a native directory picker. It returns the resolved directory and
+	// whether it changed; a cancelled picker returns ("", false, nil).
+	SetVault(dataDir string) (newDir string, changed bool, err error)
+	// Restart relaunches the desktop application so a new vault takes effect.
+	Restart() error
+	// OpenDataDir reveals the current vault in the system file manager.
+	OpenDataDir() error
 }
 
 // UpdateChecker reports the latest published release. It matches
@@ -62,6 +72,65 @@ func (s *Server) handleDesktopSettingsPut(w http.ResponseWriter, r *http.Request
 		}
 	}
 	writeJSON(w, http.StatusOK, s.desktopSettingsBody())
+}
+
+// desktopVaultRequest is the body of PUT /api/v1/desktop/vault. An empty
+// dataDir asks the shell to prompt with a native directory picker.
+type desktopVaultRequest struct {
+	DataDir string `json:"dataDir"`
+}
+
+// handleDesktopVaultPut validates and persists a new vault directory. The
+// validation (path exists/creatable, is a directory, is or can become a vault)
+// lives in the hook so the shell can reuse it for the directory picker.
+func (s *Server) handleDesktopVaultPut(w http.ResponseWriter, r *http.Request) {
+	if !s.desktopHooksAvailable() {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	var req desktopVaultRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	newDir, changed, err := s.opts.DesktopHooks.SetVault(req.DataDir)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	body := s.desktopSettingsBody()
+	body["changed"] = changed
+	if changed {
+		body["pendingDataDir"] = newDir
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
+// handleDesktopRestart relaunches the desktop shell. When the shell has no
+// restart support it reports an error instead.
+func (s *Server) handleDesktopRestart(w http.ResponseWriter, r *http.Request) {
+	if !s.desktopHooksAvailable() {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err := s.opts.DesktopHooks.Restart(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"restarting": true})
+}
+
+// handleDesktopOpenFolder reveals the current vault in the system file manager.
+func (s *Server) handleDesktopOpenFolder(w http.ResponseWriter, r *http.Request) {
+	if !s.desktopHooksAvailable() {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err := s.opts.DesktopHooks.OpenDataDir(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"opened": true})
 }
 
 // handleDesktopUpdate reports the current and latest published version. It

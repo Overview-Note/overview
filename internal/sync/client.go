@@ -5,6 +5,7 @@
 package sync
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,6 +88,9 @@ type RemoteClient struct {
 	token   string
 	ua      string
 	http    *http.Client
+	// stream is used for the long-lived SSE subscription. It must not carry a
+	// whole-request timeout, which would tear down an idle stream.
+	stream *http.Client
 }
 
 // NewRemoteClient validates the server URL and builds a client. Plain HTTP is
@@ -101,14 +106,18 @@ func NewRemoteClient(serverURL string, opts ClientOptions) (*RemoteClient, error
 		timeout = 30 * time.Second
 	}
 	client := opts.HTTPClient
+	var stream *http.Client
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
+		stream = &http.Client{}
+	} else {
+		stream = client
 	}
 	ua := opts.UserAgent
 	if ua == "" {
 		ua = "Overview-Sync/1.0"
 	}
-	return &RemoteClient{baseURL: base, token: opts.Token, ua: ua, http: client}, nil
+	return &RemoteClient{baseURL: base, token: opts.Token, ua: ua, http: client, stream: stream}, nil
 }
 
 // normalizeServerURL validates the scheme and host and returns the URL without
@@ -222,6 +231,137 @@ func (c *RemoteClient) Validate(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return manifest.VaultID, nil
+}
+
+// Changes fetches the incremental change feed after since (note sequence,
+// exclusive) and sinceTs (tombstone timestamp, RFC3339, exclusive). limit caps
+// the returned note changes; it may be zero to use the server default.
+func (c *RemoteClient) Changes(ctx context.Context, since int64, sinceTs string, limit int) (core.SyncChanges, error) {
+	q := url.Values{}
+	q.Set("since", strconv.FormatInt(since, 10))
+	if sinceTs != "" {
+		q.Set("sinceTs", sinceTs)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	resp, err := c.do(ctx, http.MethodGet, c.baseURL+"/api/v1/sync/changes?"+q.Encode(), nil, "", nil)
+	if err != nil {
+		return core.SyncChanges{}, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return core.SyncChanges{}, statusError(resp)
+	}
+	defer resp.Body.Close()
+	var out core.SyncChanges
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return core.SyncChanges{}, fmt.Errorf("decode changes: %w", err)
+	}
+	return out, nil
+}
+
+// sseBackoffBase and sseBackoffMax bound the reconnect delay of Events.
+const (
+	sseBackoffBase = 500 * time.Millisecond
+	sseBackoffMax  = 30 * time.Second
+)
+
+// Events subscribes to the server's change stream and invokes onEvent for every
+// change event, passing the current note sequence and tombstone timestamp. It
+// ignores comment heartbeats and reconnects automatically with exponential
+// backoff until ctx is cancelled. Permanent auth failures are returned so the
+// caller can stop retrying.
+func (c *RemoteClient) Events(ctx context.Context, onEvent func(latestSeq int, latestTs string)) error {
+	delay := sseBackoffBase
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		connected, err := c.streamEvents(ctx, onEvent)
+		if connected {
+			delay = sseBackoffBase
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil && (errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden)) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+		if delay < sseBackoffMax {
+			delay *= 2
+			if delay > sseBackoffMax {
+				delay = sseBackoffMax
+			}
+		}
+	}
+}
+
+// streamEvents performs a single SSE connection. It returns connected=true once
+// the server accepted the stream, and returns when the stream ends, the server
+// errors, or ctx is cancelled.
+func (c *RemoteClient) streamEvents(ctx context.Context, onEvent func(latestSeq int, latestTs string)) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/sync/events", nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("User-Agent", c.ua)
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.stream.Do(req)
+	if err != nil {
+		return false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return false, statusError(resp)
+	}
+	defer resp.Body.Close()
+
+	reader := bufio.NewReader(resp.Body)
+	var event, data string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return true, nil
+			}
+			return true, err
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			if event == "change" && data != "" {
+				var payload struct {
+					LatestSeq int64  `json:"latestSeq"`
+					LatestTs  string `json:"latestTs"`
+				}
+				if json.Unmarshal([]byte(data), &payload) == nil {
+					onEvent(int(payload.LatestSeq), payload.LatestTs)
+				}
+			}
+			event, data = "", ""
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "event:"):
+			event = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		case strings.HasPrefix(line, "data:"):
+			chunk := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if data != "" {
+				data += "\n"
+			}
+			data += chunk
+		}
+	}
 }
 
 // GetNoteRaw fetches the complete Markdown bytes and version of a note.

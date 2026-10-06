@@ -7,7 +7,7 @@ import { useWorkspaceStore } from "../../stores/workspace";
 
 const auth = useAuthStore();
 const store = useWorkspaceStore();
-const isAdmin = computed(() => auth.user?.role === "admin");
+const isAdmin = computed(() => auth.isAdmin);
 
 const importInput = ref<HTMLInputElement | null>(null);
 const importBusy = ref(false);

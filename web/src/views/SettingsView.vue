@@ -10,7 +10,7 @@ const site = useSiteStore();
 const route = useRoute();
 const router = useRouter();
 
-const isAdmin = computed(() => auth.user?.role === "admin");
+const isAdmin = computed(() => auth.isAdmin);
 
 interface NavItem {
   name: string;

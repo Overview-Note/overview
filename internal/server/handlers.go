@@ -146,7 +146,7 @@ func (s *Server) handleSyncManifest(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRestoreAsset writes a request body to an explicit vault-relative asset
-// path. Backends that cannot restore an explicit path (S3) return 501.
+// path. Backends that cannot restore an explicit path return 501.
 func (s *Server) handleRestoreAsset(w http.ResponseWriter, r *http.Request) {
 	rel := r.PathValue("path")
 	if err := validateAssetPath(rel); err != nil {

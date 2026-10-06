@@ -4,11 +4,140 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Overview-Note/overview/internal/core"
+	"github.com/Overview-Note/overview/internal/service"
 )
+
+// maxChangeLimit caps how many note changes a single /sync/changes call returns.
+const maxChangeLimit = 5000
+
+// sseHeartbeat is how often a comment line keeps an idle SSE connection alive.
+const sseHeartbeat = 25 * time.Second
+
+// handleSyncChanges serves the incremental change feed. Query parameters:
+//
+//	since    exclusive note sequence cursor (default 0; 0 means full sync)
+//	sinceTs  exclusive tombstone timestamp (RFC3339; default zero = all)
+//	limit    maximum note changes to return (default 500, max 5000)
+//
+// Paginate by passing the last returned change's seq back as since. Advance the
+// tombstone cursor by passing the response's latestTs back as sinceTs. When
+// hasMore is true, call again with the updated since until it is false.
+func (s *Server) handleSyncChanges(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+
+	since := int64(0)
+	if raw := strings.TrimSpace(q.Get("since")); raw != "" {
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || n < 0 {
+			writeError(w, http.StatusBadRequest, "since must be a non-negative integer")
+			return
+		}
+		since = n
+	}
+
+	var sinceTs time.Time
+	if raw := strings.TrimSpace(q.Get("sinceTs")); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "sinceTs must be an RFC3339 timestamp")
+			return
+		}
+		sinceTs = t
+	}
+
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			writeError(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		if n > maxChangeLimit {
+			n = maxChangeLimit
+		}
+		limit = n
+	}
+
+	changes, err := s.svc.Changes(r.Context(), since, sinceTs, limit)
+	if err != nil {
+		s.writeDomainError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, changes)
+}
+
+// handleSyncEvents streams change notifications as Server-Sent Events. Each
+// payload carries the current change cursors; a client reacts by pulling
+// /sync/changes. A comment heartbeat keeps idle connections open.
+func (s *Server) handleSyncEvents(w http.ResponseWriter, r *http.Request) {
+	rc := http.NewResponseController(w)
+	// Clear the server-wide WriteTimeout for this long-lived stream; otherwise
+	// the connection is torn down after ~120s. If the transport cannot honour
+	// it, the heartbeat plus client reconnect still recover the stream.
+	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+		s.logger.Debug("sse: cannot clear write deadline", "error", err)
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	if err := rc.Flush(); err != nil {
+		return
+	}
+
+	bus := s.svc.ChangeBus()
+	id, events := bus.Subscribe()
+	defer bus.Unsubscribe(id)
+
+	if err := writeChangeEvent(w, rc, s.svc.CurrentChangeCursor(r.Context())); err != nil {
+		return
+	}
+
+	ping := time.NewTicker(sseHeartbeat)
+	defer ping.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case ev, ok := <-events:
+			if !ok {
+				return
+			}
+			if err := writeChangeEvent(w, rc, ev); err != nil {
+				return
+			}
+		case <-ping.C:
+			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+				return
+			}
+			if err := rc.Flush(); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// writeChangeEvent emits one SSE change event with the current cursors.
+func writeChangeEvent(w io.Writer, rc *http.ResponseController, ev service.ChangeEvent) error {
+	data, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "event: change\ndata: %s\n\n", data); err != nil {
+		return err
+	}
+	return rc.Flush()
+}
 
 // SyncHooks exposes desktop vault-sync state and control to the HTTP layer
 // without making the server import the sync engine. The desktop shell

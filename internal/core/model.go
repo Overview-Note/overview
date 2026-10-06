@@ -116,6 +116,38 @@ type Tombstone struct {
 	Device    string    `json:"device"`
 }
 
+// FolderTombstone records the deletion or relocation of a folder so a client
+// can reconcile a sync, including folders that contained no notes.
+type FolderTombstone struct {
+	Path      string    `json:"path"`
+	DeletedAt time.Time `json:"deletedAt"`
+	Device    string    `json:"device,omitempty"`
+}
+
+// SyncChange is a single note change in an incremental sync response. Op is
+// currently always "upsert": the entry carries the note's current state.
+type SyncChange struct {
+	ID      string `json:"id"`
+	Path    string `json:"path"`
+	Version string `json:"version"`
+	Seq     int64  `json:"seq"`
+	Op      string `json:"op"`
+}
+
+// SyncChanges is the incremental change feed a client uses to sync without
+// fetching the full manifest. LatestSeq is the head of the note change
+// sequence; LatestTs is the highest tombstone timestamp currently recorded.
+// A client paginates sessions by feeding the last change's seq back as since,
+// and passes LatestTs back as sinceTs to receive only newer tombstones.
+type SyncChanges struct {
+	LatestSeq        int64             `json:"latestSeq"`
+	LatestTs         time.Time         `json:"latestTs"`
+	HasMore          bool              `json:"hasMore"`
+	Changes          []SyncChange      `json:"changes"`
+	Tombstones       []Tombstone       `json:"tombstones"`
+	FolderTombstones []FolderTombstone `json:"folderTombstones"`
+}
+
 // Entry is a single filesystem entry (folder or note) without its content.
 type Entry struct {
 	Path    string
