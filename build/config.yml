@@ -29,7 +29,7 @@ info:
   description: "Local-first Markdown notes with a native desktop shell"
   copyright: "(c) 2026, Overview"
   comments: "Overview desktop"
-  version: "0.16.1"
+  version: "0.16.2"
 
 # Register .md documents with the OS and route opens to the app. A file open
 # arrives as an ApplicationOpenedWithFile event (Windows/macOS) or an argv entry

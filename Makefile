@@ -4,7 +4,7 @@
 BINARY := bin/overview
 DESKTOP_BINARY := bin/overview-desktop
 EXE := $(shell go env GOEXE)
-VERSION ?= 0.16.1
+VERSION ?= 0.16.2
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 # Windows desktop builds must use the GUI PE subsystem or launching the .exe
