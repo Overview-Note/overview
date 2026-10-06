@@ -20,6 +20,90 @@ func testStaticFS() fstest.MapFS {
 	}
 }
 
+func staticFSWithAsset(assetPath, content string) fstest.MapFS {
+	return fstest.MapFS{
+		"index.html": &fstest.MapFile{Data: []byte("<!doctype html><div id=app></div>")},
+		assetPath:    &fstest.MapFile{Data: []byte(content)},
+	}
+}
+
+func TestWeakETagContentSensitive(t *testing.T) {
+	same := strings.Repeat("a", 256)
+	etag := weakETag("assets/app-abc12345.js", []byte(same))
+	if etag != weakETag("assets/app-abc12345.js", []byte(same)) {
+		t.Fatal("identical content produced different ETags")
+	}
+	if etag == weakETag("assets/app-abc12345.js", []byte(strings.Repeat("b", 256))) {
+		t.Fatal("same length, different content produced the same ETag")
+	}
+	if etag == weakETag("assets/other-abc12345.js", []byte(same)) {
+		t.Fatal("different paths produced the same ETag")
+	}
+}
+
+func TestStaticSameLengthDifferentContentRevalidates(t *testing.T) {
+	const asset = "assets/app-abc12345.js"
+
+	first := newStaticHandler(staticFSWithAsset(asset, strings.Repeat("a", 256)))
+	rec := httptest.NewRecorder()
+	first.serve(rec, httptest.NewRequest(http.MethodGet, "/"+asset, nil))
+	etag := rec.Result().Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("missing ETag")
+	}
+
+	second := newStaticHandler(staticFSWithAsset(asset, strings.Repeat("b", 256)))
+	req := httptest.NewRequest(http.MethodGet, "/"+asset, nil)
+	req.Header.Set("If-None-Match", etag)
+	rec = httptest.NewRecorder()
+	second.serve(rec, req)
+
+	resp := rec.Result()
+	if resp.StatusCode == http.StatusNotModified {
+		t.Fatal("different content of equal length was answered with 304 from a stale ETag")
+	}
+	if got := resp.Header.Get("ETag"); got == etag {
+		t.Fatalf("ETag unchanged for different content: %q", got)
+	}
+}
+
+func TestStaticMissingAssetReturns404(t *testing.T) {
+	h := newStaticHandler(testStaticFS())
+	for _, p := range []string{"/assets/missing.js", "/missing.css", "/logo.png", "/font.woff2"} {
+		rec := httptest.NewRecorder()
+		h.serve(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		resp := rec.Result()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s status = %d, want 404", p, resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
+			t.Errorf("%s Content-Type = %q, want non-html", p, ct)
+		}
+	}
+}
+
+func TestStaticClientRouteFallsBack(t *testing.T) {
+	h := newStaticHandler(testStaticFS())
+	rec := httptest.NewRecorder()
+	h.serve(rec, httptest.NewRequest(http.MethodGet, "/some/route", nil))
+	resp := rec.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/some/route status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("/some/route Content-Type = %q, want text/html", ct)
+	}
+}
+
+func TestStaticAssetImmutableHeader(t *testing.T) {
+	h := newStaticHandler(testStaticFS())
+	rec := httptest.NewRecorder()
+	h.serve(rec, httptest.NewRequest(http.MethodGet, "/assets/style-abc12345.css", nil))
+	if cc := rec.Result().Header.Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
+		t.Errorf("Cache-Control = %q, want immutable", cc)
+	}
+}
+
 func TestStaticCompressionAndCaching(t *testing.T) {
 	h := newStaticHandler(testStaticFS())
 

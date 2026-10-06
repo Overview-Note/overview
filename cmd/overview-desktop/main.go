@@ -209,7 +209,7 @@ func (d *desktop) start() {
 
 	window := d.wails.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:          "Overview",
-		URL:            base + "/?desktop=1",
+		URL:            desktopURL(base, version),
 		Width:          1280,
 		Height:         820,
 		MinWidth:       960,
@@ -677,15 +677,13 @@ func desktopBaseURL(addr string) (string, error) {
 	return "http://127.0.0.1:" + port, nil
 }
 
-// desktopURL builds the loopback URL the webview should open. The ?desktop=1
-// marker lets the frontend detect the shell (it also skips service worker
-// registration).
-func desktopURL(addr string) (string, error) {
-	base, err := desktopBaseURL(addr)
-	if err != nil {
-		return "", err
-	}
-	return base + "/?desktop=1", nil
+// desktopURL builds the loopback URL the webview should open from a resolved
+// origin and the build version. The ?desktop=1 marker lets the frontend detect
+// the shell (it also skips service worker registration); the ?v= version gives
+// every release a fresh WebView2 cache entry so an upgrade loads the new
+// frontend bundle instead of a stale index.html.
+func desktopURL(base, version string) string {
+	return base + "/?desktop=1&v=" + url.QueryEscape(version)
 }
 
 // ensureDesktopEnv defaults the process to desktop mode so config.Load applies

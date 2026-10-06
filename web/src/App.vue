@@ -258,6 +258,14 @@ async function logout() {
           <RouterView />
         </main>
       </div>
+      <button
+        v-if="settings.focusMode"
+        class="focus-exit"
+        :title="t('shortcuts.exitFocus')"
+        @click="settings.setFocus(false)"
+      >
+        {{ t("focus.exit") }}
+      </button>
     </template>
     <DialogHost />
     <ShortcutsDialog :open="shortcutsOpen" @close="shortcutsOpen = false" />

@@ -215,16 +215,31 @@ func TestRestartEnvKeepsDataDirWhenExplicit(t *testing.T) {
 }
 
 func TestDesktopURL(t *testing.T) {
-	got, err := desktopURL("127.0.0.1:5230")
-	if err != nil {
-		t.Fatalf("desktopURL: %v", err)
-	}
-	if got != "http://127.0.0.1:5230/?desktop=1" {
+	got := desktopURL("http://127.0.0.1:5230", "0.16.1")
+	if got != "http://127.0.0.1:5230/?desktop=1&v=0.16.1" {
 		t.Errorf("desktopURL = %q", got)
 	}
+	// The desktop marker must stay intact for the frontend's detectDesktop.
+	if !strings.Contains(got, "desktop=1") {
+		t.Errorf("desktopURL = %q, want desktop=1 marker", got)
+	}
+	// Versions with reserved characters are escaped so the URL stays valid.
+	escaped := desktopURL("http://127.0.0.1:5230", "1.0.0+build 2")
+	if !strings.Contains(escaped, "v=1.0.0%2Bbuild+2") {
+		t.Errorf("desktopURL = %q, want escaped version", escaped)
+	}
+}
 
-	if _, err := desktopURL("not-an-address"); err == nil {
-		t.Error("desktopURL should reject an address without a port")
+func TestDesktopBaseURL(t *testing.T) {
+	got, err := desktopBaseURL("127.0.0.1:5230")
+	if err != nil {
+		t.Fatalf("desktopBaseURL: %v", err)
+	}
+	if got != "http://127.0.0.1:5230" {
+		t.Errorf("desktopBaseURL = %q", got)
+	}
+	if _, err := desktopBaseURL("not-an-address"); err == nil {
+		t.Error("desktopBaseURL should reject an address without a port")
 	}
 }
 

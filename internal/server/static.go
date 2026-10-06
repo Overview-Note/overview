@@ -27,12 +27,18 @@ func newStaticHandler(fsys fs.FS) *staticHandler {
 }
 
 func (h *staticHandler) serve(w http.ResponseWriter, r *http.Request) {
-	// SPA fallback: unknown paths (client routes) serve index.html.
+	// SPA fallback: unknown client routes serve index.html. Asset requests
+	// (assets/ or a file extension) must 404 instead, so a missing bundle is
+	// never masked by index.html served under a JS/CSS content type.
 	p := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 	if p == "" {
 		p = "index.html"
 	}
 	if _, err := fs.Stat(h.fsys, p); err != nil {
+		if isAssetRequest(p) {
+			http.NotFound(w, r)
+			return
+		}
 		p = "index.html"
 	}
 	data, err := fs.ReadFile(h.fsys, p)
@@ -150,11 +156,16 @@ func etagMatch(header, etag string) bool {
 func weakETag(p string, data []byte) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(p))
-	var size [8]byte
-	n := len(data)
-	for i := 0; i < 8; i++ {
-		size[i] = byte(n >> (8 * i))
-	}
-	_, _ = h.Write(size[:])
+	_, _ = h.Write(data)
 	return `W/"` + strconv.FormatUint(h.Sum64(), 36) + `"`
+}
+
+// isAssetRequest reports whether p addresses a static asset rather than a
+// client-side route. Missing assets must return 404; only extension-less paths
+// fall back to index.html so the SPA can own them.
+func isAssetRequest(p string) bool {
+	if strings.HasPrefix(p, "assets/") {
+		return true
+	}
+	return path.Ext(p) != ""
 }
