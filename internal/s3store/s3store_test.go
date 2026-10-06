@@ -37,9 +37,7 @@ func decodeAWSChunked(t *testing.T, body string) string {
 		}
 		out.WriteString(body[:n])
 		body = body[n:]
-		if strings.HasPrefix(body, "\r\n") {
-			body = body[2:]
-		}
+		body = strings.TrimPrefix(body, "\r\n")
 	}
 }
 

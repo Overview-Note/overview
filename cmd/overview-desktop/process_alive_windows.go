@@ -14,7 +14,7 @@ func processAlive(pid int) bool {
 	if err != nil {
 		return false
 	}
-	defer syscall.CloseHandle(h)
+	defer func() { _ = syscall.CloseHandle(h) }()
 	var code uint32
 	if err := syscall.GetExitCodeProcess(h, &code); err != nil {
 		return false

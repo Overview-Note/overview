@@ -152,7 +152,7 @@ func (ix *Index) RecordFolderChange(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	seq, err := nextChangeSeq(ctx, tx)
 	if err != nil {
