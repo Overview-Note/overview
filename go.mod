@@ -9,6 +9,7 @@ require (
 	github.com/wailsapp/wails/v3 v3.0.0-beta.26
 	github.com/yuin/goldmark v1.8.6
 	golang.org/x/crypto v0.57.0
+	golang.org/x/image v0.41.0
 	golang.org/x/net v0.59.0
 	golang.org/x/sys v0.48.0
 	gopkg.in/yaml.v3 v3.0.1

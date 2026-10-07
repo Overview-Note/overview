@@ -16,7 +16,7 @@ else
 DESKTOP_LDFLAGS := $(LDFLAGS)
 endif
 
-.PHONY: help dev demo build build-web build-go build-desktop package-desktop test test-go test-web lint fmt vet clean docker site site-export
+.PHONY: help dev demo build build-web build-go build-desktop package-desktop icon test test-go test-web lint fmt vet clean docker site site-export
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -46,6 +46,17 @@ build-desktop: build-web ## Build the desktop shell for the host platform (front
 
 package-desktop: build-desktop ## Archive the desktop binary for the host platform
 	cd bin && tar -czf overview-desktop-$(VERSION)-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz overview-desktop$(EXE)
+
+# Regenerates every raster brand asset from web/public/icon-512.png via
+# tools/icongen: the desktop shell's icon.png (RGBA, go:embed), icon.ico, the
+# PWA icon-192.png, the full-bleed icon-512-maskable.png and the Wails
+# packager's build/appicon.png. rsrc then packs the .ico into
+# rsrc_windows_amd64.syso, which the Go linker picks up only for
+# GOOS=windows GOARCH=amd64. The .syso is committed, so neither this target nor
+# the rsrc dependency is needed for a normal build. Re-run after the icon changes.
+icon: ## Regenerate brand rasters (icon.png + icon.ico + icon-192.png + icon-512-maskable.png + appicon.png + rsrc .syso)
+	go run ./tools/icongen -src web/public/icon-512.png -ico cmd/overview-desktop/icon.ico -png cmd/overview-desktop/icon.png -png192 web/public/icon-192.png -appicon build/appicon.png -maskable web/public/icon-512-maskable.png
+	go run github.com/akavel/rsrc@latest -ico cmd/overview-desktop/icon.ico -o cmd/overview-desktop/rsrc_windows_amd64.syso -arch amd64
 
 test: test-go test-web ## Run all tests (Go + frontend)
 
