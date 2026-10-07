@@ -694,6 +694,7 @@ make dev            # 后端 :5230（内嵌前端）
 make build          # 前端 + 单二进制（bin/overview）
 make build-desktop  # 前端 + 桌面壳（bin/overview-desktop，本机平台）
 make package-desktop # build-desktop + 归档 tar.gz
+make icon           # 重新生成桌面图标（icon.png / icon.ico / rsrc_windows_amd64.syso）
 make test           # Go 测试
 make test-web       # 前端类型检查
 make lint           # golangci-lint + vue-tsc
@@ -1502,6 +1503,7 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
 - `build/config.yml` 提供 Wails v3 打包元数据（`info`/`fileAssociations`/`protocols`）；`ext` 修正为无点 `md`（macOS `CFBundleTypeExtensions` 约定）。
 - 新增 `.github/workflows/desktop.yml`：`fail-fast: false` 矩阵 `windows-latest`（CGO 0）/`macos-14`（arm64）/`macos-13`（amd64）/`ubuntu-24.04`（GTK4 + WebKitGTK 6.0）/`ubuntu-22.04`（`-tags "desktop gtk3"`）；归档 `.zip`/`.tar.gz` 上传 artifact，tag 触发时作为 Release assets 发布。
 - `ci.yml` 新增 Windows 桌面壳编译冒烟（`go build ./cmd/overview-desktop`）。
+- **Windows 图标**：exe/资源管理器/任务栏图标通过 rsrc 生成的资源对象 `cmd/overview-desktop/rsrc_windows_amd64.syso` 嵌入（`*_windows_amd64.syso` 命名使隐式构建约束只在 windows/amd64 生效，不影响 darwin/linux）。`icon.ico`（16/24/32/48/64/128/192/256，PNG 内嵌、保留透明）与 `cmd/overview-desktop/icon.png`（512 RGBA，`go:embed` 用于 Wails 窗口/托盘）由 `tools/icongen` 从品牌源 `web/public/icon-512.png` 生成；`make icon` 重新生成两者并重跑 rsrc。`.syso` 已提交，rsrc 不是普通构建/CI 的必需依赖。
 - `wails3` CLI（`v3.0.0-beta.26`）已安装并确认可执行，但仓库未采用其生成的 Taskfile/build-assets，`wails3 build`/`package` 无法直接作用于当前布局；本轮以 `go build` 产物 + 归档交付，安装器（NSIS/DMG/AppImage）留待接入。
 
 **验证记录**
