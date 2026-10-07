@@ -306,7 +306,7 @@ func (s *Server) mountStatic() {
 				writeError(w, http.StatusNotFound, "not found")
 				return
 			}
-			writeError(w, http.StatusNotFound, "frontend not built")
+			writeNotFoundPage(w)
 		})
 		return
 	}

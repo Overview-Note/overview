@@ -38,6 +38,7 @@ const scrollEl = ref<HTMLElement | null>(null);
 const toc = ref<TocItem[]>([]);
 const showToc = ref(true);
 const isPublic = ref(false);
+const missing = ref(false);
 const showAI = ref(false);
 const aiStatus = ref<AIStatus | null>(null);
 const aiTab = ref<"assistant" | "agent">("assistant");
@@ -300,6 +301,7 @@ async function onAgentChanged(payload: { wrote: boolean; paths: string[] }) {
 async function load(path: string) {
   if (!editor.value) return;
   const seq = ++loadSeq;
+  missing.value = false;
   window.clearTimeout(mermaidTimer);
   // Abort the previous note request so a slow load can't land after the switch.
   noteAbort?.abort();
@@ -328,9 +330,12 @@ async function load(path: string) {
     await nextTick();
     loading = false;
     if (seq === loadSeq) scheduleMermaid();
-  } catch {
+  } catch (e) {
     if (controller.signal.aborted) return;
     if (seq === loadSeq) loading = false;
+    if (seq === loadSeq && e instanceof ApiError && e.status === 404) {
+      missing.value = true;
+    }
     // store.error already set
   }
 }
@@ -868,6 +873,16 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </BubbleMenu>
+        <div v-if="missing" class="editor-missing">
+          <div class="notfound-card">
+            <div class="notfound-code">404</div>
+            <h1>{{ t("notFound.title") }}</h1>
+            <p>{{ t("notFound.desc") }}</p>
+            <RouterLink class="primary notfound-home" :to="{ name: 'home' }">
+              {{ t("notFound.home") }}
+            </RouterLink>
+          </div>
+        </div>
       </div>
 
       <div

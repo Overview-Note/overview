@@ -143,6 +143,12 @@ export const router = createRouter({
       props: true,
       meta: { plain: true, public: true },
     },
+    // Catch-all: must stay last so it never shadows a defined route above.
+    {
+      path: "/:pathMatch(.*)*",
+      name: "not-found",
+      component: () => import("./views/NotFoundView.vue"),
+    },
   ],
 });
 
@@ -158,6 +164,8 @@ router.beforeEach(async (to) => {
     if (to.name === "settings" || String(to.name ?? "").startsWith("settings-")) {
       return { name: "public-home" };
     }
+    // Unknown paths surface the docs-site home, never the app 404.
+    if (to.name === "not-found") return { name: "public-home" };
     return true;
   }
 

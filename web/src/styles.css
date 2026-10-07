@@ -805,7 +805,103 @@ body.resizing {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: var(--sp-6) var(--sp-5);
   color: var(--text-soft);
+}
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  max-width: 420px;
+  text-align: center;
+}
+
+.empty-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+}
+
+.empty-actions button {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.empty-actions .empty-new-folder {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .empty-actions .empty-new-folder:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-faint);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Not found
+   -------------------------------------------------------------------------- */
+
+.notfound {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6) var(--sp-5);
+  overflow: auto;
+}
+
+.notfound-card {
+  width: min(420px, 100%);
+  text-align: center;
+  padding: var(--sp-6) var(--sp-5);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+
+.notfound-code {
+  font-size: 68px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+}
+
+.notfound-card h1 {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+
+.notfound-card p {
+  margin: 0 0 var(--sp-5);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.notfound-home {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -1041,6 +1137,20 @@ body.resizing {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+
+/* Overlay shown when the note in the URL does not exist. Kept absolute so the
+   editor stays mounted underneath (its reactive watcher must keep running). */
+.editor-missing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6) var(--sp-5);
+  overflow: auto;
+  background: var(--bg);
 }
 
 .editor-scroll {

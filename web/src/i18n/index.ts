@@ -444,6 +444,10 @@ const messages: Record<Locale, Record<string, string>> = {
     "slash.taskhint": "可勾选的任务清单",
     "slash.hr": "分割线",
     "slash.hrhint": "水平分割线",
+
+    "notFound.title": "页面不存在",
+    "notFound.desc": "你访问的页面不存在或已被移动。",
+    "notFound.home": "返回首页",
   },
   en: {
     "app.loading": "Loading…",
@@ -892,6 +896,10 @@ const messages: Record<Locale, Record<string, string>> = {
     "slash.taskhint": "Checklist with checkboxes",
     "slash.hr": "Divider",
     "slash.hrhint": "Horizontal rule",
+
+    "notFound.title": "Page not found",
+    "notFound.desc": "The page you are looking for does not exist or has been moved.",
+    "notFound.home": "Back to home",
   },
   "zh-TW": {
     "topbar.users": "使用者管理",
