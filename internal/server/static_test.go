@@ -16,6 +16,7 @@ func testStaticFS() fstest.MapFS {
 		"index.html":                &fstest.MapFile{Data: []byte("<!doctype html><div id=app></div>")},
 		"assets/app-abc12345.js":    &fstest.MapFile{Data: []byte(body)},
 		"assets/style-abc12345.css": &fstest.MapFile{Data: []byte("body{color:#000}")},
+		"icon.svg":                  &fstest.MapFile{Data: []byte("<svg xmlns='http://www.w3.org/2000/svg'/>")},
 		"manifest.webmanifest":      &fstest.MapFile{Data: []byte(`{"name":"Overview"}`)},
 	}
 }
@@ -69,7 +70,9 @@ func TestStaticSameLengthDifferentContentRevalidates(t *testing.T) {
 
 func TestStaticMissingAssetReturns404(t *testing.T) {
 	h := newStaticHandler(testStaticFS())
-	for _, p := range []string{"/assets/missing.js", "/missing.css", "/logo.png", "/font.woff2"} {
+	// Bundled assets and whitelisted top-level files that are absent from the
+	// build are genuine 404s, never masked by index.html.
+	for _, p := range []string{"/assets/missing.js", "/favicon.ico", "/sitemap.xml"} {
 		rec := httptest.NewRecorder()
 		h.serve(rec, httptest.NewRequest(http.MethodGet, p, nil))
 		resp := rec.Result()
@@ -79,6 +82,41 @@ func TestStaticMissingAssetReturns404(t *testing.T) {
 		if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
 			t.Errorf("%s Content-Type = %q, want non-html", p, ct)
 		}
+	}
+}
+
+func TestStaticNoteRoutesFallBackToSPA(t *testing.T) {
+	h := newStaticHandler(testStaticFS())
+	// Extension-bearing client routes must not be mistaken for assets: /note
+	// and /public take arbitrary note paths that end in .md.
+	for _, p := range []string{"/note/guide/start.md", "/public/notes/a.md", "/note/hello"} {
+		rec := httptest.NewRecorder()
+		h.serve(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		resp := rec.Result()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("%s status = %d, want 200", p, resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Errorf("%s Content-Type = %q, want text/html", p, ct)
+		}
+	}
+}
+
+func TestStaticTopLevelWhitelist(t *testing.T) {
+	h := newStaticHandler(testStaticFS())
+
+	// A whitelisted top-level file that exists is served directly.
+	rec := httptest.NewRecorder()
+	h.serve(rec, httptest.NewRequest(http.MethodGet, "/icon.svg", nil))
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Errorf("/icon.svg status = %d, want 200", got)
+	}
+
+	// A whitelisted top-level file that does not exist is a 404, not a fallback.
+	rec = httptest.NewRecorder()
+	h.serve(rec, httptest.NewRequest(http.MethodGet, "/favicon.ico", nil))
+	if got := rec.Result().StatusCode; got != http.StatusNotFound {
+		t.Errorf("/favicon.ico status = %d, want 404", got)
 	}
 }
 

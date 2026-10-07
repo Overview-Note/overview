@@ -27,9 +27,10 @@ func newStaticHandler(fsys fs.FS) *staticHandler {
 }
 
 func (h *staticHandler) serve(w http.ResponseWriter, r *http.Request) {
-	// SPA fallback: unknown client routes serve index.html. Asset requests
-	// (assets/ or a file extension) must 404 instead, so a missing bundle is
-	// never masked by index.html served under a JS/CSS content type.
+	// SPA fallback: unknown client routes serve index.html. Genuine asset
+	// requests (bundled assets/ files or a top-level static file) must 404
+	// instead, so a missing bundle is never masked by index.html served under
+	// a JS/CSS content type.
 	p := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 	if p == "" {
 		p = "index.html"
@@ -43,6 +44,13 @@ func (h *staticHandler) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := fs.ReadFile(h.fsys, p)
 	if err != nil {
+		// A missing index.html means the frontend was never built (or its
+		// bundle is damaged): serve the self-contained HTML 404 rather than a
+		// bare text/plain response. Asset 404s already returned above.
+		if p == "index.html" {
+			writeNotFoundPage(w)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -160,12 +168,28 @@ func weakETag(p string, data []byte) string {
 	return `W/"` + strconv.FormatUint(h.Sum64(), 36) + `"`
 }
 
+// staticRoots are the fixed top-level files the frontend ships. A request for
+// a whitelisted name that is missing from the build is a genuine 404 rather
+// than an SPA route. Anything not listed here (e.g. /note/hello.md or
+// /public/hello.md) falls back to index.html and is owned by the client router.
+var staticRoots = map[string]bool{
+	"icon.svg":             true,
+	"icon-192.png":         true,
+	"icon-512.png":         true,
+	"manifest.webmanifest": true,
+	"sw.js":                true,
+	"favicon.ico":          true,
+	"robots.txt":           true,
+	"sitemap.xml":          true,
+}
+
 // isAssetRequest reports whether p addresses a static asset rather than a
-// client-side route. Missing assets must return 404; only extension-less paths
-// fall back to index.html so the SPA can own them.
+// client-side route. Missing bundled assets (assets/...) and missing top-level
+// static files must return 404; every other unmatched path falls back to
+// index.html so the SPA can own it.
 func isAssetRequest(p string) bool {
 	if strings.HasPrefix(p, "assets/") {
 		return true
 	}
-	return path.Ext(p) != ""
+	return staticRoots[p]
 }
