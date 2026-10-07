@@ -27,6 +27,8 @@ public: true
 - **Focus mode** (`F9`) — hides the top bar and sidebar and offers a floating **Exit focus**
   button in the bottom-right corner (Esc and `F9` also leave it) — and a keyboard-shortcuts
   panel (`?`)
+- **Create from the home empty state** — the landing page offers **New note** / **New folder**,
+  so a note can be started even when focus mode hides the sidebar
 
 ## Search
 

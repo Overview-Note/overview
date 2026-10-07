@@ -63,6 +63,8 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Focus mode** (`F9`) — hides the top bar and sidebar, with a low-key floating
   **Exit focus** button in the bottom-right corner as a visible way out (Esc and `F9` also work) —
   and a **keyboard-shortcuts** panel (`?`)
+- **Create from the home empty state** — the landing screen offers **New note** / **New
+  folder**, so you can start writing even when focus mode hides the sidebar
 
 ### 🔎 Search & navigation
 - **Full-text search** with SQLite FTS5 and a custom **CJK unigram + bigram tokenizer**
@@ -523,6 +525,12 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
 - [x] Darker, more readable sidebar tree: every folder depth uses the strongest text token
   (`--text`) and deep notes use `--text-muted`, so depth is conveyed by indentation and the
   uppercase/600-weight folder treatment rather than fading deeper levels
+- [x] SPA fallback and a polished 404 experience: only `assets/*` and a fixed top-level file
+  allowlist count as assets, so refreshing `/note/<path>.md` / `/public/<path>.md` serves the
+  SPA again while missing assets still 404 (never masked by `index.html`); unknown paths now
+  show a catch-all **404 view** instead of a blank screen, a missing note shows a matching
+  overlay, the server falls back to a self-contained HTML 404 page when the frontend is not
+  built, and the home empty state can create a note/folder even in focus mode
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

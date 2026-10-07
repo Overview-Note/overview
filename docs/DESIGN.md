@@ -1,7 +1,7 @@
 # Overview 设计文档
 
-> 版本：v0.16.2（侧栏树文字对比度：文件夹统一 `--text`、笔记 `--text-muted`）
-> 更新日期：2026-10-06
+> 版本：v0.16.3（SPA 回退修正 · 404 体验 · 首页空状态新建入口）
+> 更新日期：2026-10-07
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
 ---
@@ -35,6 +35,7 @@
 | v0.16.0 | 桌面引导 · owner 权限 · 同步补齐 | **无鉴权 = owner/admin**：`authMiddleware` 在 `!Auth.Required()` 时向每个请求注入 `owner`（`core.RoleAdmin`）用户，桌面/本地单用户安装可访问邮件/站点/存储/数据/用户/令牌等全部管理设置；前端 `auth.isAdmin = mode==="none" || user.role==="admin"` 同步放开设置分区。**桌面初始化与 vault 管理**：新增 `internal/config/desktop.go`（配置持久化 `<UserConfigDir>/Overview/desktop.json`、`HasVault`、`PrepareDataDir` 校验并建目录/测可写）；桌面壳首启引导（`runOnboarding`：默认/打开已有/新建 + 原生目录对话框，`--data-dir`/`OVERVIEW_DATA_DIR` 跳过）；设置页「桌面」分区可**更改数据目录**（`PUT /api/v1/desktop/vault`）、**打开数据目录**（`POST /api/v1/desktop/open-folder`）、**重启应用**（`POST /api/v1/desktop/restart`，重启子进程等待前任退出以释放单实例/vault 锁）。**同步补齐（Phase 2/3 局部）**：增量 `GET /api/v1/sync/changes?since=&sinceTs=&limit=`（`changes/tombstones/folderTombstones/latestSeq/latestTs/hasMore`，迁移 `0011_sync_folders` 的 `folder_tombstones` 与 `0012_folder_changes` 的 `folder_changes`）；实时 `GET /api/v1/sync/events`（SSE，25s 心跳，`http.ResponseController` 清写超时、`statusRecorder` 透出 `Unwrap`/`Flush`、`http.Server.BaseContext` 在 Stop 时取消流）；进程内 `service.ChangeBus` 广播（覆盖 Save/SaveRaw/Delete/Move/Mkdir/ReindexPath/Reindex，即写入/删除/移动/reindex/watcher/Mkdir）。客户端：`RemoteClient.Changes/Events`（SSE 自动重连 + 指数退避，401/403 停止）；`Engine` 订阅 SSE（debounce 500ms 触发 `SyncOnce`，先查 `/sync/changes` 头再决定）+ 轮询兜底 + `execMu` 单飞；游标 `state.cursor` 持久化；**空文件夹双向同步**（父→子建、子→父删、`folder_sync`/`folder_forget`，`remoteFolderEmpty`/`localFolderEmpty` 守卫）；目录删除实时（`folder_tombstones`）；超大附件跳过并记 warning 而非中断。**S3 显式路径写**：`s3store.Restore` 按 vault 相对 key 写入，S3 下附件同步不再 501。**错误码分类**：401→`unauthorized`、403→`forbidden`、405→`method_not_allowed`、502→`bad_gateway` |
 | v0.16.1 | 桌面升级可见性 · 专注出口 | **静态资源校验修正**：`weakETag` 改为对文件**内容**计算 FNV-1a 哈希（原实现只哈希路径 + 字节长度），Vite 重建后字节数几乎不变的 `index.html` 不再算出相同 ETag 而被 304 长期沿用；缺失的静态资源（`assets/` 前缀或带扩展名）返回 **404**，不再回退 `index.html`，避免把 HTML 当 JS/CSS 返回（`internal/server/static.go`）。**桌面壳按版本破缓存**：窗口 URL 由 `/?desktop=1` 改为 `/?desktop=1&v=<version>`（`desktopURL`，`net/url` 转义），每次发版即新的 WebView2 缓存条目，升级后自动加载新前端（`cmd/overview-desktop/main.go`）。**专注模式可退出**：顶栏/侧栏隐藏时新增右下角低调浮动按钮 `.focus-exit`（i18n `focus.exit`，zh「退出专注」/en「Exit focus」），仍保留 Esc/F9 出口（`web/src/App.vue` + `styles.css`） |
 | v0.16.2 | 侧栏树文字对比度 | 左侧栏文件树「多级菜单」去掉「层级越深越淡」：`.tree-row.folder`（含 depth-0/1/2/3）由 `--text-soft`/`--text-faint` 统一改为 **`--text`**；`.tree-row.note.depth-3` 由 `--text-soft` 改为 **`--text-muted`**；层级仍由 `padding-left` 缩进 + 文件夹「大写 + 600 字重」区分，hover/active 不变。仅改 `web/src/styles.css`，未动 `internal/sitegen/content.css` 的共享 token（ADR-087） |
+| v0.16.3 | SPA 回退修正 · 404 体验 · 空状态入口 | **静态资源判定收窄**：`isAssetRequest` 由「带扩展名」改为「`assets/` 前缀 + 固定顶层白名单（icon.svg/icon-192.png/icon-512.png/manifest.webmanifest/sw.js/favicon.ico/robots.txt/sitemap.xml）」，修正 v0.16.1 过宽判定导致 `/note/<path>.md`、`/public/<path>.md` 刷新 404 而非回退 `index.html` 的回归；`assets/` 缺失仍 404 且非 HTML（ADR-088）。**404 体验**：前端新增 catch-all 路由 `/:pathMatch(.*)*` 与 `views/NotFoundView.vue`（此前未知路径渲染空白），文档站 render 模式下 `not-found` 重定向 `public-home`；`EditorPane.vue` 笔记 404 时显示一致的覆盖卡片；服务端新增自包含、亮暗自适应的 HTML 404 页 `internal/server/notfound.go`（用于 `index.html` 缺失 / `Static==nil` 分支），`/api/*` 仍 JSON、`assets/` 仍非 HTML（ADR-089）。**首页空状态入口**：`EmptyState.vue` 新增「新建笔记 / 新建文件夹」，复用侧栏流程与 i18n，专注模式隐藏侧栏时也能新建 |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -263,6 +264,8 @@ GET /api/v1/sync/manifest                          全量清单（强 ETag，正
 | ADR-085 | 桌面壳窗口 URL 追加构建版本 `?v=<version>`（`desktopURL`，`net/url` 转义） | WebView2 的 HTTP 缓存按 URL 区分条目；只用 `/?desktop=1` 时同一 URL 会复用旧缓存，配合被 `immutable` 缓存的旧资源，升级后可能一直加载旧前端 | 每个发行版本是全新缓存条目，升级后首次打开即拉取新 bundle；`?desktop=1` 标记保持不变，前端仍据此识别桌面壳并跳过 Service Worker 注册 |
 | ADR-086 | 专注模式提供**可见出口**：右下角低调浮动按钮 `.focus-exit`（i18n `focus.exit`，zh「退出专注」/en「Exit focus」），点击调用 `settings.setFocus(false)`；Esc/F9 快捷键仍可用 | 专注模式隐藏顶栏/侧栏，此前只有键盘出口，触屏或鼠标用户无处退出，形成「无路可退」的死角 | 按钮 `z-index:90` 位于内容之上、全屏遮罩（`z-index:100`）之下；仅在专注模式且非 plain（render/公开）时渲染；`prefers-reduced-motion` 下不引入额外动画 |
 | ADR-087 | 侧栏文件树的多级菜单**不再靠降低不透明度表达层级**：`.tree-row.folder`（含 depth-0/1/2/3）统一用 `--text`，`.tree-row.note.depth-3` 用 `--text-muted`；层级改由 `padding-left` 缩进与文件夹「大写 + 600 字重」承载，hover/active 不变 | 原实现「层级越深越淡」（`--text-soft` → `--text-faint`，浅色下 #9b9b9b/#b7b7b3）使深层文件夹/笔记与背景对比度不足，长目录树可读性差；用**对比度**编码深度还会与 hover/active 态、暗色主题相互干扰 | 所有层级的树文字都达到主/次文本对比度（浅色 `--text` #37352f、笔记 `--text-muted` #6b6b6b），缩进与字重仍清晰区分层级；仅改应用侧 `web/src/styles.css`，**未动** `internal/sitegen/content.css` 的共享 token，静态站与公开页不受影响 |
+| ADR-088 | 静态资源判定收窄为「`assets/` 前缀 + 固定顶层文件白名单」，其余未命中路径一律回退 SPA；`assets/` 缺失仍返回非 HTML 404 | v0.16.1（ADR-084）以「带扩展名」判定资源，把 `/note/<path>.md`、`/public/<path>.md` 这类带扩展名的客户端路由误判为静态资源，刷新时返回 404 而非回退 `index.html`；但白名单仍须让缺失的真实资源（`assets/*`、`favicon.ico` 等）明确 404，不被 `index.html` 以 JS/CSS 内容类型掩盖 | 只有 `assets/*` 与固定顶层文件（icon.svg / icon-192.png / icon-512.png / manifest.webmanifest / sw.js / favicon.ico / robots.txt / sitemap.xml）视为资源；其余路径无论是否带扩展名都回退 SPA，`/note`、`/public` 下的 `.md` 深链接刷新恢复；`internal/server/static_test.go` 覆盖「带扩展名路由回退 SPA」与「白名单缺失 404」 |
+| ADR-089 | 404 体验三端统一：前端 catch-all vue 路由 + 笔记缺失覆盖层 + 服务端自包含 HTML 404 页；内容协商按路径区分（`/api/*` JSON、`assets/` 非 HTML、文档路由 HTML） | 未知客户端路径此前无匹配路由而渲染空白页，笔记不存在时只有底部错误文本；未构建前端的服务端只回 `text/plain`，对访问者既不友好也不一致 | 新增 `web/src/views/NotFoundView.vue` 与置于路由末尾的 `/:pathMatch(.*)*`；文档站 render 模式把 `not-found` 重定向 `public-home` 而非应用 404；`EditorPane.vue` 在 `ApiError.status===404` 时显示同款卡片；`internal/server/notfound.go` 的 `writeNotFoundPage` 用于 `index.html` 缺失 / `Static==nil` 分支，内联 CSS、跟随系统明暗、无外部依赖 |
 
 ---
 
@@ -540,6 +543,18 @@ Base：`/api/v1`
 | `/dav/` | WebDAV 挂载（Basic 认证，需 auth=multi） |
 | `/mcp` | MCP 服务端（JSON-RPC 2.0，Bearer 令牌，协议 `2026-07-28`） |
 | `/api/docs` | 自包含的 OpenAPI 交互文档 |
+
+**静态服务与 404 语义（v0.16.3，ADR-088/089）**
+
+内嵌前端由 `internal/server/static.go` 的 `staticHandler` 服务，SPA 回退与资源 404 的判定顺序为：
+
+1. `fs.Stat` 命中：按扩展名给 `Content-Type` 并加 `X-Content-Type-Options: nosniff`；`assets/` 下带内容哈希的路径 `Cache-Control: immutable`，其余（`index.html`/`sw.js`/manifest/图标）`no-cache` + 弱 ETag（内容 FNV-1a）。
+2. 未命中且 `isAssetRequest(p)` 为真（`assets/` 前缀或顶层白名单）→ **404，非 HTML**（不被 `index.html` 掩盖）。
+3. 未命中且非资源（如 `/note/技术/Go/并发模型.md`、`/public/<path>`、任意未知客户端路由）→ 回退 **`index.html`（200，`text/html`）**，交由前端 router 处理。
+4. `index.html` 本身缺失（前端未构建或产物损坏）→ 自包含、亮暗自适应的 **HTML 404 页**（`internal/server/notfound.go`，`Static==nil` 分支同此）。
+
+`/api/*` 的未命中仍为 `{error:{code:"not_found"}}` JSON；`assets/` 缺失为非 HTML 404。前端侧未知路径由末尾 catch-all
+`/:pathMatch(.*)*` → `NotFoundView.vue` 呈现，render（文档站）模式则重定向 `public-home`。
 
 **CLI（离线，复用同一 `service` 层）**
 
@@ -1653,3 +1668,43 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   `/api/v1/health` 返回 `version: 0.16.2`。
 - **本轮未验证**：暗色主题的 computed color 人工比对（token 本身未改，预期 `--text` #e9e6e0 /
   `--text-muted` #b3afa8）。
+
+### 13.30 SPA 回退修正 · 404 体验 · 空状态入口（v0.16.3，ADR-088/089）
+
+**静态资源判定（`internal/server/static.go`，ADR-088）**
+
+- `isAssetRequest(p)` 删除「带扩展名」判定，改为 `strings.HasPrefix(p, "assets/") || staticRoots[p]`；
+  `staticRoots` 白名单为 `icon.svg` / `icon-192.png` / `icon-512.png` / `manifest.webmanifest` /
+  `sw.js` / `favicon.ico` / `robots.txt` / `sitemap.xml`。
+- 结果：`/note/guide/start.md`、`/public/notes/a.md` 等带扩展名的客户端路由刷新时回退
+  `index.html`（200，`text/html`）；`/assets/missing.js`、缺失的 `/favicon.ico` 等仍 404。
+- `internal/server/static_test.go` 新增 `TestStaticNoteRoutesFallBackToSPA`、`TestStaticTopLevelWhitelist`，
+  并更新 `TestStaticMissingAssetReturns404`（改为断言白名单缺失文件 404）。
+
+**404 体验（`internal/server/notfound.go` + 前端，ADR-089）**
+
+- 服务端 `writeNotFoundPage`：内联 CSS、`color-scheme: light dark`、无外部资源的 HTML 404；
+  `staticHandler.serve` 在 `index.html` 读取失败时调用，`server.mountStatic` 的 `Static==nil`
+  分支由 `writeError(..., "frontend not built")` 改为 `writeNotFoundPage`。
+- 前端 `web/src/router.ts` 新增末尾 catch-all `/:pathMatch(.*)*` → `views/NotFoundView.vue`；
+  render 模式 `beforeEach` 把 `not-found` 重定向 `public-home`。`EditorPane.vue` 新增 `missing`
+  状态，`load()` 捕获 `ApiError` 且 `status===404` 时显示与 NotFoundView 一致的 `.notfound-card`
+  覆盖卡片。i18n 新增 `notFound.title`/`notFound.desc`/`notFound.home`（zh/en）。
+- `internal/server/notfound_test.go`：状态 404、`Content-Type: text/html`、正文含 "404"；
+  无 `index.html` 的 FS 对 `/`、`/note/hello.md` 均返回 HTML 404。
+
+**首页空状态入口（`web/src/components/EmptyState.vue`）**
+
+- 新增「新建笔记」（`store.createNote("", name)` 后跳转笔记）/「新建文件夹」（`store.createFolder("", name)`）
+  按钮，复用 `sidebar.newNote*`/`sidebar.newFolder*`/`sidebar.createFailed` i18n 与侧栏流程；
+  专注模式隐藏侧栏时仍可从首页新建。
+
+**验证记录**
+
+- `go build ./...`、`go test ./...` 全绿（含新增/更新的 `internal/server/static_test.go`、`notfound_test.go`）。
+- `cd web && npm run build`（`overview-web@0.16.3`）通过。
+- headless：重编 `bin/overview.exe`（v0.16.3）并以 `OVERVIEW_AUTH=multi` 重启 demo；`/api/v1/health`
+  返回 `version: 0.16.3`。路由/资源语义：`/note/x.md` → 200（HTML）、`/public/x.md` → 200（HTML）、
+  `/assets/missing.js` → 404（非 HTML）、`/api/v1/nope` → 404（JSON）；首页空状态「新建笔记 / 新建文件夹」
+  按钮在专注模式（侧栏隐藏）下可见可用。
+- **本轮未验证**：真实桌面 WebView2 升级路径与 macOS/Linux 桌面壳（同前）。

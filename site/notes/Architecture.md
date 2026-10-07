@@ -91,6 +91,18 @@ The lifecycle is shared: both binaries call `app.New`/`Start`/`Stop`, and a data
 instance lock plus Wails' single-instance channel keep one server and one window. See
 [[Desktop]].
 
+## Static serving and 404s
+
+The embedded frontend is served by a custom handler (gzip; content-hashed `assets/*` cached
+`immutable`, everything else revalidated with a weak content-`ETag`). A request that misses the
+filesystem falls back to `index.html` **only when it is not an asset**: `assets/*` and a fixed
+top-level allowlist (`icon.svg`, the PNG icons, `manifest.webmanifest`, `sw.js`, `favicon.ico`,
+`robots.txt`, `sitemap.xml`) are the only asset paths, so refreshing a note route such as
+`/note/<path>.md` — which *has* an extension — still serves the SPA. Missing assets return a
+non-HTML `404` instead of being masked by `index.html`, and an absent bundle returns a
+self-contained HTML 404 page. Unknown client routes render a catch-all **404 view** in the SPA
+(the docs-site render mode redirects them to its home instead).
+
 ## Vault sync
 
 The desktop shell attaches the `sync` engine to the shared app through a `SyncFactory`; the
