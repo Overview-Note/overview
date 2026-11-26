@@ -515,3 +515,194 @@ func TestBackfillLowerColumns(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveLinkUnicodeNormalization(t *testing.T) {
+	ctx := context.Background()
+	const (
+		nfcPath  = "notes/café.md"
+		nfdPath  = "notes/cafe\u0301.md"
+		nfcTitle = "Café"
+		nfdTitle = "Cafe\u0301"
+	)
+
+	t.Run("stored NFD resolved as NFC", func(t *testing.T) {
+		ix := openTestIndex(t)
+		if err := ix.Sync(ctx, []core.Note{
+			note("1", nfdPath, nfdTitle, "coffee"),
+			note("2", "ascii.md", "Ascii Note", "plain"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		for _, target := range []string{
+			nfcTitle,
+			nfdTitle,
+			nfcPath,
+			nfdPath,
+			"café.md",
+			"cafe\u0301.md",
+			"CAFÉ",
+			"CAFE\u0301",
+			"Café.md",
+			"Cafe\u0301.md",
+		} {
+			meta, err := ix.ResolveLink(ctx, target)
+			if err != nil {
+				t.Errorf("resolve %q: %v", target, err)
+				continue
+			}
+			if meta.Path != nfdPath {
+				t.Errorf("resolve %q -> %q, want %q", target, meta.Path, nfdPath)
+			}
+		}
+		for _, target := range []string{"ascii", "ASCII", "Ascii Note", "ascii note"} {
+			meta, err := ix.ResolveLink(ctx, target)
+			if err != nil {
+				t.Errorf("resolve %q: %v", target, err)
+				continue
+			}
+			if meta.Path != "ascii.md" {
+				t.Errorf("resolve %q -> %q, want ascii.md", target, meta.Path)
+			}
+		}
+	})
+
+	t.Run("stored NFC resolved as NFD", func(t *testing.T) {
+		ix := openTestIndex(t)
+		if err := ix.Sync(ctx, []core.Note{
+			note("1", nfcPath, nfcTitle, "coffee"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		for _, target := range []string{
+			nfdTitle,
+			nfcTitle,
+			nfdPath,
+			nfcPath,
+			"cafe\u0301.md",
+			"CAFE\u0301",
+			"CAFÉ",
+		} {
+			meta, err := ix.ResolveLink(ctx, target)
+			if err != nil {
+				t.Errorf("resolve %q: %v", target, err)
+				continue
+			}
+			if meta.Path != nfcPath {
+				t.Errorf("resolve %q -> %q, want %q", target, meta.Path, nfcPath)
+			}
+		}
+	})
+
+	t.Run("cyrillic combining mark", func(t *testing.T) {
+		ix := openTestIndex(t)
+		const (
+			nfcPath  = "й.md"
+			nfdPath  = "и\u0306.md"
+			nfcTitle = "Йошкар-Ола"
+			nfdTitle = "И\u0306ошкар-Ола"
+		)
+		if err := ix.Sync(ctx, []core.Note{
+			note("1", nfdPath, nfdTitle, "city"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		for _, target := range []string{
+			nfcPath,
+			nfdPath,
+			nfcTitle,
+			nfdTitle,
+			"Й",
+			"И\u0306",
+			"йошкар-ола",
+			"и\u0306ошкар-ола",
+		} {
+			meta, err := ix.ResolveLink(ctx, target)
+			if err != nil {
+				t.Errorf("resolve %q: %v", target, err)
+				continue
+			}
+			if meta.Path != nfdPath {
+				t.Errorf("resolve %q -> %q, want %q", target, meta.Path, nfdPath)
+			}
+		}
+	})
+
+	t.Run("backlinks use folded target keys", func(t *testing.T) {
+		ix := openTestIndex(t)
+		const (
+			targetPath = "notes/cafe\u0301.md"
+			sourcePath = "source.md"
+		)
+		if err := ix.Sync(ctx, []core.Note{
+			note("1", targetPath, "Cafe\u0301", "target"),
+			note("2", sourcePath, "Source", "see [[CAFÉ]] and [[cafe\u0301]]"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		metas, err := ix.Backlinks(ctx, targetPath)
+		if err != nil {
+			t.Fatalf("backlinks: %v", err)
+		}
+		if len(metas) != 1 || metas[0].Path != sourcePath {
+			t.Errorf("backlinks = %+v, want one from %q", metas, sourcePath)
+		}
+	})
+}
+
+func TestBackfillLowerRefoldsNormalization(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "test.db")
+	const (
+		nfcPath  = "notes/café.md"
+		nfdPath  = "notes/cafe\u0301.md"
+		nfcTitle = "Café"
+		nfdTitle = "Cafe\u0301"
+	)
+
+	ix, err := index.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.Sync(ctx, []core.Note{
+		note("1", nfdPath, nfdTitle, "coffee"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`UPDATE notes SET path_lower = lower(path), title_lower = lower(title), name_lower = lower(name)`); err != nil {
+		db.Close()
+		t.Fatalf("simulate stale lower columns: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM schema_migrations WHERE version = 14`); err != nil {
+		db.Close()
+		t.Fatalf("roll back migration 0014: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := index.Open(path)
+	if err != nil {
+		t.Fatalf("reopen with stale lower columns: %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	for _, target := range []string{nfcPath, nfdPath, nfcTitle, nfdTitle, "CAFÉ", "CAFE\u0301"} {
+		meta, err := reopened.ResolveLink(ctx, target)
+		if err != nil {
+			t.Errorf("resolve %q after refold: %v", target, err)
+			continue
+		}
+		if meta.Path != nfdPath {
+			t.Errorf("resolve %q after refold -> %q, want %q", target, meta.Path, nfdPath)
+		}
+	}
+}

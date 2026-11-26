@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"golang.org/x/text/unicode/norm"
 	_ "modernc.org/sqlite"
 
 	"github.com/Overview-Note/overview/internal/core"
@@ -123,10 +124,11 @@ func (ix *Index) migrate(ctx context.Context) error {
 	return nil
 }
 
-// backfillLower fills the precomputed lower-case lookup columns for rows that
-// predate migration 0013. SQLite's lower() only folds ASCII, so the values are
-// computed with Go's Unicode-aware strings.ToLower instead. A note path is
-// never empty, so an empty path_lower reliably marks an unbackfilled row.
+// backfillLower fills the precomputed folded lookup columns for rows that
+// predate the current fold rules. SQLite's lower() only folds ASCII and cannot
+// normalize Unicode, so the values are computed with foldKey instead. A note
+// path is never empty, so an empty path_lower reliably marks an unbackfilled
+// row.
 func (ix *Index) backfillLower(ctx context.Context) error {
 	rows, err := ix.db.QueryContext(ctx,
 		`SELECT id, path, title FROM notes WHERE path_lower = ''`)
@@ -161,8 +163,8 @@ func (ix *Index) backfillLower(ctx context.Context) error {
 	for _, p := range todo {
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE notes SET path_lower = ?, title_lower = ?, name_lower = ? WHERE id = ?`,
-			strings.ToLower(p.path), strings.ToLower(p.title),
-			strings.ToLower(noteName(p.path)), p.id); err != nil {
+			foldKey(p.path), foldKey(p.title),
+			foldKey(noteName(p.path)), p.id); err != nil {
 			return err
 		}
 	}
@@ -449,7 +451,7 @@ func (ix *Index) Backlinks(ctx context.Context, path string) ([]core.NoteMeta, e
 		return nil, err
 	}
 
-	keys := uniqueLower(p, strings.TrimSuffix(strings.ToLower(p), ".md"), title, name, id)
+	keys := uniqueLower(p, strings.TrimSuffix(foldKey(p), ".md"), title, name, id)
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
 	args := make([]any, 0, len(keys)+1)
 	for _, k := range keys {
@@ -486,13 +488,14 @@ func (ix *Index) Backlinks(ctx context.Context, path string) ([]core.NoteMeta, e
 
 // ResolveLink resolves a raw wiki-link target to a stored note.
 func (ix *Index) ResolveLink(ctx context.Context, raw string) (core.NoteMeta, error) {
-	key := strings.ToLower(strings.TrimSpace(raw))
+	key := foldKey(strings.TrimSpace(raw))
 	if key == "" {
 		return core.NoteMeta{}, core.ErrNotFound
 	}
 	// Wiki-links may spell the target as a path, a file name with or without
-	// the Markdown extension, or a title. All comparisons use the Go-computed
-	// lower-case columns because SQLite's lower() only folds ASCII.
+	// the Markdown extension, or a title. All comparisons use the folded
+	// columns (NFC + case-folded) because SQLite's lower() folds only ASCII
+	// and cannot normalize Unicode.
 	keyMD := key + ".md"
 	stem := strings.TrimSuffix(key, ".md")
 	var (
@@ -524,11 +527,14 @@ func (ix *Index) ResolveLink(ctx context.Context, raw string) (core.NoteMeta, er
 	return m, nil
 }
 
+// foldKey canonicalizes s for case- and normalization-insensitive matching.
+func foldKey(s string) string { return strings.ToLower(norm.NFC.String(s)) }
+
 func uniqueLower(values ...string) []string {
 	seen := make(map[string]struct{}, len(values))
 	out := make([]string, 0, len(values))
 	for _, v := range values {
-		v = strings.ToLower(strings.TrimSpace(v))
+		v = foldKey(strings.TrimSpace(v))
 		if v == "" {
 			continue
 		}
@@ -614,7 +620,7 @@ func insert(ctx context.Context, tx *sql.Tx, n core.Note, seq int64) error {
 		n.ID, n.Path, name, n.Title, strings.Join(n.Tags, ","), n.Body,
 		n.Created.UTC().Format(time.RFC3339), n.Updated.UTC().Format(time.RFC3339),
 		n.Size, n.Version, boolToInt(n.Public), seq,
-		strings.ToLower(n.Path), strings.ToLower(n.Title), strings.ToLower(name)); err != nil {
+		foldKey(n.Path), foldKey(n.Title), foldKey(name)); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx,
@@ -628,7 +634,7 @@ func insert(ctx context.Context, tx *sql.Tx, n core.Note, seq int64) error {
 	for _, target := range textproc.ExtractWikiLinks(n.Body) {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO links (source_id, source_path, target_raw, target_key) VALUES (?, ?, ?, ?)`,
-			n.ID, n.Path, target, strings.ToLower(target)); err != nil {
+			n.ID, n.Path, target, foldKey(target)); err != nil {
 			return err
 		}
 	}
