@@ -2,11 +2,14 @@ package index_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	_ "modernc.org/sqlite"
 
 	"github.com/Overview-Note/overview/internal/core"
 	"github.com/Overview-Note/overview/internal/index"
@@ -412,5 +415,103 @@ func TestUpsertAndDelete(t *testing.T) {
 	metas, _ = ix.Tree(ctx)
 	if len(metas) != 0 {
 		t.Errorf("delete failed: %+v", metas)
+	}
+}
+
+func TestResolveLinkUnicodeCase(t *testing.T) {
+	ctx := context.Background()
+	ix := openTestIndex(t)
+	const (
+		cyrillicPath  = "10 Личные/Серверы/Локальный сервер.md"
+		cyrillicTitle = "Локальный сервер"
+	)
+	if err := ix.Sync(ctx, []core.Note{
+		note("1", cyrillicPath, cyrillicTitle, "self hosted"),
+		note("2", "ascii.md", "Ascii Note", "plain"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, target := range []string{
+		cyrillicTitle,
+		"локальный сервер",
+		"ЛОКАЛЬНЫЙ СЕРВЕР",
+		cyrillicPath,
+		"10 личные/серверы/локальный сервер.md",
+		"Локальный сервер.md",
+		"локальный сервер.md",
+	} {
+		meta, err := ix.ResolveLink(ctx, target)
+		if err != nil {
+			t.Errorf("resolve %q: %v", target, err)
+			continue
+		}
+		if meta.Path != cyrillicPath {
+			t.Errorf("resolve %q -> %q, want %q", target, meta.Path, cyrillicPath)
+		}
+	}
+
+	for _, target := range []string{"ascii", "ASCII", "Ascii Note", "ascii note"} {
+		meta, err := ix.ResolveLink(ctx, target)
+		if err != nil {
+			t.Errorf("resolve %q: %v", target, err)
+			continue
+		}
+		if meta.Path != "ascii.md" {
+			t.Errorf("resolve %q -> %q, want ascii.md", target, meta.Path)
+		}
+	}
+
+	if _, err := ix.ResolveLink(ctx, "Отсутствует"); !errors.Is(err, core.ErrNotFound) {
+		t.Errorf("missing target should be ErrNotFound, got %v", err)
+	}
+}
+
+func TestBackfillLowerColumns(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "test.db")
+	const cyrillicPath = "10 Личные/Серверы/Локальный сервер.md"
+
+	ix, err := index.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.Sync(ctx, []core.Note{
+		note("1", cyrillicPath, "Локальный сервер", "self hosted"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`UPDATE notes SET path_lower = '', title_lower = '', name_lower = ''`); err != nil {
+		db.Close()
+		t.Fatalf("clear lower columns: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := index.Open(path)
+	if err != nil {
+		t.Fatalf("reopen with stale lower columns: %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	for _, target := range []string{"ЛОКАЛЬНЫЙ СЕРВЕР", "локальный сервер", cyrillicPath} {
+		meta, err := reopened.ResolveLink(ctx, target)
+		if err != nil {
+			t.Errorf("resolve %q after backfill: %v", target, err)
+			continue
+		}
+		if meta.Path != cyrillicPath {
+			t.Errorf("resolve %q after backfill -> %q, want %q", target, meta.Path, cyrillicPath)
+		}
 	}
 }

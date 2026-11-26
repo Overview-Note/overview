@@ -50,6 +50,10 @@ func Open(path string) (*Index, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := ix.backfillLower(context.Background()); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return ix, nil
 }
 
@@ -117,6 +121,52 @@ func (ix *Index) migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// backfillLower fills the precomputed lower-case lookup columns for rows that
+// predate migration 0013. SQLite's lower() only folds ASCII, so the values are
+// computed with Go's Unicode-aware strings.ToLower instead. A note path is
+// never empty, so an empty path_lower reliably marks an unbackfilled row.
+func (ix *Index) backfillLower(ctx context.Context) error {
+	rows, err := ix.db.QueryContext(ctx,
+		`SELECT id, path, title FROM notes WHERE path_lower = ''`)
+	if err != nil {
+		return err
+	}
+	type pending struct {
+		id, path, title string
+	}
+	var todo []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.id, &p.path, &p.title); err != nil {
+			rows.Close()
+			return err
+		}
+		todo = append(todo, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(todo) == 0 {
+		return nil
+	}
+
+	tx, err := ix.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, p := range todo {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE notes SET path_lower = ?, title_lower = ?, name_lower = ? WHERE id = ?`,
+			strings.ToLower(p.path), strings.ToLower(p.title),
+			strings.ToLower(noteName(p.path)), p.id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func migrationVersion(name string) (int, error) {
@@ -440,22 +490,29 @@ func (ix *Index) ResolveLink(ctx context.Context, raw string) (core.NoteMeta, er
 	if key == "" {
 		return core.NoteMeta{}, core.ErrNotFound
 	}
+	// Wiki-links may spell the target as a path, a file name with or without
+	// the Markdown extension, or a title. All comparisons use the Go-computed
+	// lower-case columns because SQLite's lower() only folds ASCII.
+	keyMD := key + ".md"
+	stem := strings.TrimSuffix(key, ".md")
 	var (
 		m        core.NoteMeta
 		tags, up string
 	)
 	err := ix.db.QueryRowContext(ctx, `
 		SELECT id, path, title, tags, updated, size FROM notes
-		WHERE LOWER(path) = ? OR LOWER(path) = ? OR LOWER(title) = ? OR LOWER(name) = ? OR id = ?
+		WHERE path_lower = ? OR path_lower = ? OR title_lower = ?
+			OR name_lower = ? OR name_lower = ? OR id = ?
 		ORDER BY CASE
-			WHEN LOWER(path) = ? THEN 0
-			WHEN LOWER(path) = ? THEN 1
-			WHEN LOWER(title) = ? THEN 2
-			WHEN LOWER(name) = ? THEN 3
+			WHEN path_lower = ? THEN 0
+			WHEN path_lower = ? THEN 1
+			WHEN title_lower = ? THEN 2
+			WHEN name_lower = ? THEN 3
+			WHEN name_lower = ? THEN 3
 			ELSE 4 END
 		LIMIT 1`,
-		key, key+".md", key, key, strings.TrimSpace(raw),
-		key, key+".md", key, key).Scan(&m.ID, &m.Path, &m.Title, &tags, &up, &m.Size)
+		key, keyMD, key, key, stem, strings.TrimSpace(raw),
+		key, keyMD, key, key, stem).Scan(&m.ID, &m.Path, &m.Title, &tags, &up, &m.Size)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return core.NoteMeta{}, core.ErrNotFound
@@ -550,12 +607,14 @@ func insertGuarded(ctx context.Context, tx *sql.Tx, logger *slog.Logger, n core.
 
 func insert(ctx context.Context, tx *sql.Tx, n core.Note, seq int64) error {
 	n = ensureNoteID(n)
+	name := noteName(n.Path)
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO notes (id, path, name, title, tags, body, created, updated, size, version, public, changed_seq)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		n.ID, n.Path, noteName(n.Path), n.Title, strings.Join(n.Tags, ","), n.Body,
+		INSERT INTO notes (id, path, name, title, tags, body, created, updated, size, version, public, changed_seq, path_lower, title_lower, name_lower)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		n.ID, n.Path, name, n.Title, strings.Join(n.Tags, ","), n.Body,
 		n.Created.UTC().Format(time.RFC3339), n.Updated.UTC().Format(time.RFC3339),
-		n.Size, n.Version, boolToInt(n.Public), seq); err != nil {
+		n.Size, n.Version, boolToInt(n.Public), seq,
+		strings.ToLower(n.Path), strings.ToLower(n.Title), strings.ToLower(name)); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx,
