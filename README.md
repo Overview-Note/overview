@@ -233,13 +233,17 @@ make package-desktop    # + tar.gz archive for the host OS/arch
 - **Linux** — CGO + GTK/WebKitGTK (GTK4 + WebKitGTK 6.0 by default, GTK3 with `gtk3`):
   ```bash
   sudo apt install libgtk-4-dev libwebkitgtk-6.0-dev   # GTK4 (Ubuntu 24.04)
-  # or: sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev   # GTK3 (Ubuntu 22.04)
+  # or: sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev   # GTK3 (Ubuntu 22.04 / Debian 12)
   go build -tags desktop ./cmd/overview-desktop
   go build -tags "desktop gtk3" ./cmd/overview-desktop
   ```
 
 Tagged releases (`v*`) build the Windows/macOS/Linux shells in CI and attach them to the
-GitHub Release. See [`docs/DESIGN.md`](docs/DESIGN.md) (ADR-059…066) for the design, and
+GitHub Release. The GTK4 archive is built on the `ubuntu-24.04` runner; the GTK3 one is
+compiled inside an `ubuntu:22.04` container on that same runner, so it keeps a glibc 2.35
+floor and still starts on Ubuntu 22.04 / Debian 12. The archives are named
+`overview-desktop-<version>-linux-amd64-gtk4.tar.gz` and `…-gtk3.tar.gz` so they do not
+overwrite each other. See [`docs/DESIGN.md`](docs/DESIGN.md) (ADR-059…066) for the design, and
 [`docs/PROJECT.md`](docs/PROJECT.md) for the current desktop limitations.
 
 ### Local development

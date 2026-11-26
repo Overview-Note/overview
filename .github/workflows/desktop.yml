@@ -16,7 +16,17 @@ name: Desktop
 #                   the macOS SDK is universal, so Go passes clang -arch x86_64
 #                   and produces a native Intel binary from Apple Silicon.
 #   ubuntu-24.04    amd64, CGO enabled, GTK4 + WebKitGTK 6.0
-#   ubuntu-22.04    amd64, CGO enabled, -tags "desktop gtk3" (GTK3 + WebKit2GTK 4.1)
+#   ubuntu-24.04    amd64, CGO enabled, -tags "desktop gtk3" (GTK3 + WebKit2GTK
+#                   4.1), but the compile itself runs inside an `ubuntu:22.04`
+#                   container. Keeping the build root at glibc 2.35 means the
+#                   binary still starts on Ubuntu 22.04 and Debian 12; the
+#                   variant exists for distributions that ship WebKit2GTK 4.1
+#                   rather than WebKitGTK 6.0. Both Linux jobs run on
+#                   ubuntu-24.04 because GitHub ended standard support for the
+#                   22.04 runner image on 2026-09-17.
+# Linux archives carry the matrix `variant` (-gtk4 / -gtk3) in their file name;
+# the release job merges every artifact into one directory, so without it the
+# two Linux variants would overwrite each other.
 # A failing platform does not cancel the others (fail-fast: false).
 
 on:
@@ -45,6 +55,7 @@ jobs:
             goarch: amd64
             cgo: "0"
             tags: desktop
+            variant: ""
             ext: .exe
             # GUI subsystem: without this the .exe opens a console window.
             gui: "-H windowsgui"
@@ -54,6 +65,7 @@ jobs:
             goarch: arm64
             cgo: "1"
             tags: desktop
+            variant: ""
             ext: ""
             gui: ""
           - name: macos-amd64
@@ -62,6 +74,7 @@ jobs:
             goarch: amd64
             cgo: "1"
             tags: desktop
+            variant: ""
             ext: ""
             gui: ""
           - name: linux-amd64-gtk4
@@ -70,16 +83,19 @@ jobs:
             goarch: amd64
             cgo: "1"
             tags: desktop
+            variant: gtk4
             ext: ""
             gui: ""
           - name: linux-amd64-gtk3
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             goos: linux
             goarch: amd64
             cgo: "1"
             tags: "desktop gtk3"
+            variant: gtk3
             ext: ""
             gui: ""
+            # Compiled inside ubuntu:22.04, see "Build desktop shell (GTK3)".
     env:
       RAW_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
     steps:
@@ -108,8 +124,9 @@ jobs:
         run: npm run build
 
       # Wails v3 Linux uses GTK4 + WebKitGTK 6.0 by default and GTK3 + WebKit2GTK
-      # 4.1 with the `gtk3` build tag. X11/xkb development headers are pulled in
-      # by the global-shortcut backend.
+      # 4.1 with the `gtk3` build tag; the GTK3 toolchain is installed inside the
+      # ubuntu:22.04 container instead of on the host. X11/xkb development
+      # headers are pulled in by the global-shortcut backend.
       - name: Install Linux desktop dependencies (GTK4)
         if: runner.os == 'Linux' && matrix.name == 'linux-amd64-gtk4'
         run: |
@@ -119,16 +136,8 @@ jobs:
             libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev \
             libxi-dev libxxf86vm-dev libxkbcommon-dev
 
-      - name: Install Linux desktop dependencies (GTK3)
-        if: runner.os == 'Linux' && matrix.name == 'linux-amd64-gtk3'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgtk-3-dev libwebkit2gtk-4.1-dev \
-            libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev \
-            libxi-dev libxxf86vm-dev libxkbcommon-dev
-
       - name: Build desktop shell
+        if: matrix.variant != 'gtk3'
         shell: bash
         env:
           GOOS: ${{ matrix.goos }}
@@ -139,6 +148,55 @@ jobs:
           go build -trimpath -tags "${{ matrix.tags }}" \
             -ldflags="-s -w ${GUI_LDFLAGS} -X main.version=${VERSION}" \
             -o "bin/overview-desktop${{ matrix.ext }}" ./cmd/overview-desktop
+
+      # GTK3 is compiled in ubuntu:22.04 (glibc 2.35, gcc 11, GTK3 + WebKit2GTK
+      # 4.1 from the 22.04 archive) so the binary keeps a glibc 2.35 ceiling and
+      # still starts on Ubuntu 22.04 / Debian 12. Go is pinned to a concrete
+      # patch release and GOTOOLCHAIN=local keeps it from downloading another
+      # toolchain. -buildvcs=false because the container has no git.
+      - name: Build desktop shell (GTK3)
+        if: matrix.variant == 'gtk3'
+        shell: bash
+        env:
+          GO_TOOLCHAIN: "1.26.11"
+          GO_TOOLCHAIN_SHA256: "9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec"
+        run: |
+          docker run --rm \
+            -e "VERSION=${VERSION}" \
+            -e "GO_TOOLCHAIN=${GO_TOOLCHAIN}" \
+            -e "GO_TOOLCHAIN_SHA256=${GO_TOOLCHAIN_SHA256}" \
+            -e "HOST_UID=$(id -u)" \
+            -e "HOST_GID=$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/src" \
+            -w /src \
+            ubuntu:22.04 bash -lc '
+              set -euo pipefail
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                ca-certificates curl tar build-essential pkg-config \
+                libgtk-3-dev libwebkit2gtk-4.1-dev \
+                libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev \
+                libxi-dev libxxf86vm-dev libxkbcommon-dev
+              curl -fsSL "https://go.dev/dl/go${GO_TOOLCHAIN}.linux-amd64.tar.gz" -o /tmp/go.tar.gz
+              echo "${GO_TOOLCHAIN_SHA256}  /tmp/go.tar.gz" | sha256sum -c -
+              tar -C /usr/local -xzf /tmp/go.tar.gz
+              export PATH="/usr/local/go/bin:${PATH}"
+              export CGO_ENABLED=1 GOOS=linux GOARCH=amd64
+              export GOTOOLCHAIN=local
+              go build -trimpath -buildvcs=false -tags "desktop gtk3" \
+                -ldflags="-s -w -X main.version=${VERSION}" \
+                -o bin/overview-desktop ./cmd/overview-desktop
+              chown "${HOST_UID}:${HOST_GID}" bin/overview-desktop
+            '
+
+      - name: Verify GTK3 glibc ceiling
+        if: matrix.variant == 'gtk3'
+        shell: bash
+        run: |
+          MAX=$(objdump -T bin/overview-desktop | grep -o 'GLIBC_[0-9.]*' | sed 's/^GLIBC_//' | sort -Vu | tail -1)
+          echo "highest GLIBC symbol version: ${MAX}"
+          test -n "${MAX}"
+          test "$(printf '%s\n2.35\n' "${MAX}" | sort -V | tail -1)" = "2.35"
 
       - name: Archive (Windows)
         if: runner.os == 'Windows'
@@ -153,7 +211,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          tar -czf "dist/overview-desktop-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" \
+          SUFFIX=""
+          if [ -n "${{ matrix.variant }}" ]; then SUFFIX="-${{ matrix.variant }}"; fi
+          tar -czf "dist/overview-desktop-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}${SUFFIX}.tar.gz" \
             -C bin overview-desktop
 
       - name: Upload build artifact

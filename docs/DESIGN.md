@@ -743,7 +743,7 @@ cd web && npm run dev      # 终端 2（:5173，/api 代理到 :5230）
 - `.github/workflows/ci.yml`：后端 `go vet` + `go test -race -cover`；前端 `npm ci` + `vue-tsc` + `npm test` + `vite build`；`golangci-lint`；Windows 上 `go build ./cmd/overview-desktop` 编译冒烟。
 - `.github/workflows/docker.yml`：推送 `v*` 标签时构建 **多架构（amd64/arm64）** 镜像并发布到 **GHCR**（`ghcr.io/<owner>/<repo>`），使用内置 `GITHUB_TOKEN`，无需额外密钥。
 - `.github/workflows/pages.yml`：导出文档站（`overview export`）并部署到 GitHub Pages。
-- `.github/workflows/desktop.yml`：推送 `v*` 标签或手动触发时，矩阵构建桌面壳（`windows-latest` 无 CGO；`macos-14` arm64 / `macos-13` amd64 CGO；`ubuntu-24.04` GTK4+WebKitGTK 6.0；`ubuntu-22.04` `-tags "desktop gtk3"`），产物归档为 `.zip`/`.tar.gz` 上传 artifact，并在 tag 触发时作为 Release assets 发布；`fail-fast: false` 使单个平台失败不影响其它平台。
+- `.github/workflows/desktop.yml`：推送 `v*` 标签或手动触发时，矩阵构建桌面壳（`windows-latest` 无 CGO；`macos-15` arm64 / amd64 CGO；`ubuntu-24.04` GTK4+WebKitGTK 6.0；`ubuntu-24.04` 主机上以 `ubuntu:22.04` 容器编译 `-tags "desktop gtk3"`，容器内为 glibc 2.35 + GTK3 + WebKit2GTK 4.1，产物保持 glibc ≤ 2.35 以便在 Ubuntu 22.04 / Debian 12 启动，构建后用 `objdump -T` 校验 GLIBC 符号版本上限），产物归档为 `.zip`/`.tar.gz` 上传 artifact，并在 tag 触发时作为 Release assets 发布；Linux 归档按矩阵 `variant` 命名为 `…-linux-amd64-gtk4.tar.gz` / `…-linux-amd64-gtk3.tar.gz`，避免 release job `merge-multiple` 时同名覆盖；`fail-fast: false` 使单个平台失败不影响其它平台。
 
 ---
 

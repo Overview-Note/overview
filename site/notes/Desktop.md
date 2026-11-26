@@ -144,7 +144,11 @@ The shell source is guarded by the build tag `windows || darwin || desktop`, so 
 `CGO_ENABLED=0 go build ./...` on a machine without GTK headers still works for the backend.
 
 Tagged releases build the Windows/macOS/Linux shells in CI
-(`.github/workflows/desktop.yml`) and attach them to the GitHub Release.
+(`.github/workflows/desktop.yml`) and attach them to the GitHub Release. Both Linux jobs run on
+the `ubuntu-24.04` runner, but the GTK3 one is compiled inside an `ubuntu:22.04` container: it
+keeps a glibc 2.35 floor (CI verifies the binary's highest `GLIBC_` symbol version) and still
+starts on Ubuntu 22.04 / Debian 12. The variants are published as separate archives
+(`overview-desktop-<version>-linux-amd64-gtk4.tar.gz` and `…-gtk3.tar.gz`).
 
 ## Current limitations
 
