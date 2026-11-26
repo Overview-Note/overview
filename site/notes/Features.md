@@ -10,7 +10,8 @@ public: true
 
 - **Hierarchical folders** — physical directories map to the navigation tree
 - **Markdown as the source of truth** — Git-friendly and portable
-- **Wiki-links & backlinks** — `[[Note]]` with a backlinks panel
+- **Wiki-links & backlinks** — `[[Note]]` with a backlinks panel; targets resolve by path,
+  title or file name, case-insensitively (including non-ASCII scripts)
 - **Per-note visibility** — Private or Public share link
 
 ## Editing

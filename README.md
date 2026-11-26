@@ -47,7 +47,7 @@ SQLite FTS5, and exposes the vault over REST, **WebDAV**, and the **Model Contex
 - **Hierarchical folders** — physical directories map directly to the navigation tree
 - **Markdown as the source of truth** — Git-friendly, portable, no vendor lock-in
 - **Wiki-links & backlinks** — `[[Note]]` / `[[Note|alias]]`, with a backlinks panel;
-  targets resolve by full path, title, or file name
+  targets resolve by full path, title, or file name, case-insensitively (including non-ASCII scripts)
 - **Per-note visibility** — Private or Public (share a read-only **globe page** at `/public/<path>`)
 
 ### ✍️ Editing
@@ -531,6 +531,9 @@ Requirements: **Go 1.26+**, **Node 22+**, and **Docker** (optional).
   show a catch-all **404 view** instead of a blank screen, a missing note shows a matching
   overlay, the server falls back to a self-contained HTML 404 page when the frontend is not
   built, and the home empty state can create a note/folder even in focus mode
+- [x] Case-insensitive wiki-link resolution for non-ASCII scripts: precomputed Unicode
+  lower-case index columns (`path_lower`/`title_lower`/`name_lower`, migration `0013`)
+  instead of SQLite's ASCII-only `lower()`, with an idempotent backfill for existing vaults
 
 **Not yet done** (see [`docs/DESIGN.md`](docs/DESIGN.md) §12 for the full backlog)
 

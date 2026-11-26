@@ -1,7 +1,7 @@
 # Overview 设计文档
 
-> 版本：v0.16.3（SPA 回退修正 · 404 体验 · 首页空状态新建入口）
-> 更新日期：2026-10-07
+> 版本：v0.16.4（Wiki 链接 Unicode 大小写不敏感）
+> 更新日期：2026-11-26
 > 定位：可自部署、支持层级目录、AI 原生、以文件为真相的 Markdown 知识库
 
 ---
@@ -36,6 +36,7 @@
 | v0.16.1 | 桌面升级可见性 · 专注出口 | **静态资源校验修正**：`weakETag` 改为对文件**内容**计算 FNV-1a 哈希（原实现只哈希路径 + 字节长度），Vite 重建后字节数几乎不变的 `index.html` 不再算出相同 ETag 而被 304 长期沿用；缺失的静态资源（`assets/` 前缀或带扩展名）返回 **404**，不再回退 `index.html`，避免把 HTML 当 JS/CSS 返回（`internal/server/static.go`）。**桌面壳按版本破缓存**：窗口 URL 由 `/?desktop=1` 改为 `/?desktop=1&v=<version>`（`desktopURL`，`net/url` 转义），每次发版即新的 WebView2 缓存条目，升级后自动加载新前端（`cmd/overview-desktop/main.go`）。**专注模式可退出**：顶栏/侧栏隐藏时新增右下角低调浮动按钮 `.focus-exit`（i18n `focus.exit`，zh「退出专注」/en「Exit focus」），仍保留 Esc/F9 出口（`web/src/App.vue` + `styles.css`） |
 | v0.16.2 | 侧栏树文字对比度 | 左侧栏文件树「多级菜单」去掉「层级越深越淡」：`.tree-row.folder`（含 depth-0/1/2/3）由 `--text-soft`/`--text-faint` 统一改为 **`--text`**；`.tree-row.note.depth-3` 由 `--text-soft` 改为 **`--text-muted`**；层级仍由 `padding-left` 缩进 + 文件夹「大写 + 600 字重」区分，hover/active 不变。仅改 `web/src/styles.css`，未动 `internal/sitegen/content.css` 的共享 token（ADR-087） |
 | v0.16.3 | SPA 回退修正 · 404 体验 · 空状态入口 | **静态资源判定收窄**：`isAssetRequest` 由「带扩展名」改为「`assets/` 前缀 + 固定顶层白名单（icon.svg/icon-192.png/icon-512.png/manifest.webmanifest/sw.js/favicon.ico/robots.txt/sitemap.xml）」，修正 v0.16.1 过宽判定导致 `/note/<path>.md`、`/public/<path>.md` 刷新 404 而非回退 `index.html` 的回归；`assets/` 缺失仍 404 且非 HTML（ADR-088）。**404 体验**：前端新增 catch-all 路由 `/:pathMatch(.*)*` 与 `views/NotFoundView.vue`（此前未知路径渲染空白），文档站 render 模式下 `not-found` 重定向 `public-home`；`EditorPane.vue` 笔记 404 时显示一致的覆盖卡片；服务端新增自包含、亮暗自适应的 HTML 404 页 `internal/server/notfound.go`（用于 `index.html` 缺失 / `Static==nil` 分支），`/api/*` 仍 JSON、`assets/` 仍非 HTML（ADR-089）。**首页空状态入口**：`EmptyState.vue` 新增「新建笔记 / 新建文件夹」，复用侧栏流程与 i18n，专注模式隐藏侧栏时也能新建 |
+| v0.16.4 | Wiki 链接 Unicode 大小写 | **根因**：`ResolveLink` 用 Go `strings.ToLower`（Unicode 感知）生成查询键，却与 SQLite `lower()`（仅折叠 ASCII）比较存储值，路径/标题/文件名含大写非 ASCII 字母（如西里尔 `Л`）的笔记永远无法被 wiki 链接解析（issue #1）。**修复**：迁移 `0013_note_lower` 为 `notes` 增加 `path_lower`/`title_lower`/`name_lower` 三列与索引，写入时由 Go 预计算；`ResolveLink` 改查这三列等值匹配（含 `name_lower` 去 `.md` 的文件名匹配）；`Open()` 对旧库幂等回填（`backfillLower`，以空 `path_lower` 标记待回填行）。新增 `TestResolveLinkUnicodeCase`、`TestBackfillLowerColumns`（ADR-090） |
 
 v0.2.0 的目标不是加功能，而是**建立可持续演进的地基**，避免后续加双链/多用户/WebDAV 时返工。
 
@@ -266,6 +267,7 @@ GET /api/v1/sync/manifest                          全量清单（强 ETag，正
 | ADR-087 | 侧栏文件树的多级菜单**不再靠降低不透明度表达层级**：`.tree-row.folder`（含 depth-0/1/2/3）统一用 `--text`，`.tree-row.note.depth-3` 用 `--text-muted`；层级改由 `padding-left` 缩进与文件夹「大写 + 600 字重」承载，hover/active 不变 | 原实现「层级越深越淡」（`--text-soft` → `--text-faint`，浅色下 #9b9b9b/#b7b7b3）使深层文件夹/笔记与背景对比度不足，长目录树可读性差；用**对比度**编码深度还会与 hover/active 态、暗色主题相互干扰 | 所有层级的树文字都达到主/次文本对比度（浅色 `--text` #37352f、笔记 `--text-muted` #6b6b6b），缩进与字重仍清晰区分层级；仅改应用侧 `web/src/styles.css`，**未动** `internal/sitegen/content.css` 的共享 token，静态站与公开页不受影响 |
 | ADR-088 | 静态资源判定收窄为「`assets/` 前缀 + 固定顶层文件白名单」，其余未命中路径一律回退 SPA；`assets/` 缺失仍返回非 HTML 404 | v0.16.1（ADR-084）以「带扩展名」判定资源，把 `/note/<path>.md`、`/public/<path>.md` 这类带扩展名的客户端路由误判为静态资源，刷新时返回 404 而非回退 `index.html`；但白名单仍须让缺失的真实资源（`assets/*`、`favicon.ico` 等）明确 404，不被 `index.html` 以 JS/CSS 内容类型掩盖 | 只有 `assets/*` 与固定顶层文件（icon.svg / icon-192.png / icon-512.png / manifest.webmanifest / sw.js / favicon.ico / robots.txt / sitemap.xml）视为资源；其余路径无论是否带扩展名都回退 SPA，`/note`、`/public` 下的 `.md` 深链接刷新恢复；`internal/server/static_test.go` 覆盖「带扩展名路由回退 SPA」与「白名单缺失 404」 |
 | ADR-089 | 404 体验三端统一：前端 catch-all vue 路由 + 笔记缺失覆盖层 + 服务端自包含 HTML 404 页；内容协商按路径区分（`/api/*` JSON、`assets/` 非 HTML、文档路由 HTML） | 未知客户端路径此前无匹配路由而渲染空白页，笔记不存在时只有底部错误文本；未构建前端的服务端只回 `text/plain`，对访问者既不友好也不一致 | 新增 `web/src/views/NotFoundView.vue` 与置于路由末尾的 `/:pathMatch(.*)*`；文档站 render 模式把 `not-found` 重定向 `public-home` 而非应用 404；`EditorPane.vue` 在 `ApiError.status===404` 时显示同款卡片；`internal/server/notfound.go` 的 `writeNotFoundPage` 用于 `index.html` 缺失 / `Static==nil` 分支，内联 CSS、跟随系统明暗、无外部依赖 |
+| ADR-090 | Wiki 链接大小写不敏感采用 **Go 预计算的 Unicode 小写列**（`notes.path_lower/title_lower/name_lower` + 索引），`ResolveLink` 只做等值匹配；**不依赖** SQLite 的 `lower()` / `COLLATE NOCASE`，也**不引入 ICU** | `ResolveLink` 原先用 Go `strings.ToLower`（Unicode 感知，如 `Л`→`л`）生成查询键，却与存储值经 SQLite `lower()` 比较；`lower()` 与 `COLLATE NOCASE` 都只折叠 ASCII，大写西里尔/希腊等字母原样保留，含此类字母的笔记永远解析不到（issue #1）。ICU 扩展可提供完整大小写折叠，但 `modernc.org/sqlite`（纯 Go、无 CGO）默认不含 ICU，引入会破坏单二进制零 CGO 的发布形态，也增加跨平台构建复杂度 | 折叠语义统一到 Go：写入（`Index.Upsert`）时把 `path`/`title`/去 `.md` 的文件名用 `strings.ToLower` 预计算落三列，`Open()` 用 `backfillLower` 幂等回填迁移前的旧行（路径非空，故 `path_lower = ''` 可作待回填标记）。代价是每行多三列与三个索引的存储，且所有写路径必须经 `Upsert` 维护小写列（当前 Save/Sync/ReplacePrefix 均如此）；收益是无 CGO、无新依赖、覆盖全部 Unicode 简单大小写映射，ASCII 行为不变 |
 
 ---
 
@@ -303,7 +305,7 @@ updated: "2026-10-01T16:54:09Z"
 
 - 迁移文件位于 `internal/index/migrations/*.sql`，通过 `go:embed` 内嵌
 - 迁移记录表 `schema_migrations(version, applied_at)`，启动时按序应用未执行项
-- 迁移清单（0001–0012）：
+- 迁移清单（0001–0013）：
 
 | 版本 | 内容 |
 | --- | --- |
@@ -319,6 +321,7 @@ updated: "2026-10-01T16:54:09Z"
 | `0010_sync` | `notes.changed_seq`（单调变更序号）+ `note_tombstones`（删除墓碑，含 `deleted_at` 索引） |
 | `0011_sync_folders` | `folder_tombstones(path PK, deleted_at, device)` + `deleted_at` 索引（空文件夹删除/移动的墓碑） |
 | `0012_folder_changes` | `folder_changes(path PK, changed_seq)` + `changed_seq` 索引（空文件夹创建/移动的序号，与笔记共计数器） |
+| `0013_note_lower` | `notes.path_lower`/`title_lower`/`name_lower` + 三列索引（wiki 链接 Unicode 大小写解析，ADR-090） |
 
 - `users`（迁移 0004 + 0008）：`id`、`username`（唯一）、`password_hash`、`role`（`admin`/`member`）、`created`、`updated`、`email`（唯一，非空时）、`status`（`active`/`invited`）、`email_verified`。受邀账号 `password_hash` 为空串（bcrypt 永不匹配），必须先接受邀请设置密码。
 - `user_tokens`（迁移 0008）：`id`、`user_id`、`purpose`（`invite`/`reset`/`verify`）、`token_hash`（sha256，唯一）、`created`、`expires`、`used`。令牌单次消费：读取-校验-写入在同一事务内完成（连接池限单连接以串行化）。
@@ -330,6 +333,7 @@ updated: "2026-10-01T16:54:09Z"
 - `note_tombstones`（迁移 0010）：`id`(PK)、`path`、`deleted_at`、`device`；按 `deleted_at` 建索引。`service.Delete`/`Move` 对消失的笔记调用 `Index.RecordTombstone` 记录墓碑（`service.recordTombstones`），供同步客户端协调删除；v0.16.0 起由 `GET /sync/changes` 以 `sinceTs` 增量返回（ADR-072/080）。
 - `folder_tombstones`（迁移 0011）：`path`(PK)、`deleted_at`、`device`；按 `deleted_at` 建索引。`service.Delete`/`Move` 对消失的目录（含空目录）调用 `Index.RecordFolderTombstone`（`service.recordFolderTombstones`）upsert 墓碑，使「目录删除」可随实时/增量流传播（ADR-081）。
 - `folder_changes`（迁移 0012）：`path`(PK)、`changed_seq`；按 `changed_seq` 建索引。`service.Mkdir`/仍存在的目录移动调用 `Index.RecordFolderChange`，从 `settings('change_seq')` **共享计数器**分配序号并 upsert，使不含任何笔记的空文件夹也能推进客户端游标；`Index.LatestSeq` 取 `notes.changed_seq` 与 `folder_changes.changed_seq` 的最大值（ADR-081）。
+- `notes.path_lower`/`title_lower`/`name_lower`（迁移 0013）：wiki 链接解析用的 Unicode 小写列。`Index.Upsert` 用 Go `strings.ToLower` 预计算 `path`、`title` 与去 `.md` 的文件名并写入，配 `idx_notes_path_lower`/`idx_notes_title_lower`/`idx_notes_name_lower`；`ResolveLink` 只对这三列做等值匹配（不再调用 SQLite 的 ASCII-only `lower()`）。迁移前的旧行在 `Open()` 由 `backfillLower` 幂等回填——路径不会为空，故 `path_lower = ''` 可作为待回填标记（ADR-090）。
 - `settings` 另存同步库标识 `vault_id`（首次 `Index.VaultID` 生成并持久化的 ULID），随 `GET /sync/manifest` 返回，用于客户端校验连接的是同一个库（ADR-067）。
 - 领域模型新增 `NoteMeta.Version`（索引里的内容哈希）、`ManifestNote`、`VaultManifest`（`vaultId`/`generatedAt`/`etag`/`notes`/`folders`）、`Tombstone`（见 `internal/core/model.go`）。
 - v0.16.0 领域模型补充（`internal/core/model.go`）：`FolderTombstone{path, deletedAt, device}`、`SyncChange{id, path, version, seq, op}`（`op` 目前恒为 `upsert`）、`SyncChanges{latestSeq, latestTs, hasMore, changes[], tombstones[], folderTombstones[]}`；端口 `core.ChangeLog`（`internal/core/ports.go`）暴露 `LatestSeq`/`ChangesSince`/`TombstonesSince`/`FolderTombstonesSince`/`LatestTombstoneTime`/`RecordFolderTombstone`/`RecordFolderChange`，由 `internal/index` 实现（可选能力，未实现时增量端点返回 `not_supported`、目录标记为 no-op）。
@@ -1139,7 +1143,7 @@ HTTP 与前端
 
 - 语法：`[[Target]]` / `[[Target|Display]]`
 - 解析：`textproc.ExtractWikiLinks` 抽取目标（忽略代码块/行内代码），存入 `links(source_id, source_path, target_raw, target_key)` 表
-- 目标解析优先级：完整路径 → 路径+.md → 标题 → **文件名（basename）** → id；因此 `[[并发模型]]` 可命中 `技术/Go/并发模型.md`
+- 目标解析优先级：完整路径 → 路径+.md → 标题 → **文件名（basename）** → id；因此 `[[并发模型]]` 可命中 `技术/Go/并发模型.md`。v0.16.4 起比较**大小写不敏感且覆盖非 ASCII**：写入时预计算 `path_lower/title_lower/name_lower`，解析只查这些列（issue #1，ADR-090）。
 - 反链：以目标笔记的 {路径, 标题, 文件名, id} 为键，反查 `links` 指向它的来源笔记
 - API：`GET /api/v1/links?path=`、`GET /api/v1/resolve?target=`
 - 前端：编辑器内 `[[...]]` 渲染为可点击链接（点击解析跳转，未创建则询问创建）；右侧面板展示反向链接与外部链接
@@ -1710,3 +1714,36 @@ MCP 服务端升级到 **`2026-07-28`**，并实现为 **dual-era**（同时支�
   `/assets/missing.js` → 404（非 HTML）、`/api/v1/nope` → 404（JSON）；首页空状态「新建笔记 / 新建文件夹」
   按钮在专注模式（侧栏隐藏）下可见可用。
 - **本轮未验证**：真实桌面 WebView2 升级路径与 macOS/Linux 桌面壳（同前）。
+
+### 13.31 Wiki 链接 Unicode 大小写（v0.16.4，ADR-090）
+
+**复现（issue #1）**
+
+- 新建笔记 `Локальный сервер.md`（路径与文件名含大写西里尔 `Л`）。v0.16.3 下访问
+  `GET /api/v1/resolve?target=Локальный сервер` 返回 404：`ResolveLink` 把目标转成 Go 小写
+  `локальный сервер`，而 `notes.path_lower` 一类的比较值来自 SQLite `lower()`，只折叠 ASCII，
+  存储侧的 `Л` 保持大写，两者永不相等。`ЛОКАЛЬНЫЙ СЕРВЕР`、大小写混合路径同样 404；
+  ASCII 笔记因 `lower()` 与 `strings.ToLower` 结果一致而不受影响。
+
+**修复（`internal/index`）**
+
+- 迁移 `0013_note_lower.sql`：`notes` 新增 `path_lower`/`title_lower`/`name_lower`（`TEXT NOT NULL
+  DEFAULT ''`）与三个索引。
+- `Index.Upsert` 写入时用 Go `strings.ToLower` 预计算三列（`name_lower` 为去 `.md` 的文件名），
+  与 `ResolveLink` 的键使用同一折叠语义。
+- `ResolveLink` 改为对 `path_lower`/`title_lower`/`name_lower` 做等值匹配（含 `key`、`key + ".md"`、
+  去 `.md` 的 stem），`ORDER BY CASE` 维持「路径 → 路径.md → 标题 → 文件名 → id」优先级。
+- `Open()` 新增 `backfillLower`：对 `path_lower = ''` 的旧行在同一事务内回填三列；路径不会为空，
+  空值可安全作为「未回填」标记，重复打开为幂等空操作。
+
+**验证记录**
+
+- `TestResolveLinkUnicodeCase` 覆盖小写/全大写/混合大小写路径与 `xxx.md` 形式；`TestBackfillLowerColumns`
+  覆盖迁移前的旧行回填与幂等性。
+- `go build ./...`、`go test ./...` 全绿；`cd web && npm run build`（`overview-web@0.16.4`）通过。
+- headless：重编的 `bin/overview.exe`（v0.16.4）以 `OVERVIEW_AUTH=multi` 重启 demo，`GET /api/v1/health`
+  返回 `version: 0.16.4`；笔记 `10 Личные/Серверы/Локальный сервер.md` 可被 `Локальный сервер`、`ЛОКАЛЬНЫЙ СЕРВЕР`、
+  大小写混合路径与 `Локальный сервер.md` 四种目标解析（200），不存在的目标仍 404，ASCII 笔记行为不变。
+- 旧库升级：对 v0.16.3 产生的 `overview.db` 直接启动 v0.16.4，迁移 `0013` 应用后 `backfillLower`
+  回填旧行，同一 wiki 链接即可解析；再次启动不再产生回填写入（幂等）。
+- **本轮未验证**：真实桌面 WebView2 端点击 wiki 链接的交互路径（与 headless 共用同一索引实现）。
