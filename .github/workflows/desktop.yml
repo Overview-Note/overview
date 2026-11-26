@@ -9,8 +9,9 @@ name: Desktop
 # Platform matrix:
 #   windows-latest  amd64, CGO disabled  (WebView2 needs no CGO; built with the
 #                   GUI PE subsystem so launching it shows no console window)
-#   macos-14        arm64, CGO enabled   (Xcode command line tools)
-#   macos-14        amd64, CGO enabled, cross-compiled from the arm64 runner.
+#   macos-15        arm64, CGO enabled   (Xcode command line tools; macOS 14
+#                   runners were retired by GitHub on 2026-11-02)
+#   macos-15        amd64, CGO enabled, cross-compiled from the arm64 runner.
 #                   The macos-13 (Intel) runner is no longer reliably available;
 #                   the macOS SDK is universal, so Go passes clang -arch x86_64
 #                   and produces a native Intel binary from Apple Silicon.
@@ -48,7 +49,7 @@ jobs:
             # GUI subsystem: without this the .exe opens a console window.
             gui: "-H windowsgui"
           - name: macos-arm64
-            os: macos-14
+            os: macos-15
             goos: darwin
             goarch: arm64
             cgo: "1"
@@ -56,7 +57,7 @@ jobs:
             ext: ""
             gui: ""
           - name: macos-amd64
-            os: macos-14
+            os: macos-15
             goos: darwin
             goarch: amd64
             cgo: "1"
